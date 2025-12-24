@@ -21,6 +21,8 @@ namespace WoodburySpectatorSync.Net
         private Thread _receiveThread;
         private volatile bool _running;
         private volatile bool _connected;
+        private const int ConnectTimeoutMs = 3000;
+        private const int RetryDelayMs = 2000;
 
         public SpectatorClient(ManualLogSource logger, Settings settings)
         {
@@ -56,25 +58,38 @@ namespace WoodburySpectatorSync.Net
 
         private void ConnectLoop()
         {
-            try
+            while (_running)
             {
-                _client = new TcpClient();
-                _client.NoDelay = true;
-                _client.Connect(_settings.SpectatorHostIP.Value, _settings.HostPort.Value);
-                _stream = _client.GetStream();
-                _connected = true;
-                Status = "Connected";
-                _logger.LogInfo("Connected to host");
+                try
+                {
+                    Status = "Connecting";
+                    _client = new TcpClient();
+                    _client.NoDelay = true;
+                    ConnectWithTimeout(_client, _settings.SpectatorHostIP.Value, _settings.HostPort.Value, ConnectTimeoutMs);
+                    _stream = _client.GetStream();
+                    _connected = true;
+                    Status = "Connected";
+                    _logger.LogInfo("Connected to host");
 
-                _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-Receive" };
-                _receiveThread.Start();
-            }
-            catch (Exception ex)
-            {
-                Status = "Connection failed";
-                _logger.LogWarning("Connect failed: " + ex.Message);
-                _running = false;
-                Cleanup();
+                    _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-Receive" };
+                    _receiveThread.Start();
+                    _receiveThread.Join();
+                }
+                catch (Exception ex)
+                {
+                    Status = "Retrying";
+                    _logger.LogWarning("Connect failed: " + ex.Message);
+                }
+                finally
+                {
+                    _connected = false;
+                    Cleanup();
+                }
+
+                if (_running)
+                {
+                    Thread.Sleep(RetryDelayMs);
+                }
             }
         }
 
@@ -157,6 +172,18 @@ namespace WoodburySpectatorSync.Net
             try { _client?.Close(); } catch { }
             _stream = null;
             _client = null;
+        }
+
+        private static void ConnectWithTimeout(TcpClient client, string host, int port, int timeoutMs)
+        {
+            var result = client.BeginConnect(host, port, null, null);
+            var success = result.AsyncWaitHandle.WaitOne(timeoutMs);
+            if (!success)
+            {
+                client.Close();
+                throw new TimeoutException("Connect timed out.");
+            }
+            client.EndConnect(result);
         }
     }
 }

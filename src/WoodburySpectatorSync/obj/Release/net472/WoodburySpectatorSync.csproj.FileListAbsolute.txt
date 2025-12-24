@@ -5,3 +5,4 @@ C:\Users\tudor\fears to fathom woodbury getaway mp mod\src\WoodburySpectatorSync
 C:\Users\tudor\fears to fathom woodbury getaway mp mod\src\WoodburySpectatorSync\bin\Release\net472\WoodburySpectatorSync.pdb
 C:\Users\tudor\fears to fathom woodbury getaway mp mod\src\WoodburySpectatorSync\obj\Release\net472\WoodburySpectatorSync.dll
 C:\Users\tudor\fears to fathom woodbury getaway mp mod\src\WoodburySpectatorSync\obj\Release\net472\WoodburySpectatorSync.pdb
+C:\Users\tudor\fears to fathom woodbury getaway mp mod\src\WoodburySpectatorSync\obj\Release\net472\WoodburySpectatorSync.sourcelink.json

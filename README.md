@@ -30,6 +30,7 @@ The project references Unity, the game assembly, and BepInEx from `lib/`:
 - `lib/UnityEngine.IMGUIModule.dll`
 - `lib/UnityEngine.AudioModule.dll`
 - `lib/UnityEngine.PhysicsModule.dll`
+- `lib/UnityEngine.AnimationModule.dll`
 - `lib/UnityEngine.UIModule.dll`
 - `lib/UnityEngine.SceneManagementModule.dll`
 - `lib/UnityEngine.UnityWebRequestModule.dll`
@@ -87,6 +88,8 @@ This mode is host-authoritative and currently focused on the Cabin scene.
 Notes:
 - Client uses a free camera controller to avoid local story triggers.
 - Interactions are sent to the host and applied there.
+- Client auto-teleports to host if too far or updates go stale (configurable).
+- Set `UseLocalPlayerController = true` to use the local first-person controller instead of freecam.
 
 ## Config
 
@@ -99,6 +102,11 @@ Notes:
 - `SmoothingRotation` = 0.15
 - `OverlayEnabled` = true
 - `VerboseLogging` = false
+- `TeleportDistance` = 25
+- `TeleportCooldownSeconds` = 3
+- `TeleportOnStaleSeconds` = 6
+- `SnapToHostOnSceneLoad` = true
+- `UseLocalPlayerController` = true
 
 ## Known limitations
 

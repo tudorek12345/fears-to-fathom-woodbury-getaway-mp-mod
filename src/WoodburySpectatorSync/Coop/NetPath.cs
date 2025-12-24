@@ -55,6 +55,15 @@ namespace WoodburySpectatorSync.Coop
         private static Transform FindChild(GameObject[] roots, string segment)
         {
             var (name, index) = ParseSegment(segment);
+            if (index >= 0 && index < roots.Length)
+            {
+                var candidate = roots[index];
+                if (candidate.name == name)
+                {
+                    return candidate.transform;
+                }
+            }
+
             var matches = new List<Transform>();
             foreach (var root in roots)
             {
@@ -69,12 +78,21 @@ namespace WoodburySpectatorSync.Coop
                 return matches[index];
             }
 
-            return null;
+            return matches.Count > 0 ? matches[0] : null;
         }
 
         private static Transform FindChild(Transform parent, string segment)
         {
             var (name, index) = ParseSegment(segment);
+            if (index >= 0 && index < parent.childCount)
+            {
+                var candidate = parent.GetChild(index);
+                if (candidate.name == name)
+                {
+                    return candidate;
+                }
+            }
+
             var matches = new List<Transform>();
             for (var i = 0; i < parent.childCount; i++)
             {
@@ -90,7 +108,7 @@ namespace WoodburySpectatorSync.Coop
                 return matches[index];
             }
 
-            return null;
+            return matches.Count > 0 ? matches[0] : null;
         }
 
         private static (string name, int index) ParseSegment(string segment)
@@ -106,7 +124,7 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            return (segment, 0);
+            return (segment, -1);
         }
     }
 }

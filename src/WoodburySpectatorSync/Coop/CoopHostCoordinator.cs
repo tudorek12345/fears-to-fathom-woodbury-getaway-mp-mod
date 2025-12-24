@@ -15,6 +15,9 @@ namespace WoodburySpectatorSync.Coop
         private readonly Settings _settings;
         private readonly CoopServer _server;
         private readonly RemoteAvatar _clientAvatar;
+        private RemotePlayerProxy _remotePlayer;
+        private PlayerInputState _lastInputState;
+        private bool _hasInputState;
         private readonly Dictionary<string, DoorState> _doorStates = new Dictionary<string, DoorState>();
         private readonly Dictionary<string, HoldableState> _holdableStates = new Dictionary<string, HoldableState>();
         private readonly Dictionary<string, int> _storyFlags = new Dictionary<string, int>();
@@ -33,6 +36,7 @@ namespace WoodburySpectatorSync.Coop
         private long _nextPlayerSendMs;
         private long _nextWorldSendMs;
         private long _nextStorySendMs;
+        private long _nextFullSyncMs;
         private bool _lastClientConnected;
         private string _lastSceneName = string.Empty;
 
@@ -74,6 +78,10 @@ namespace WoodburySpectatorSync.Coop
         {
             SceneManager.activeSceneChanged -= OnSceneChanged;
             _clientAvatar.SetActive(false);
+            if (_remotePlayer != null && _remotePlayer.Root != null)
+            {
+                UnityEngine.Object.Destroy(_remotePlayer.Root.gameObject);
+            }
         }
 
         public void Update()
@@ -86,14 +94,22 @@ namespace WoodburySpectatorSync.Coop
                 var sceneName = SceneManager.GetActiveScene().name;
                 _lastSceneName = sceneName;
                 _server.Enqueue(new SceneChangeMessage(sceneName));
-                SendFullState();
+                SendFullState(force: true);
+                _nextFullSyncMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 5000;
+                SnapRemotePlayerToHost();
                 _logger.LogInfo("Co-op client connected, sent initial state");
             }
             else if (!_server.IsClientConnected && _lastClientConnected)
             {
                 _lastClientConnected = false;
+                if (_remotePlayer != null)
+                {
+                    _remotePlayer.SetActive(false);
+                }
+                _clientAvatar.SetActive(false);
             }
 
+            EnsureRemotePlayer();
             DrainIncoming();
 
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -116,13 +132,28 @@ namespace WoodburySpectatorSync.Coop
                 SendStoryFlags();
                 _nextStorySendMs = nowMs + 1000;
             }
+
+            if (_server.IsClientConnected && nowMs >= _nextFullSyncMs)
+            {
+                SendFullState(force: true);
+                _nextFullSyncMs = nowMs + 5000;
+            }
         }
 
         public void SetClientAvatar(PlayerTransformState state)
         {
-            _clientAvatar.SetActive(true);
-            _clientAvatar.Root.position = state.Position;
-            _clientAvatar.Root.rotation = state.Rotation;
+            if (_remotePlayer != null && _remotePlayer.Root != null)
+            {
+                _remotePlayer.SetActive(true);
+                _remotePlayer.ApplyTransform(state);
+                _clientAvatar.SetActive(false);
+            }
+            else
+            {
+                _clientAvatar.SetActive(true);
+                _clientAvatar.Root.position = state.Position;
+                _clientAvatar.Root.rotation = state.Rotation;
+            }
         }
 
         private void DrainIncoming()
@@ -137,6 +168,12 @@ namespace WoodburySpectatorSync.Coop
                 {
                     HandleInteract(interact);
                 }
+                else if (message is PlayerInputMessage input)
+                {
+                    _lastInputState = input.State;
+                    _hasInputState = true;
+                    _remotePlayer?.ApplyInput(input.State);
+                }
             }
         }
 
@@ -145,7 +182,10 @@ namespace WoodburySpectatorSync.Coop
             var target = NetPath.FindByPath(interact.TargetPath);
             if (target == null) return;
 
-            var distance = Vector3.Distance(_clientAvatar.Root.position, target.position);
+            var source = _remotePlayer != null && _remotePlayer.Root != null
+                ? _remotePlayer.Root.position
+                : _clientAvatar.Root.position;
+            var distance = Vector3.Distance(source, target.position);
             if (distance > 3.5f)
             {
                 return;
@@ -154,7 +194,14 @@ namespace WoodburySpectatorSync.Coop
             var interactable = target.GetComponent<Iinteractable>();
             if (interactable != null)
             {
-                interactable.Clicked(null);
+                try
+                {
+                    interactable.Clicked(null);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Co-op interact failed: " + ex.Message);
+                }
             }
         }
 
@@ -284,8 +331,16 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
-        private void SendFullState()
+        private void SendFullState(bool force)
         {
+            if (force)
+            {
+                _doorStates.Clear();
+                _holdableStates.Clear();
+                _aiStates.Clear();
+                _storyFlags.Clear();
+            }
+
             SendDoorStates();
             SendHoldableStates();
             SendStoryFlags();
@@ -300,6 +355,54 @@ namespace WoodburySpectatorSync.Coop
             _aiAgents = UnityEngine.Object.FindObjectsOfType<NavmeshPathAgent>();
         }
 
+        private void EnsureRemotePlayer()
+        {
+            if (_remotePlayer != null && _remotePlayer.Root != null) return;
+
+            var playerController = PlayerController.GetInstance();
+            if (playerController == null) return;
+
+            var fps = _playerFirstPersonField != null
+                ? _playerFirstPersonField.GetValue(playerController) as FirstPersonController
+                : null;
+            if (fps == null) return;
+
+            _remotePlayer = new RemotePlayerProxy(fps, new Color(0.2f, 0.7f, 1f, 0.8f));
+            _remotePlayer.SetActive(_server.IsClientConnected);
+
+            if (_hasInputState)
+            {
+                _remotePlayer.ApplyInput(_lastInputState);
+            }
+        }
+
+        private void SnapRemotePlayerToHost()
+        {
+            EnsureRemotePlayer();
+            if (_remotePlayer == null || _remotePlayer.Root == null) return;
+
+            var playerController = PlayerController.GetInstance();
+            if (playerController == null) return;
+
+            var fps = _playerFirstPersonField != null
+                ? _playerFirstPersonField.GetValue(playerController) as FirstPersonController
+                : null;
+            if (fps == null) return;
+
+            var camera = fps.playerCamera != null ? fps.playerCamera : Camera.main;
+            if (camera == null) return;
+
+            var state = new PlayerTransformState
+            {
+                PlayerId = 1,
+                Position = fps.transform.position,
+                Rotation = fps.transform.rotation,
+                CameraPosition = camera.transform.position,
+                CameraRotation = camera.transform.rotation
+            };
+            _remotePlayer.ApplyTransform(state);
+        }
+
         private void OnSceneChanged(Scene oldScene, Scene newScene)
         {
             CacheSceneObjects();
@@ -308,10 +411,17 @@ namespace WoodburySpectatorSync.Coop
             _aiStates.Clear();
             _storyFlags.Clear();
 
+            if (_remotePlayer != null && _remotePlayer.Root != null)
+            {
+                UnityEngine.Object.Destroy(_remotePlayer.Root.gameObject);
+            }
+            _remotePlayer = null;
             _lastSceneName = newScene.name;
             if (_server.IsRunning && _server.IsClientConnected)
             {
                 _server.Enqueue(new SceneChangeMessage(_lastSceneName));
+                SendFullState(force: true);
+                _nextFullSyncMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 5000;
             }
         }
     }

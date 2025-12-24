@@ -39,6 +39,10 @@
       <HintPath>..\..\lib\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AnimationModule" Condition="Exists('..\..\lib\UnityEngine.AnimationModule.dll')">
+      <HintPath>..\..\lib\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.AudioModule" Condition="Exists('..\..\lib\UnityEngine.AudioModule.dll')">
       <HintPath>..\..\lib\UnityEngine.AudioModule.dll</HintPath>
       <Private>false</Private>

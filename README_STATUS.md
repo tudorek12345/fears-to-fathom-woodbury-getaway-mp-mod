@@ -9,6 +9,10 @@
   - Client interactions relay to host via Iinteractable.Clicked.
   - Host replicates door state (CabinDoor + NOTLonely_Door.DoorScript), holdables (position/active), AI transforms (NavmeshPathAgent), and story flags (PlayerPrefs keys).
   - Remote avatar capsules show host/client positions (not full player prefab).
+  - Client auto-teleports to host if too far or updates go stale.
+  - Periodic full resync (5s) and reconnect retry are enabled.
+  - Experimental remote player prefab clone on host (animations best-effort).
+  - Client sends input state to host for remote animation and potential future prediction.
 - Build target: net472 (Mono). BepInEx 5 Mono path is active. IL2CPP remains TODO.
 
 ## Limitations

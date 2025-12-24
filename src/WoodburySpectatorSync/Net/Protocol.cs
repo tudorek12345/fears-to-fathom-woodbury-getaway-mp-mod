@@ -17,7 +17,8 @@ namespace WoodburySpectatorSync.Net
         DoorState = 8,
         HoldableState = 9,
         StoryFlag = 10,
-        AiTransform = 11
+        AiTransform = 11,
+        PlayerInput = 12
     }
 
     public abstract class Message
@@ -146,6 +147,17 @@ namespace WoodburySpectatorSync.Net
         }
     }
 
+    public sealed class PlayerInputMessage : Message
+    {
+        public PlayerInputState State;
+
+        public PlayerInputMessage(PlayerInputState state)
+        {
+            Type = MessageType.PlayerInput;
+            State = state;
+        }
+    }
+
     public struct CameraState
     {
         public long UnixTimeMs;
@@ -186,6 +198,18 @@ namespace WoodburySpectatorSync.Net
         public Vector3 Position;
         public Quaternion Rotation;
         public bool Active;
+    }
+
+    public struct PlayerInputState
+    {
+        public byte PlayerId;
+        public float MoveX;
+        public float MoveY;
+        public float LookYaw;
+        public float LookPitch;
+        public bool Jump;
+        public bool Crouch;
+        public bool Sprint;
     }
 
     public static class Protocol
@@ -348,6 +372,24 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
+        public static byte[] BuildPlayerInput(PlayerInputState state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.PlayerInput);
+                writer.Write(state.PlayerId);
+                writer.Write(state.MoveX);
+                writer.Write(state.MoveY);
+                writer.Write(state.LookYaw);
+                writer.Write(state.LookPitch);
+                writer.Write(state.Jump);
+                writer.Write(state.Crouch);
+                writer.Write(state.Sprint);
+                return ms.ToArray();
+            }
+        }
+
         public static bool TryParsePayload(byte[] payload, out Message message, out string error)
         {
             message = null;
@@ -445,6 +487,19 @@ namespace WoodburySpectatorSync.Net
                                 Position = ReadVector3(reader),
                                 Rotation = ReadQuaternion(reader),
                                 Active = reader.ReadBoolean()
+                            });
+                            return true;
+                        case MessageType.PlayerInput:
+                            message = new PlayerInputMessage(new PlayerInputState
+                            {
+                                PlayerId = reader.ReadByte(),
+                                MoveX = reader.ReadSingle(),
+                                MoveY = reader.ReadSingle(),
+                                LookYaw = reader.ReadSingle(),
+                                LookPitch = reader.ReadSingle(),
+                                Jump = reader.ReadBoolean(),
+                                Crouch = reader.ReadBoolean(),
+                                Sprint = reader.ReadBoolean()
                             });
                             return true;
                         default:

@@ -23,6 +23,8 @@ namespace WoodburySpectatorSync.Coop
         private Thread _sendThread;
         private volatile bool _running;
         private volatile bool _connected;
+        private const int ConnectTimeoutMs = 3000;
+        private const int RetryDelayMs = 2000;
 
         public CoopClient(ManualLogSource logger, Settings settings)
         {
@@ -66,27 +68,41 @@ namespace WoodburySpectatorSync.Coop
 
         private void ConnectLoop()
         {
-            try
+            while (_running)
             {
-                _client = new TcpClient();
-                _client.NoDelay = true;
-                _client.Connect(_settings.SpectatorHostIP.Value, _settings.HostPort.Value);
-                _stream = _client.GetStream();
-                _connected = true;
-                Status = "Connected";
-                _logger.LogInfo("Co-op connected to host");
+                try
+                {
+                    Status = "Connecting";
+                    _client = new TcpClient();
+                    _client.NoDelay = true;
+                    ConnectWithTimeout(_client, _settings.SpectatorHostIP.Value, _settings.HostPort.Value, ConnectTimeoutMs);
+                    _stream = _client.GetStream();
+                    _connected = true;
+                    Status = "Connected";
+                    _logger.LogInfo("Co-op connected to host");
 
-                _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-CoopReceive" };
-                _sendThread = new Thread(SendLoop) { IsBackground = true, Name = "WSS-CoopSend" };
-                _receiveThread.Start();
-                _sendThread.Start();
-            }
-            catch (Exception ex)
-            {
-                Status = "Connection failed";
-                _logger.LogWarning("Co-op connect failed: " + ex.Message);
-                _running = false;
-                Cleanup();
+                    _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-CoopReceive" };
+                    _sendThread = new Thread(SendLoop) { IsBackground = true, Name = "WSS-CoopSend" };
+                    _receiveThread.Start();
+                    _sendThread.Start();
+
+                    _receiveThread.Join();
+                }
+                catch (Exception ex)
+                {
+                    Status = "Retrying";
+                    _logger.LogWarning("Co-op connect failed: " + ex.Message);
+                }
+                finally
+                {
+                    _connected = false;
+                    Cleanup();
+                }
+
+                if (_running)
+                {
+                    Thread.Sleep(RetryDelayMs);
+                }
             }
         }
 
@@ -190,6 +206,18 @@ namespace WoodburySpectatorSync.Coop
             _client = null;
         }
 
+        private static void ConnectWithTimeout(TcpClient client, string host, int port, int timeoutMs)
+        {
+            var result = client.BeginConnect(host, port, null, null);
+            var success = result.AsyncWaitHandle.WaitOne(timeoutMs);
+            if (!success)
+            {
+                client.Close();
+                throw new TimeoutException("Connect timed out.");
+            }
+            client.EndConnect(result);
+        }
+
         private static byte[] BuildPayload(Message message)
         {
             switch (message.Type)
@@ -203,6 +231,8 @@ namespace WoodburySpectatorSync.Coop
                 }
                 case MessageType.Pong:
                     return Protocol.BuildPong();
+                case MessageType.PlayerInput:
+                    return Protocol.BuildPlayerInput(((PlayerInputMessage)message).State);
                 default:
                     return null;
             }
