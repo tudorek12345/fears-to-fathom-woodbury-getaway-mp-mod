@@ -23,6 +23,7 @@ namespace WoodburySpectatorSync.Coop
         private Thread _sendThread;
         private volatile bool _running;
         private volatile bool _connected;
+        private UdpChannel _udpChannel;
         private const int ConnectTimeoutMs = 3000;
         private const int RetryDelayMs = 2000;
 
@@ -35,6 +36,7 @@ namespace WoodburySpectatorSync.Coop
 
         public bool IsConnected => _connected;
         public string Status { get; private set; }
+        public bool HasUdp => _udpChannel != null && _udpChannel.HasRemoteEndpoint;
 
         public void Connect()
         {
@@ -63,7 +65,21 @@ namespace WoodburySpectatorSync.Coop
 
         public bool TryDequeue(out Message message)
         {
+            if (TryDequeueUdp(out message))
+            {
+                return true;
+            }
+
             return _incoming.TryDequeue(out message);
+        }
+
+        public void SendUdp(Message message)
+        {
+            if (_udpChannel == null || !_udpChannel.HasRemoteEndpoint) return;
+            if (message == null) return;
+            var payload = BuildPayload(message);
+            if (payload == null) return;
+            _udpChannel.Send(payload);
         }
 
         private void ConnectLoop()
@@ -80,6 +96,8 @@ namespace WoodburySpectatorSync.Coop
                     _connected = true;
                     Status = "Connected";
                     _logger.LogInfo("Co-op connected to host");
+
+                    StartUdp();
 
                     _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-CoopReceive" };
                     _sendThread = new Thread(SendLoop) { IsBackground = true, Name = "WSS-CoopSend" };
@@ -128,6 +146,11 @@ namespace WoodburySpectatorSync.Coop
                         if (message is PingMessage)
                         {
                             Enqueue(new PongMessage());
+                        }
+                        else if (message is UdpInfoMessage udpInfo)
+                        {
+                            ConfigureUdp(udpInfo.Port);
+                            SendUdpPing();
                         }
                         else
                         {
@@ -204,6 +227,8 @@ namespace WoodburySpectatorSync.Coop
             try { _client?.Close(); } catch { }
             _stream = null;
             _client = null;
+            _udpChannel?.Stop();
+            _udpChannel = null;
         }
 
         private static void ConnectWithTimeout(TcpClient client, string host, int port, int timeoutMs)
@@ -233,9 +258,61 @@ namespace WoodburySpectatorSync.Coop
                     return Protocol.BuildPong();
                 case MessageType.PlayerInput:
                     return Protocol.BuildPlayerInput(((PlayerInputMessage)message).State);
+                case MessageType.UdpInfo:
+                    return Protocol.BuildUdpInfo(((UdpInfoMessage)message).Port);
                 default:
                     return null;
             }
+        }
+
+        private void StartUdp()
+        {
+            if (!_settings.UdpEnabled.Value || _udpChannel != null) return;
+
+            try
+            {
+                _udpChannel = new UdpChannel(_logger, 0);
+                ConfigureUdp(_settings.UdpPort.Value);
+                SendUdpPing();
+            }
+            catch (Exception ex)
+            {
+                _udpChannel = null;
+                _logger.LogWarning("Co-op UDP setup failed: " + ex.Message);
+            }
+        }
+
+        private void ConfigureUdp(int port)
+        {
+            if (_udpChannel == null) return;
+            if (port <= 0) return;
+            _udpChannel.SetRemote(_settings.SpectatorHostIP.Value, port);
+        }
+
+        private void SendUdpPing()
+        {
+            if (_udpChannel == null) return;
+            if (!_udpChannel.HasRemoteEndpoint) return;
+            _udpChannel.Send(Protocol.BuildPing());
+        }
+
+        private bool TryDequeueUdp(out Message message)
+        {
+            message = null;
+            if (_udpChannel == null) return false;
+
+            while (_udpChannel.TryDequeue(out message))
+            {
+                if (message is PingMessage || message is PongMessage || message is UdpInfoMessage)
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            message = null;
+            return false;
         }
     }
 }

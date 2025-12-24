@@ -22,6 +22,7 @@ namespace WoodburySpectatorSync.Net
         private Thread _acceptThread;
         private Thread _sendThread;
         private volatile bool _running;
+        private UdpChannel _udpChannel;
 
         private volatile bool _hasCamera;
         private CameraState _latestCamera;
@@ -46,6 +47,19 @@ namespace WoodburySpectatorSync.Net
             _listener = new TcpListener(bindIp, _settings.HostPort.Value);
             _listener.Start();
 
+            if (_settings.UdpEnabled.Value)
+            {
+                try
+                {
+                    _udpChannel = new UdpChannel(_logger, _settings.UdpPort.Value, bindIp);
+                }
+                catch (Exception ex)
+                {
+                    _udpChannel = null;
+                    _logger.LogWarning("UDP disabled: " + ex.Message);
+                }
+            }
+
             _acceptThread = new Thread(AcceptLoop) { IsBackground = true, Name = "WSS-Accept" };
             _sendThread = new Thread(SendLoop) { IsBackground = true, Name = "WSS-Send" };
             _acceptThread.Start();
@@ -60,6 +74,8 @@ namespace WoodburySpectatorSync.Net
 
             _running = false;
             try { _listener?.Stop(); } catch { }
+            _udpChannel?.Stop();
+            _udpChannel = null;
             DisconnectClient();
             _logger.LogInfo("Host server stopped");
         }
@@ -104,6 +120,11 @@ namespace WoodburySpectatorSync.Net
                     }
 
                     _logger.LogInfo("Spectator connected");
+                    if (_udpChannel != null)
+                    {
+                        _udpChannel.ClearRemote();
+                        _outgoing.Enqueue(Protocol.BuildFrame(Protocol.BuildUdpInfo(_settings.UdpPort.Value)));
+                    }
 
                     if (!string.IsNullOrEmpty(_lastSceneName))
                     {
@@ -162,7 +183,14 @@ namespace WoodburySpectatorSync.Net
                     if (_hasCamera && stopwatch.ElapsedMilliseconds >= nextSendMs)
                     {
                         var payload = Protocol.BuildCameraState(_latestCamera);
-                        SendFrame(Protocol.BuildFrame(payload));
+                        if (_udpChannel != null && _udpChannel.HasRemoteEndpoint)
+                        {
+                            _udpChannel.Send(payload);
+                        }
+                        else
+                        {
+                            SendFrame(Protocol.BuildFrame(payload));
+                        }
                         nextSendMs = stopwatch.ElapsedMilliseconds + intervalMs;
                     }
 

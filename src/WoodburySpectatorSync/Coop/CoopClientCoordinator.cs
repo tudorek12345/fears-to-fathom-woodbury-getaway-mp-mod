@@ -184,7 +184,15 @@ namespace WoodburySpectatorSync.Coop
                 CameraRotation = camera.transform.rotation
             };
 
-            _client.Enqueue(new PlayerTransformMessage(state));
+            var message = new PlayerTransformMessage(state);
+            if (_settings.UdpEnabled.Value && _client.HasUdp)
+            {
+                _client.SendUdp(message);
+            }
+            else
+            {
+                _client.Enqueue(message);
+            }
         }
 
         private void SendInputState()
@@ -210,7 +218,15 @@ namespace WoodburySpectatorSync.Coop
                 Sprint = Input.GetKey(KeyCode.LeftShift)
             };
 
-            _client.Enqueue(new PlayerInputMessage(state));
+            var message = new PlayerInputMessage(state);
+            if (_settings.UdpEnabled.Value && _client.HasUdp)
+            {
+                _client.SendUdp(message);
+            }
+            else
+            {
+                _client.Enqueue(message);
+            }
         }
 
         private void DrainIncoming()

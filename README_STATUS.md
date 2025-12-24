@@ -13,6 +13,7 @@
   - Periodic full resync (5s) and reconnect retry are enabled.
   - Experimental remote player prefab clone on host (animations best-effort).
   - Client sends input state to host for remote animation and potential future prediction.
+- UDP channel added for high-frequency camera/transform updates with TCP fallback.
 - Build target: net472 (Mono). BepInEx 5 Mono path is active. IL2CPP remains TODO.
 
 ## Limitations
@@ -28,6 +29,7 @@
   - Door and holdable sync is best-effort; physics state is not replicated.
   - AI sync is transform-only; behavior state is not replicated.
   - Focused on Cabin scene first; other scenes are not validated.
+  - UDP depends on firewall allowing `UdpPort`; TCP fallback is used if UDP is blocked.
 
 ## Future features
 
@@ -55,6 +57,7 @@
 - Expand story flag coverage beyond PlayerPrefs (in-memory flags).
 - Add a reconnect/resync full snapshot on client join.
 - Add debug overlay: ping, last sync time, entity counts.
+- Add UDP stats (drop rate, last packet time) to overlay.
 
 ## Chat prompt log (user requests)
 
@@ -70,3 +73,4 @@
 - Diagnose client stuck on MainMenu/black screen and fix co-op scene sync/camera.
 - Launch host and client instances again.
 - Create this status/roadmap/readme document with limitations, future steps, prompt log, and TODO.
+- Improve networking; implement UDP for high-frequency updates (option 2).

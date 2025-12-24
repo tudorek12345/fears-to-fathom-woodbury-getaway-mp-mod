@@ -21,6 +21,7 @@ namespace WoodburySpectatorSync.Net
         private Thread _receiveThread;
         private volatile bool _running;
         private volatile bool _connected;
+        private UdpChannel _udpChannel;
         private const int ConnectTimeoutMs = 3000;
         private const int RetryDelayMs = 2000;
 
@@ -53,6 +54,11 @@ namespace WoodburySpectatorSync.Net
 
         public bool TryDequeue(out Message message)
         {
+            if (TryDequeueUdp(out message))
+            {
+                return true;
+            }
+
             return _incoming.TryDequeue(out message);
         }
 
@@ -70,6 +76,8 @@ namespace WoodburySpectatorSync.Net
                     _connected = true;
                     Status = "Connected";
                     _logger.LogInfo("Connected to host");
+
+                    StartUdp();
 
                     _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-Receive" };
                     _receiveThread.Start();
@@ -116,6 +124,11 @@ namespace WoodburySpectatorSync.Net
                         if (message is PingMessage)
                         {
                             SendFrame(Protocol.BuildFrame(Protocol.BuildPong()));
+                        }
+                        else if (message is UdpInfoMessage udpInfo)
+                        {
+                            ConfigureUdp(udpInfo.Port);
+                            SendUdpPing();
                         }
                         else
                         {
@@ -172,6 +185,58 @@ namespace WoodburySpectatorSync.Net
             try { _client?.Close(); } catch { }
             _stream = null;
             _client = null;
+            _udpChannel?.Stop();
+            _udpChannel = null;
+        }
+
+        private void StartUdp()
+        {
+            if (!_settings.UdpEnabled.Value || _udpChannel != null) return;
+
+            try
+            {
+                _udpChannel = new UdpChannel(_logger, 0);
+                ConfigureUdp(_settings.UdpPort.Value);
+                SendUdpPing();
+            }
+            catch (Exception ex)
+            {
+                _udpChannel = null;
+                _logger.LogWarning("UDP setup failed: " + ex.Message);
+            }
+        }
+
+        private void ConfigureUdp(int port)
+        {
+            if (_udpChannel == null) return;
+            if (port <= 0) return;
+            _udpChannel.SetRemote(_settings.SpectatorHostIP.Value, port);
+        }
+
+        private void SendUdpPing()
+        {
+            if (_udpChannel == null) return;
+            if (!_udpChannel.HasRemoteEndpoint) return;
+            _udpChannel.Send(Protocol.BuildPing());
+        }
+
+        private bool TryDequeueUdp(out Message message)
+        {
+            message = null;
+            if (_udpChannel == null) return false;
+
+            while (_udpChannel.TryDequeue(out message))
+            {
+                if (message is PingMessage || message is PongMessage || message is UdpInfoMessage)
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            message = null;
+            return false;
         }
 
         private static void ConnectWithTimeout(TcpClient client, string host, int port, int timeoutMs)

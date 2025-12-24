@@ -22,6 +22,9 @@ Client:
 - SpectatorHostIP = 127.0.0.1 (same PC) or the host's LAN IP
 Shared:
 - SendHz = 20
+- UdpEnabled = true
+- UdpPort = 27056
+- Use the same UdpPort on host and client.
 - UseLocalPlayerController = true (client controls a real local player)
 - TeleportDistance = 25
 - TeleportCooldownSeconds = 3
@@ -82,6 +85,8 @@ Troubleshooting
 - Connection fails:
   - Check firewall and HostPort (27055).
   - Verify SpectatorHostIP is correct.
+- UDP updates missing:
+  - Allow UdpPort (27056) in firewall or set UdpEnabled = false.
 
 Logs
 - Check BepInEx/LogOutput.log for errors and warnings.

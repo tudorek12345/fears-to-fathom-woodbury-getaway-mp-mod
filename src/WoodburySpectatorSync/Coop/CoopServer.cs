@@ -24,6 +24,7 @@ namespace WoodburySpectatorSync.Coop
         private Thread _sendThread;
         private Thread _receiveThread;
         private volatile bool _running;
+        private UdpChannel _udpChannel;
 
         public CoopServer(ManualLogSource logger, Settings settings)
         {
@@ -33,6 +34,7 @@ namespace WoodburySpectatorSync.Coop
 
         public bool IsRunning => _running;
         public bool IsClientConnected => _client != null && _client.Connected;
+        public bool HasUdp => _udpChannel != null && _udpChannel.HasRemoteEndpoint;
 
         public void Start()
         {
@@ -42,6 +44,19 @@ namespace WoodburySpectatorSync.Coop
             var bindIp = ParseBindIp(_settings.HostBindIP.Value);
             _listener = new TcpListener(bindIp, _settings.HostPort.Value);
             _listener.Start();
+
+            if (_settings.UdpEnabled.Value)
+            {
+                try
+                {
+                    _udpChannel = new UdpChannel(_logger, _settings.UdpPort.Value, bindIp);
+                }
+                catch (Exception ex)
+                {
+                    _udpChannel = null;
+                    _logger.LogWarning("Co-op UDP disabled: " + ex.Message);
+                }
+            }
 
             _acceptThread = new Thread(AcceptLoop) { IsBackground = true, Name = "WSS-CoopAccept" };
             _sendThread = new Thread(SendLoop) { IsBackground = true, Name = "WSS-CoopSend" };
@@ -57,6 +72,8 @@ namespace WoodburySpectatorSync.Coop
 
             _running = false;
             try { _listener?.Stop(); } catch { }
+            _udpChannel?.Stop();
+            _udpChannel = null;
             DisconnectClient();
             _logger.LogInfo("Co-op host server stopped");
         }
@@ -71,7 +88,21 @@ namespace WoodburySpectatorSync.Coop
 
         public bool TryDequeueIncoming(out Message message)
         {
+            if (TryDequeueUdp(out message))
+            {
+                return true;
+            }
+
             return _incoming.TryDequeue(out message);
+        }
+
+        public void SendUdp(Message message)
+        {
+            if (_udpChannel == null || !_udpChannel.HasRemoteEndpoint) return;
+            if (message == null) return;
+            var payload = BuildPayload(message);
+            if (payload == null) return;
+            _udpChannel.Send(payload);
         }
 
         private void AcceptLoop()
@@ -93,6 +124,12 @@ namespace WoodburySpectatorSync.Coop
                     {
                         _client = client;
                         _stream = client.GetStream();
+                    }
+
+                    if (_udpChannel != null)
+                    {
+                        _udpChannel.ClearRemote();
+                        _outgoing.Enqueue(Protocol.BuildFrame(Protocol.BuildUdpInfo(_settings.UdpPort.Value)));
                     }
 
                     _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-CoopReceive" };
@@ -210,6 +247,25 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private bool TryDequeueUdp(out Message message)
+        {
+            message = null;
+            if (_udpChannel == null) return false;
+
+            while (_udpChannel.TryDequeue(out message))
+            {
+                if (message is PingMessage || message is PongMessage || message is UdpInfoMessage)
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            message = null;
+            return false;
+        }
+
         private static bool ReadExact(NetworkStream stream, byte[] buffer, int count)
         {
             var offset = 0;
@@ -254,6 +310,8 @@ namespace WoodburySpectatorSync.Coop
                 }
                 case MessageType.AiTransform:
                     return Protocol.BuildAiTransform(((AiTransformMessage)message).State);
+                case MessageType.UdpInfo:
+                    return Protocol.BuildUdpInfo(((UdpInfoMessage)message).Port);
                 default:
                     return null;
             }

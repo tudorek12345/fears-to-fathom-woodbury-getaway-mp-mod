@@ -21,6 +21,8 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<float> SmoothingRotation;
         public ConfigEntry<bool> OverlayEnabled;
         public ConfigEntry<bool> VerboseLogging;
+        public ConfigEntry<bool> UdpEnabled;
+        public ConfigEntry<int> UdpPort;
         public ConfigEntry<float> CoopTeleportDistance;
         public ConfigEntry<float> CoopTeleportCooldownSeconds;
         public ConfigEntry<float> CoopTeleportStaleSeconds;
@@ -39,6 +41,8 @@ namespace WoodburySpectatorSync.Config
             settings.SmoothingRotation = config.Bind("Sync", "SmoothingRotation", 0.15f, "Camera rotation smoothing 0..1");
             settings.OverlayEnabled = config.Bind("UI", "OverlayEnabled", true, "Show overlay by default");
             settings.VerboseLogging = config.Bind("Debug", "VerboseLogging", false, "Verbose logging");
+            settings.UdpEnabled = config.Bind("Network", "UdpEnabled", true, "Enable UDP for high-frequency state (camera/transform)");
+            settings.UdpPort = config.Bind("Network", "UdpPort", 27056, "UDP port for high-frequency state");
             settings.CoopTeleportDistance = config.Bind("Coop", "TeleportDistance", 25f, "Auto-teleport client to host if farther than this (meters)");
             settings.CoopTeleportCooldownSeconds = config.Bind("Coop", "TeleportCooldownSeconds", 3f, "Minimum seconds between auto-teleports");
             settings.CoopTeleportStaleSeconds = config.Bind("Coop", "TeleportOnStaleSeconds", 6f, "Auto-teleport if host updates are stale for this long");

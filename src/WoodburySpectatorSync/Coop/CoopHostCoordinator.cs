@@ -227,7 +227,15 @@ namespace WoodburySpectatorSync.Coop
                 CameraRotation = camera.transform.rotation
             };
 
-            _server.Enqueue(new PlayerTransformMessage(state));
+            var message = new PlayerTransformMessage(state);
+            if (_settings.UdpEnabled.Value && _server.HasUdp)
+            {
+                _server.SendUdp(message);
+            }
+            else
+            {
+                _server.Enqueue(message);
+            }
         }
 
         private void SendDoorStates()

@@ -18,7 +18,8 @@ namespace WoodburySpectatorSync.Net
         HoldableState = 9,
         StoryFlag = 10,
         AiTransform = 11,
-        PlayerInput = 12
+        PlayerInput = 12,
+        UdpInfo = 13
     }
 
     public abstract class Message
@@ -155,6 +156,17 @@ namespace WoodburySpectatorSync.Net
         {
             Type = MessageType.PlayerInput;
             State = state;
+        }
+    }
+
+    public sealed class UdpInfoMessage : Message
+    {
+        public int Port;
+
+        public UdpInfoMessage(int port)
+        {
+            Type = MessageType.UdpInfo;
+            Port = port;
         }
     }
 
@@ -390,6 +402,17 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
+        public static byte[] BuildUdpInfo(int port)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.UdpInfo);
+                writer.Write(port);
+                return ms.ToArray();
+            }
+        }
+
         public static bool TryParsePayload(byte[] payload, out Message message, out string error)
         {
             message = null;
@@ -501,6 +524,9 @@ namespace WoodburySpectatorSync.Net
                                 Crouch = reader.ReadBoolean(),
                                 Sprint = reader.ReadBoolean()
                             });
+                            return true;
+                        case MessageType.UdpInfo:
+                            message = new UdpInfoMessage(reader.ReadInt32());
                             return true;
                         default:
                             error = "Unknown message type";

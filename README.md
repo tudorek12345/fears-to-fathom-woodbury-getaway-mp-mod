@@ -10,6 +10,7 @@ TODO (IL2CPP): If the game is IL2CPP, swap to BepInEx IL2CPP and update the proj
 - Scene sync (spectator loads host scene).
 - Camera sync (position/rotation/FOV) at configurable rate.
 - Progress marker string sync (host sets via hotkey).
+- Optional UDP for high-frequency camera/transform updates.
 
 ## Install (BepInEx Mono)
 
@@ -90,6 +91,7 @@ Notes:
 - Interactions are sent to the host and applied there.
 - Client auto-teleports to host if too far or updates go stale (configurable).
 - Set `UseLocalPlayerController = true` to use the local first-person controller instead of freecam.
+- UDP (if enabled) carries high-frequency transform/input; TCP carries scene and world state.
 
 ## Config
 
@@ -102,6 +104,8 @@ Notes:
 - `SmoothingRotation` = 0.15
 - `OverlayEnabled` = true
 - `VerboseLogging` = false
+- `UdpEnabled` = true
+- `UdpPort` = 27056
 - `TeleportDistance` = 25
 - `TeleportCooldownSeconds` = 3
 - `TeleportOnStaleSeconds` = 6
@@ -119,6 +123,8 @@ Notes:
 ## Troubleshooting
 
 - Firewall: allow the host's port (`HostPort`) on LAN.
+- If UDP updates don't appear, allow `UdpPort` or set `UdpEnabled = false` to fall back to TCP.
+- Ensure the host and client share the same `UdpPort` value.
 - If you see a black screen on spectator, ensure the correct scene is loaded and the camera is found.
 - If input feels locked on spectator, that is expected; spectator is camera-only.
 
@@ -128,10 +134,10 @@ Notes:
 - Host and spectator on two PCs over LAN.
 - Trigger a scene change and verify spectator loads the same scene.
 - Disconnect/reconnect spectator (F7) while host is running.
+- Toggle `UdpEnabled` on/off and verify camera updates still flow.
 
 ## Additional methods to explore (future)
 
-- UDP for camera stream (lower latency), keep TCP for scene/progress.
 - Snapshot buffers + time-based interpolation for smoother motion.
 - Game-specific camera binding to cutscene cameras instead of `Camera.main`.
 - Real story flag sync instead of manual progress markers.
