@@ -28,6 +28,11 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<float> CoopTeleportStaleSeconds;
         public ConfigEntry<bool> CoopSnapToHostOnSceneLoad;
         public ConfigEntry<bool> CoopUseLocalPlayer;
+        public ConfigEntry<bool> CoopRouteInteractions;
+        public ConfigEntry<bool> CoopAutoStartHost;
+        public ConfigEntry<bool> CoopAutoConnectClient;
+        public ConfigEntry<bool> CoopForceCabinStart;
+        public ConfigEntry<string> CoopCabinStartSequence;
 
         public static Settings Bind(ConfigFile config)
         {
@@ -48,6 +53,11 @@ namespace WoodburySpectatorSync.Config
             settings.CoopTeleportStaleSeconds = config.Bind("Coop", "TeleportOnStaleSeconds", 6f, "Auto-teleport if host updates are stale for this long");
             settings.CoopSnapToHostOnSceneLoad = config.Bind("Coop", "SnapToHostOnSceneLoad", true, "Snap client camera to host after scene load");
             settings.CoopUseLocalPlayer = config.Bind("Coop", "UseLocalPlayerController", true, "Use the local player controller instead of freecam in co-op client");
+            settings.CoopRouteInteractions = config.Bind("Coop", "RouteInteractionsToHost", true, "Route client interaction clicks to the host (prevents local story triggers)");
+            settings.CoopAutoStartHost = config.Bind("Coop", "AutoStartHost", false, "Auto-start co-op host server on launch");
+            settings.CoopAutoConnectClient = config.Bind("Coop", "AutoConnectClient", false, "Auto-connect co-op client on launch");
+            settings.CoopForceCabinStart = config.Bind("Coop", "ForceCabinStartSequence", true, "Force the client to start at a cabin testing sequence (skips driving intro)");
+            settings.CoopCabinStartSequence = config.Bind("Coop", "CabinStartSequence", "StartAfterShower", "CabinSceneSequences enum name (StartAfterShower, StartInKitchenAfterOvenStart, StartHiding)");
             return settings;
         }
     }

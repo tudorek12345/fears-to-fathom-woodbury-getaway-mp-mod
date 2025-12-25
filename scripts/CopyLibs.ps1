@@ -18,7 +18,8 @@ $managedDir = $unityEnginePath.Directory.FullName
 $required = @(
     "UnityEngine.dll",
     "UnityEngine.CoreModule.dll",
-    "Assembly-CSharp.dll"
+    "Assembly-CSharp.dll",
+    "Assembly-CSharp-firstpass.dll"
 )
 
 $optional = @(
@@ -27,6 +28,7 @@ $optional = @(
     "UnityEngine.AudioModule.dll",
     "UnityEngine.PhysicsModule.dll",
     "UnityEngine.AnimationModule.dll",
+    "UnityEngine.AIModule.dll",
     "UnityEngine.UIModule.dll",
     "UnityEngine.SceneManagementModule.dll",
     "UnityEngine.UnityWebRequestModule.dll"

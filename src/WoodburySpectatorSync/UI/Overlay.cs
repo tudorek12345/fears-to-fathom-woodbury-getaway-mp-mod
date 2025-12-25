@@ -28,23 +28,47 @@ namespace WoodburySpectatorSync.UI
             _progressMarker = marker ?? "";
         }
 
-        public void Draw(string modeLabel, string status, string sceneName)
+        public string Draw(string modeLabel, string status, string sceneName, string[] extraLines)
         {
-            if (!_visible) return;
+            if (!_visible) return null;
 
+            var text = BuildText(modeLabel, status, sceneName, extraLines, out var lineCount);
+
+            var height = 20 + lineCount * 18;
+            var rect = new Rect(10, 10, 560, height);
+            GUI.Box(rect, text);
+            return text;
+        }
+
+        public string BuildText(string modeLabel, string status, string sceneName, string[] extraLines, out int lineCount)
+        {
             var sb = new StringBuilder();
+            lineCount = 0;
             sb.AppendLine("Woodbury Spectator Sync (MVP)");
+            lineCount++;
             sb.AppendLine("Mode: " + modeLabel);
+            lineCount++;
             sb.AppendLine("Status: " + status);
+            lineCount++;
             sb.AppendLine("Scene: " + sceneName);
+            lineCount++;
             if (!string.IsNullOrEmpty(_progressMarker))
             {
                 sb.AppendLine("Progress: " + _progressMarker);
+                lineCount++;
+            }
+            if (extraLines != null)
+            {
+                foreach (var line in extraLines)
+                {
+                    if (string.IsNullOrEmpty(line)) continue;
+                    sb.AppendLine(line);
+                    lineCount++;
+                }
             }
             sb.AppendLine("Hotkeys: F6 host on/off, F7 connect, F8 overlay, F9 progress");
-
-            var rect = new Rect(10, 10, 480, 140);
-            GUI.Box(rect, sb.ToString());
+            lineCount++;
+            return sb.ToString();
         }
     }
 }

@@ -18,6 +18,8 @@ namespace WoodburySpectatorSync.Net
         private Thread _receiveThread;
         private volatile bool _running;
         private uint _sendSeq;
+        private long _lastReceiveUnixMs;
+        private long _lastSendUnixMs;
 
         public UdpChannel(ManualLogSource logger, int localPort, IPAddress bindAddress = null)
         {
@@ -31,6 +33,8 @@ namespace WoodburySpectatorSync.Net
         }
 
         public bool HasRemoteEndpoint => _remoteEndpoint != null;
+        public long LastReceiveUnixMs => Interlocked.Read(ref _lastReceiveUnixMs);
+        public long LastSendUnixMs => Interlocked.Read(ref _lastSendUnixMs);
 
         public void SetRemote(string host, int port)
         {
@@ -73,6 +77,7 @@ namespace WoodburySpectatorSync.Net
 
             try
             {
+                Interlocked.Exchange(ref _lastSendUnixMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 _client.Send(packet, packet.Length, _remoteEndpoint);
             }
             catch (Exception ex)
@@ -107,6 +112,7 @@ namespace WoodburySpectatorSync.Net
                         _remoteEndpoint = remote;
                     }
 
+                    Interlocked.Exchange(ref _lastReceiveUnixMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                     var seq = BitConverter.ToUInt32(data, 0);
                     var payload = new byte[data.Length - 4];
                     Buffer.BlockCopy(data, 4, payload, 0, payload.Length);

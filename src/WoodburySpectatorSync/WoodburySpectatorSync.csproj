@@ -19,6 +19,10 @@
       <HintPath>..\..\lib\Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Assembly-CSharp-firstpass" Condition="Exists('..\..\lib\Assembly-CSharp-firstpass.dll')">
+      <HintPath>..\..\lib\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine">
       <HintPath>..\..\lib\UnityEngine.dll</HintPath>
       <Private>false</Private>
@@ -41,6 +45,10 @@
     </Reference>
     <Reference Include="UnityEngine.AnimationModule" Condition="Exists('..\..\lib\UnityEngine.AnimationModule.dll')">
       <HintPath>..\..\lib\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AIModule" Condition="Exists('..\..\lib\UnityEngine.AIModule.dll')">
+      <HintPath>..\..\lib\UnityEngine.AIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.AudioModule" Condition="Exists('..\..\lib\UnityEngine.AudioModule.dll')">

@@ -2,49 +2,36 @@
 
 ## Current status
 
-- MVP spectator mode is implemented (Host/Spectator, scene sync, camera sync, progress marker).
-- Co-op is experimental and host-authoritative:
-  - CoopHost and CoopClient modes added.
-  - Scene sync for co-op client (auto loads host scene).
-  - Client interactions relay to host via Iinteractable.Clicked.
-  - Host replicates door state (CabinDoor + NOTLonely_Door.DoorScript), holdables (position/active), AI transforms (NavmeshPathAgent), and story flags (PlayerPrefs keys).
-  - Remote avatar capsules show host/client positions (not full player prefab).
-  - Client auto-teleports to host if too far or updates go stale.
-  - Periodic full resync (5s) and reconnect retry are enabled.
-  - Experimental remote player prefab clone on host (animations best-effort).
-  - Client sends input state to host for remote animation and potential future prediction.
-- UDP channel added for high-frequency camera/transform updates with TCP fallback.
-- Build target: net472 (Mono). BepInEx 5 Mono path is active. IL2CPP remains TODO.
+- Primary focus is co-op. Cabin is the first scene being stabilized.
+- Entry path: use the "Board game" episode in the menu to reach the Cabin flow.
+- Co-op is host-authoritative with SceneReady handshake and full snapshot on connect.
+- Client interactions can be routed to host (RouteInteractionsToHost).
+- Sync covers player transforms, door states, holdables, basic AI transforms, and story flags.
+- UDP handles high-frequency transforms; TCP carries scene and world state.
+- Priority queue and UDP drain budgeting reduce transform starvation.
+- Dialogue events are transmitted; UI mirroring is still incomplete.
 
 ## Limitations
 
-- Spectator mode:
-  - No co-op interaction or state sync (items, doors, AI, inventory).
-  - No prevention of story triggers beyond minimal spectator lockdown.
-  - One spectator only.
-- Co-op mode:
-  - Not a full second player prefab; client uses free camera and interaction ray.
-  - Client gameplay systems are disabled locally to avoid story divergence.
-  - Inventory ownership and held item handoff are not fully modeled.
-  - Door and holdable sync is best-effort; physics state is not replicated.
-  - AI sync is transform-only; behavior state is not replicated.
-  - Focused on Cabin scene first; other scenes are not validated.
-  - UDP depends on firewall allowing `UdpPort`; TCP fallback is used if UDP is blocked.
+- Not a full second player prefab yet; client uses local controller or freecam.
+- Dialogue UI can flicker or appear briefly on the client.
+- Item ownership, hand attachment, and physics replication are incomplete.
+- AI sync is transform-only; behavior state is not replicated.
+- Other scenes are not validated beyond Cabin.
 
 ## Future features
 
-- Spawn a real second player prefab per scene (Cabin/Pizzeria/RoadTrip).
+- Spawn a real second player prefab per scene (Cabin, Pizzeria, RoadTrip).
 - Networked input and animation state replication.
 - Proper item ownership, pickup/throw authority, and hand attachment sync.
 - Server-side gating for story triggers and cutscene synchronization.
 - AI behavior state replication (not only transform).
 - Multi-client support (more than one client).
-- Smoother state sync (snapshots, interpolation, rollback).
 
 ## Next steps to take
 
-1. Validate Cabin co-op flow end-to-end (doors, simple items, triggers).
-2. Identify and map player prefab spawn points and camera setup for Cabin.
+1. Validate the Cabin co-op flow end-to-end (doors, simple items, triggers).
+2. Map player prefab spawn points and camera setup for Cabin.
 3. Implement client-held item ownership (host confirms, client mirrors).
 4. Add host-side checks for interaction distance and line of sight.
 5. Extend sync to additional scenes after Cabin stabilizes.
@@ -55,22 +42,4 @@
 - Sync held items (left/right hand) and throw events.
 - Sync door audio and lock state consistently.
 - Expand story flag coverage beyond PlayerPrefs (in-memory flags).
-- Add a reconnect/resync full snapshot on client join.
-- Add debug overlay: ping, last sync time, entity counts.
 - Add UDP stats (drop rate, last packet time) to overlay.
-
-## Chat prompt log (user requests)
-
-- Create a production-quality MVP spectator mod with TCP sync, camera follow, scene sync, and progress marker.
-- Report mod state.
-- Add build and lib wiring; build the project.
-- Install BepInEx 5 (Mono), run the game once to generate config.
-- Wire full co-op interaction and state sync (items, doors, AI, inventory, story flags) and prevent story triggers.
-- Confirm Mono/IL2CPP, enable true co-op with both players interacting, and reverse-engineer game systems.
-- Use a My Summer Car Online style approach (two players).
-- Provide a recommendation and start with Cabin scene.
-- Launch host and client builds; launch two instances at 720p.
-- Diagnose client stuck on MainMenu/black screen and fix co-op scene sync/camera.
-- Launch host and client instances again.
-- Create this status/roadmap/readme document with limitations, future steps, prompt log, and TODO.
-- Improve networking; implement UDP for high-frequency updates (option 2).

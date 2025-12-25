@@ -8,6 +8,7 @@ namespace WoodburySpectatorSync.Coop
     {
         private readonly GameObject _root;
         private readonly CharacterController _characterController;
+        private readonly bool _allowCharacterController;
         private readonly Transform _cameraTransform;
         private readonly Animator _animator;
         private readonly HashSet<int> _animFloatParams = new HashSet<int>();
@@ -15,8 +16,9 @@ namespace WoodburySpectatorSync.Coop
 
         public Transform Root => _root != null ? _root.transform : null;
 
-        public RemotePlayerProxy(FirstPersonController source, Color tint)
+        public RemotePlayerProxy(FirstPersonController source, Color tint, bool allowCharacterController = false)
         {
+            _allowCharacterController = allowCharacterController;
             _root = Object.Instantiate(source.gameObject, source.transform.position, source.transform.rotation);
             _root.name = "CoopRemotePlayer";
 
@@ -46,6 +48,11 @@ namespace WoodburySpectatorSync.Coop
 
             _characterController = _root.GetComponent<CharacterController>();
             _cameraTransform = cameras.Length > 0 ? cameras[0].transform : null;
+
+            if (!_allowCharacterController)
+            {
+                DisableColliders();
+            }
 
             _animator = _root.GetComponentInChildren<Animator>(true);
             if (_animator != null)
@@ -78,7 +85,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (_root == null) return;
 
-            if (_characterController != null)
+            if (_characterController != null && _allowCharacterController)
             {
                 _characterController.enabled = false;
             }
@@ -91,7 +98,7 @@ namespace WoodburySpectatorSync.Coop
                 _cameraTransform.position = state.CameraPosition;
             }
 
-            if (_characterController != null)
+            if (_characterController != null && _allowCharacterController)
             {
                 _characterController.enabled = true;
             }
@@ -145,6 +152,16 @@ namespace WoodburySpectatorSync.Coop
             if (renderer != null)
             {
                 renderer.material.color = tint;
+            }
+        }
+
+        private void DisableColliders()
+        {
+            var colliders = _root.GetComponentsInChildren<Collider>(true);
+            foreach (var collider in colliders)
+            {
+                if (collider == null) continue;
+                collider.enabled = false;
             }
         }
     }

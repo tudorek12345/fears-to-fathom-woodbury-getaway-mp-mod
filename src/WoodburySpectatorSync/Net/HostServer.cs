@@ -27,6 +27,7 @@ namespace WoodburySpectatorSync.Net
         private volatile bool _hasCamera;
         private CameraState _latestCamera;
         private string _lastSceneName = string.Empty;
+        private int _lastSceneIndex = -1;
         private string _lastProgressMarker = string.Empty;
 
         public HostServer(ManualLogSource logger, Settings settings)
@@ -86,10 +87,11 @@ namespace WoodburySpectatorSync.Net
             _hasCamera = true;
         }
 
-        public void QueueSceneChange(string sceneName)
+        public void QueueSceneChange(string sceneName, int buildIndex)
         {
             _lastSceneName = sceneName ?? string.Empty;
-            _outgoing.Enqueue(Protocol.BuildFrame(Protocol.BuildSceneChange(_lastSceneName)));
+            _lastSceneIndex = buildIndex;
+            _outgoing.Enqueue(Protocol.BuildFrame(Protocol.BuildSceneChange(_lastSceneName, _lastSceneIndex)));
         }
 
         public void QueueProgressMarker(string marker)
@@ -128,7 +130,7 @@ namespace WoodburySpectatorSync.Net
 
                     if (!string.IsNullOrEmpty(_lastSceneName))
                     {
-                        _outgoing.Enqueue(Protocol.BuildFrame(Protocol.BuildSceneChange(_lastSceneName)));
+                        _outgoing.Enqueue(Protocol.BuildFrame(Protocol.BuildSceneChange(_lastSceneName, _lastSceneIndex)));
                     }
 
                     if (!string.IsNullOrEmpty(_lastProgressMarker))

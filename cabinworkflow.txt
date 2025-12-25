@@ -1,16 +1,16 @@
-WOODBURY CO-OP CABIN WORKFLOW (EXPERIMENTAL)
+WOODBURY CO-OP CABIN WORKFLOW (WIP)
 
 Goal
 - Run two instances (host + client) in the Cabin scene with shared state.
-- Host is authoritative. Client sends input/interaction requests to host.
+- Host is authoritative. Client sends interaction requests to host.
 
 Menu / Episode Selection
-- This game is "Woodbury Getaway" itself. From the main menu, choose New Game or Continue.
-- If you see an episode selector, choose Woodbury Getaway (this title).
+- If you see an episode selector, choose "Board game" (Woodbury Getaway).
+- This is the path that loads the Cabin flow for testing.
 
 When to start the server
-- Start the co-op server AFTER the host is fully inside the Cabin scene.
-- If the server starts while the host is still on the main menu, the client will sync to the main menu.
+- Start the co-op server only after the host is fully inside the Cabin scene.
+- If the server starts in the main menu, the client will sync to the menu.
 
 Recommended config (BepInEx/config/com.woodbury.spectatorsync.cfg)
 Host:
@@ -19,33 +19,33 @@ Host:
 - HostPort = 27055
 Client:
 - Mode = CoopClient
-- SpectatorHostIP = 127.0.0.1 (same PC) or the host's LAN IP
+- SpectatorHostIP = 127.0.0.1 (same PC) or host LAN IP
 Shared:
 - SendHz = 20
 - UdpEnabled = true
 - UdpPort = 27056
-- Use the same UdpPort on host and client.
-- UseLocalPlayerController = true (client controls a real local player)
+- UseLocalPlayerController = true
+- RouteInteractionsToHost = true
 - TeleportDistance = 25
 - TeleportCooldownSeconds = 3
 - TeleportOnStaleSeconds = 6
 - SnapToHostOnSceneLoad = true
+- AutoStartHost = false
+- AutoConnectClient = false
+- ForceCabinStartSequence = true
+- CabinStartSequence = StartAfterShower
 
 How to start two instances (same PC)
-1) Set Mode = CoopHost in the config.
-2) Launch the game (Host instance). Use windowed mode if possible:
-   -screen-fullscreen 0 -screen-width 1280 -screen-height 720
-3) In the Host instance, load into the Cabin scene.
-4) Press F6 to start the server (overlay should show "Co-op hosting").
-5) Edit config:
-   - Mode = CoopClient
-   - SpectatorHostIP = 127.0.0.1
-6) Launch the game again (Client instance).
-7) Press F7 to connect (overlay should show "Connected").
+1) Set Mode = CoopHost in the host config.
+2) Launch the host and load into the Cabin via "Board game".
+3) Press F6 to start the host server (overlay shows "Co-op hosting").
+4) Set Mode = CoopClient in the client config.
+5) Launch the client and stay on the main menu.
+6) Press F7 to connect and wait for the scene to load.
 
 If the game blocks two instances
 - Close both instances.
-- Duplicate the game folder to another location and run one instance from each folder.
+- Duplicate the game folder and run one instance from each folder.
 
 Controls and behavior
 Host:
@@ -54,31 +54,32 @@ Client:
 - UseLocalPlayerController = true: normal WASD + mouse.
 - UseLocalPlayerController = false: freecam (WASD move, mouse look, Space up, LCtrl down).
 - Interactions: left click sends an interaction request to the host.
+- If RouteInteractionsToHost = true, local interactables are disabled to avoid story drift.
 
 Debug / validation steps (Cabin)
 1) Verify both overlays show Scene: CabinScene.
 2) Host sees a second player (prefab clone or capsule).
 3) Client moves and host sees remote movement/rotation.
-4) Client clicks a door; host opens it; client sees door open.
-5) Client picks up a simple item; host sees it move (best-effort).
+4) Client clicks a door; host opens it; client sees the door open.
+5) Client interacts with a simple item; host sees it move (best-effort).
 
 Caveats
 - Remote player animations are best-effort; Animator parameter names may not match.
 - Item ownership and hand attachment are incomplete (transform-only sync).
 - AI is transform-only; behavior can still diverge.
-- UseLocalPlayerController can trigger local story events on the client. Use freecam if needed.
-- Scene transitions are host-driven; always start the server after host loads the intended scene.
+- If local player is enabled, story triggers can still fire on the client.
+- Scene transitions are host-driven; always start the server after the host loads the intended scene.
 
 Troubleshooting
 - Client stuck on main menu:
-  - Make sure host already loaded Cabin before pressing F6.
-  - Disconnect (F7), then reconnect after host is in Cabin.
+  - Host must be inside Cabin before pressing F6.
+  - Client should stay on main menu and press F7.
 - Black screen on client:
   - Wait for scene load; scene sync can take a few seconds.
   - Toggle UseLocalPlayerController to false and reconnect.
 - No interactions from client:
   - Ensure client is within ~3.5m of the target.
-  - Make sure the host is connected and in the same scene.
+  - Check RouteInteractionsToHost and confirm host is connected.
 - Desync or missing objects:
   - Wait for the 5s full resync.
   - Disconnect/reconnect the client (F7).
@@ -89,4 +90,4 @@ Troubleshooting
   - Allow UdpPort (27056) in firewall or set UdpEnabled = false.
 
 Logs
-- Check BepInEx/LogOutput.log for errors and warnings.
+- Check BepInEx/LogOutput.log and BepInEx/logs for errors and warnings.

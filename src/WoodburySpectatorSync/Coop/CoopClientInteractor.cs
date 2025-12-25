@@ -24,6 +24,14 @@ namespace WoodburySpectatorSync.Coop
                 if (Physics.Raycast(ray, out var hit, _range))
                 {
                     var interactable = hit.collider.GetComponent<Iinteractable>();
+                    if (interactable == null)
+                    {
+                        interactable = hit.collider.GetComponentInParent<Iinteractable>();
+                    }
+                    if (interactable == null)
+                    {
+                        interactable = hit.collider.GetComponentInChildren<Iinteractable>();
+                    }
                     if (interactable != null)
                     {
                         var path = NetPath.GetPath(interactable.gameObject.transform);

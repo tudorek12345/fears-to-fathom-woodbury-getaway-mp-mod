@@ -35,7 +35,7 @@ namespace WoodburySpectatorSync.Coop
             if (Input.GetKey(KeyCode.LeftControl)) move.y -= 1f;
 
             var speed = Input.GetKey(KeyCode.LeftShift) ? _moveSpeed * 1.5f : _moveSpeed;
-            var delta = _camera.transform.TransformDirection(move.normalized) * speed * Time.deltaTime;
+            var delta = _camera.transform.TransformDirection(move.normalized) * speed * Time.unscaledDeltaTime;
             _camera.transform.position += delta;
         }
     }

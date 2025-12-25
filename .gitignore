@@ -1,0 +1,21 @@
+# Build artifacts
+**/bin/
+**/obj/
+*.pdb
+*.cache
+*.sourcelink.json
+
+# Game/Unity references (local copies)
+lib/*.dll
+
+# Decompiled content and tooling output
+decompiled/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# IDE files
+.vs/
+*.user
+*.suo

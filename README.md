@@ -1,16 +1,32 @@
-# Woodbury Spectator Sync (MVP)
+# Woodbury Spectator Sync (Co-op Focus)
 
-A BepInEx 5 (Mono) mod that adds a LAN spectator mode to "Fears to Fathom: Woodbury Getaway".
+A BepInEx 5 (Mono) LAN mod for "Fears to Fathom: Woodbury Getaway".
+Primary focus is co-op; spectator mode remains but is secondary.
+Current work targets the Cabin scene first. In the episode list, select "Board game" to reach the Cabin flow.
 
-TODO (IL2CPP): If the game is IL2CPP, swap to BepInEx IL2CPP and update the project references and bootstrapper.
+TODO (IL2CPP): If the game is IL2CPP, swap to BepInEx IL2CPP and update project references and bootstrapper.
 
-## Features (MVP)
+## Scope
 
-- One host, one spectator client.
-- Scene sync (spectator loads host scene).
-- Camera sync (position/rotation/FOV) at configurable rate.
-- Progress marker string sync (host sets via hotkey).
-- Optional UDP for high-frequency camera/transform updates.
+- Co-op first, host-authoritative.
+- Cabin scene is the first stabilized target.
+- Spectator mode is supported but not the main focus.
+
+## Current status (WIP)
+
+- Co-op host/client connects and syncs on LAN.
+- Scene handshake uses SceneReady; host resends SceneChange until client acks, then sends a full snapshot.
+- Sync includes player transforms, door states, holdables, basic AI transforms, and story flags.
+- Interaction routing is available: client clicks are sent to the host and applied there.
+- UDP is used for high-frequency transforms; TCP carries scene and world state.
+- Transform backlog control and UDP drain budgeting are in place to reduce starvation.
+- Dialogue events are transmitted, but full dialogue UI mirroring is not complete.
+
+Known issues (latest build):
+- HostUpdateAge can climb even while transforms are flowing; still under investigation.
+- Dialogue UI can flicker or appear briefly on the client instead of staying in sync.
+- Item ownership and physics replication are incomplete.
+- Other scenes are not yet validated beyond Cabin.
 
 ## Install (BepInEx Mono)
 
@@ -55,43 +71,56 @@ Copy these from your game/BepInEx install into `lib/` if needed.
 
 ## Usage
 
-### Host
+### Co-op Host (primary focus)
 
-1. Set `Mode = Host` in the config.
+1. Set `Mode = CoopHost` in the config.
 2. Launch the game.
-3. Press `F6` to start the host server.
-4. Press `F9` to set the progress marker string.
+3. From the main menu, select the "Board game" episode (Woodbury Getaway) to reach the Cabin flow.
+4. Wait until the host is fully inside the Cabin scene.
+5. Press `F6` to start the co-op server.
 
-### Spectator
+### Co-op Client
+
+1. Set `Mode = CoopClient` in the config.
+2. Set `SpectatorHostIP` to the host's LAN IP.
+3. Launch the game and stay on the main menu.
+4. Press `F7` to connect and wait for scene load.
+5. Do not select an episode on the client.
+
+Notes:
+- `RouteInteractionsToHost = true` routes clicks to the host (prevents local story triggers).
+- `UseLocalPlayerController = true` uses the local first-person controller; set to `false` for freecam.
+- UDP (if enabled) carries high-frequency transforms; TCP carries scene and world state.
+- Host waits for SceneReady before sending the full co-op snapshot.
+- Host and client must run the same mod build/version.
+
+### Spectator (secondary)
 
 1. Set `Mode = Spectator` in the config.
 2. Set `SpectatorHostIP` to the host's LAN IP.
 3. Launch the game.
 4. Press `F7` to connect.
 
-### Co-op (experimental)
+### Host + client on the same PC (no auto-connect)
 
-This mode is host-authoritative and currently focused on the Cabin scene.
+Use separate config files so each instance keeps its own mode:
 
-#### Co-op Host
+```powershell
+$exe = "C:\Games\Fears to Fathom - Woodbury Getaway\Fears to Fathom - Woodbury Getaway.exe"
+$wd = "C:\Games\Fears to Fathom - Woodbury Getaway"
+$env:WSS_MODE = "CoopHost"
+$env:WSS_CONFIG = "C:\Games\Fears to Fathom - Woodbury Getaway\BepInEx\config\com.woodbury.spectatorsync.host.cfg"
+Start-Process -FilePath $exe -WorkingDirectory $wd
+Start-Sleep -Seconds 2
+$env:WSS_MODE = "CoopClient"
+$env:WSS_CONFIG = "C:\Games\Fears to Fathom - Woodbury Getaway\BepInEx\config\com.woodbury.spectatorsync.client.cfg"
+Start-Process -FilePath $exe -WorkingDirectory $wd
+Remove-Item Env:WSS_MODE, Env:WSS_CONFIG -ErrorAction SilentlyContinue
+```
 
-1. Set `Mode = CoopHost` in the config.
-2. Launch the game.
-3. Press `F6` to start the co-op server.
-
-#### Co-op Client
-
-1. Set `Mode = CoopClient` in the config.
-2. Set `SpectatorHostIP` to the host's LAN IP.
-3. Launch the game.
-4. Press `F7` to connect.
-
-Notes:
-- Client uses a free camera controller to avoid local story triggers.
-- Interactions are sent to the host and applied there.
-- Client auto-teleports to host if too far or updates go stale (configurable).
-- Set `UseLocalPlayerController = true` to use the local first-person controller instead of freecam.
-- UDP (if enabled) carries high-frequency transform/input; TCP carries scene and world state.
+Then:
+- Host window: enter Cabin, press `F6`.
+- Client window: stay on main menu, press `F7`.
 
 ## Config
 
@@ -111,33 +140,41 @@ Notes:
 - `TeleportOnStaleSeconds` = 6
 - `SnapToHostOnSceneLoad` = true
 - `UseLocalPlayerController` = true
+- `RouteInteractionsToHost` = true
+- `AutoStartHost` = false
+- `AutoConnectClient` = false
+- `ForceCabinStartSequence` = true
+- `CabinStartSequence` = StartAfterShower
 
-## Known limitations
+## Networking notes
 
-- Spectator mode: no co-op interaction or state sync (items, doors, AI, inventory).
-- Spectator mode: no prevention of story triggers beyond minimal spectator lockdown.
-- One spectator only.
-- Co-op mode is experimental and currently focused on Cabin scene only.
-- Co-op uses host-authoritative state; client item ownership and inventory handoff are limited.
+- Host state (scene, doors, dialogue, story flags) is prioritized over transforms.
+- UDP has a per-frame drain budget to avoid starving TCP state.
+- Old transform messages can be dropped to keep the stream fresh.
 
 ## Troubleshooting
 
-- Firewall: allow the host's port (`HostPort`) on LAN.
-- If UDP updates don't appear, allow `UdpPort` or set `UdpEnabled = false` to fall back to TCP.
-- Ensure the host and client share the same `UdpPort` value.
-- If you see a black screen on spectator, ensure the correct scene is loaded and the camera is found.
-- If input feels locked on spectator, that is expected; spectator is camera-only.
+- Client stuck on main menu:
+  - Start the host server only after the host is inside the Cabin scene.
+  - Client should stay on main menu and press `F7`, not pick an episode.
+- Wrong scene on client:
+  - Host must select "Board game" in the episode list before starting the server.
+- UDP updates missing:
+  - Allow `UdpPort` in firewall or set `UdpEnabled = false`.
+- Overlay missing:
+  - Press `F8` to toggle overlay.
 
 ## Test plan
 
-- Host and spectator on same PC (`127.0.0.1`).
-- Host and spectator on two PCs over LAN.
-- Trigger a scene change and verify spectator loads the same scene.
-- Disconnect/reconnect spectator (F7) while host is running.
-- Toggle `UdpEnabled` on/off and verify camera updates still flow.
+- Co-op host and client on the same PC (`127.0.0.1`).
+- Co-op host and client on two PCs over LAN.
+- Scene handshake with SceneReady and full snapshot.
+- Door interaction routed to host and mirrored on client.
+- UDP on/off validation.
 
 ## Additional methods to explore (future)
 
-- Snapshot buffers + time-based interpolation for smoother motion.
-- Game-specific camera binding to cutscene cameras instead of `Camera.main`.
-- Real story flag sync instead of manual progress markers.
+- Full dialogue UI mirroring and drift correction.
+- Real item ownership and hand attachment sync.
+- Expanded scene coverage beyond Cabin (Pizzeria, RoadTrip).
+- More robust AI behavior state sync.

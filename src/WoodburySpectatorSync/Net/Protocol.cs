@@ -19,7 +19,13 @@ namespace WoodburySpectatorSync.Net
         StoryFlag = 10,
         AiTransform = 11,
         PlayerInput = 12,
-        UdpInfo = 13
+        UdpInfo = 13,
+        SceneReady = 14,
+        DialogueLine = 15,
+        DialogueStart = 16,
+        DialogueAdvance = 17,
+        DialogueChoice = 18,
+        DialogueEnd = 19
     }
 
     public abstract class Message
@@ -41,10 +47,27 @@ namespace WoodburySpectatorSync.Net
     public sealed class SceneChangeMessage : Message
     {
         public string SceneName;
+        public int BuildIndex;
+        public int StartSequence;
+        public int FromMenu;
 
-        public SceneChangeMessage(string sceneName)
+        public SceneChangeMessage(string sceneName, int buildIndex = -1, int startSequence = -1, int fromMenu = -1)
         {
             Type = MessageType.SceneChange;
+            SceneName = sceneName ?? string.Empty;
+            BuildIndex = buildIndex;
+            StartSequence = startSequence;
+            FromMenu = fromMenu;
+        }
+    }
+
+    public sealed class SceneReadyMessage : Message
+    {
+        public string SceneName;
+
+        public SceneReadyMessage(string sceneName)
+        {
+            Type = MessageType.SceneReady;
             SceneName = sceneName ?? string.Empty;
         }
     }
@@ -70,9 +93,19 @@ namespace WoodburySpectatorSync.Net
 
     public sealed class PongMessage : Message
     {
+        public bool HasTransform;
+        public PlayerTransformState Transform;
+
         public PongMessage()
         {
             Type = MessageType.Pong;
+        }
+
+        public PongMessage(PlayerTransformState transform)
+        {
+            Type = MessageType.Pong;
+            HasTransform = true;
+            Transform = transform;
         }
     }
 
@@ -170,6 +203,75 @@ namespace WoodburySpectatorSync.Net
         }
     }
 
+    public sealed class DialogueLineMessage : Message
+    {
+        public string Speaker;
+        public string Text;
+        public float Duration;
+        public byte Kind;
+
+        public DialogueLineMessage(string speaker, string text, float duration, byte kind)
+        {
+            Type = MessageType.DialogueLine;
+            Speaker = speaker ?? string.Empty;
+            Text = text ?? string.Empty;
+            Duration = duration;
+            Kind = kind;
+        }
+    }
+
+    public sealed class DialogueStartMessage : Message
+    {
+        public int ConversationId;
+        public int EntryId;
+
+        public DialogueStartMessage(int conversationId, int entryId)
+        {
+            Type = MessageType.DialogueStart;
+            ConversationId = conversationId;
+            EntryId = entryId;
+        }
+    }
+
+    public sealed class DialogueAdvanceMessage : Message
+    {
+        public int ConversationId;
+        public int EntryId;
+
+        public DialogueAdvanceMessage(int conversationId, int entryId)
+        {
+            Type = MessageType.DialogueAdvance;
+            ConversationId = conversationId;
+            EntryId = entryId;
+        }
+    }
+
+    public sealed class DialogueChoiceMessage : Message
+    {
+        public int ConversationId;
+        public int EntryId;
+        public int ChoiceIndex;
+
+        public DialogueChoiceMessage(int conversationId, int entryId, int choiceIndex)
+        {
+            Type = MessageType.DialogueChoice;
+            ConversationId = conversationId;
+            EntryId = entryId;
+            ChoiceIndex = choiceIndex;
+        }
+    }
+
+    public sealed class DialogueEndMessage : Message
+    {
+        public int ConversationId;
+
+        public DialogueEndMessage(int conversationId)
+        {
+            Type = MessageType.DialogueEnd;
+            ConversationId = conversationId;
+        }
+    }
+
     public struct CameraState
     {
         public long UnixTimeMs;
@@ -259,12 +361,26 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
-        public static byte[] BuildSceneChange(string sceneName)
+        public static byte[] BuildSceneChange(string sceneName, int buildIndex = -1, int startSequence = -1, int fromMenu = -1)
         {
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms, Encoding.UTF8))
             {
                 WriteHeader(writer, MessageType.SceneChange);
+                WriteString(writer, sceneName);
+                writer.Write(buildIndex);
+                writer.Write(startSequence);
+                writer.Write(fromMenu);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildSceneReady(string sceneName)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.SceneReady);
                 WriteString(writer, sceneName);
                 return ms.ToArray();
             }
@@ -291,12 +407,17 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
-        public static byte[] BuildPong()
+        public static byte[] BuildPong(PlayerTransformState? hostTransform = null)
         {
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms, Encoding.UTF8))
             {
                 WriteHeader(writer, MessageType.Pong);
+                if (hostTransform.HasValue)
+                {
+                    writer.Write((byte)1);
+                    WritePlayerTransform(writer, hostTransform.Value);
+                }
                 return ms.ToArray();
             }
         }
@@ -307,11 +428,7 @@ namespace WoodburySpectatorSync.Net
             using (var writer = new BinaryWriter(ms, Encoding.UTF8))
             {
                 WriteHeader(writer, MessageType.PlayerTransform);
-                writer.Write(state.PlayerId);
-                WriteVector3(writer, state.Position);
-                WriteQuaternion(writer, state.Rotation);
-                WriteVector3(writer, state.CameraPosition);
-                WriteQuaternion(writer, state.CameraRotation);
+                WritePlayerTransform(writer, state);
                 return ms.ToArray();
             }
         }
@@ -413,6 +530,68 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
+        public static byte[] BuildDialogueLine(string speaker, string text, float duration, byte kind)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.DialogueLine);
+                WriteString(writer, speaker);
+                WriteString(writer, text);
+                writer.Write(duration);
+                writer.Write(kind);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildDialogueStart(int conversationId, int entryId)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.DialogueStart);
+                writer.Write(conversationId);
+                writer.Write(entryId);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildDialogueAdvance(int conversationId, int entryId)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.DialogueAdvance);
+                writer.Write(conversationId);
+                writer.Write(entryId);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildDialogueChoice(int conversationId, int entryId, int choiceIndex)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.DialogueChoice);
+                writer.Write(conversationId);
+                writer.Write(entryId);
+                writer.Write(choiceIndex);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildDialogueEnd(int conversationId)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.DialogueEnd);
+                writer.Write(conversationId);
+                return ms.ToArray();
+            }
+        }
+
         public static bool TryParsePayload(byte[] payload, out Message message, out string error)
         {
             message = null;
@@ -457,7 +636,28 @@ namespace WoodburySpectatorSync.Net
                             message = new CameraStateMessage(state);
                             return true;
                         case MessageType.SceneChange:
-                            message = new SceneChangeMessage(ReadString(reader));
+                        {
+                            var sceneName = ReadString(reader);
+                            var buildIndex = -1;
+                            var startSequence = -1;
+                            var fromMenu = -1;
+                            if (ms.Position <= ms.Length - 4)
+                            {
+                                buildIndex = reader.ReadInt32();
+                            }
+                            if (ms.Position <= ms.Length - 4)
+                            {
+                                startSequence = reader.ReadInt32();
+                            }
+                            if (ms.Position <= ms.Length - 4)
+                            {
+                                fromMenu = reader.ReadInt32();
+                            }
+                            message = new SceneChangeMessage(sceneName, buildIndex, startSequence, fromMenu);
+                            return true;
+                        }
+                        case MessageType.SceneReady:
+                            message = new SceneReadyMessage(ReadString(reader));
                             return true;
                         case MessageType.ProgressMarker:
                             message = new ProgressMarkerMessage(ReadString(reader));
@@ -466,8 +666,27 @@ namespace WoodburySpectatorSync.Net
                             message = new PingMessage();
                             return true;
                         case MessageType.Pong:
-                            message = new PongMessage();
+                        {
+                            var pong = new PongMessage();
+                            if (ms.Position < ms.Length)
+                            {
+                                var hasTransform = reader.ReadByte();
+                                if (hasTransform != 0)
+                                {
+                                    pong.HasTransform = true;
+                                    pong.Transform = new PlayerTransformState
+                                    {
+                                        PlayerId = reader.ReadByte(),
+                                        Position = ReadVector3(reader),
+                                        Rotation = ReadQuaternion(reader),
+                                        CameraPosition = ReadVector3(reader),
+                                        CameraRotation = ReadQuaternion(reader)
+                                    };
+                                }
+                            }
+                            message = pong;
                             return true;
+                        }
                         case MessageType.PlayerTransform:
                             message = new PlayerTransformMessage(new PlayerTransformState
                             {
@@ -528,6 +747,27 @@ namespace WoodburySpectatorSync.Net
                         case MessageType.UdpInfo:
                             message = new UdpInfoMessage(reader.ReadInt32());
                             return true;
+                        case MessageType.DialogueLine:
+                        {
+                            var speaker = ReadString(reader);
+                            var text = ReadString(reader);
+                            var duration = reader.ReadSingle();
+                            var kind = reader.ReadByte();
+                            message = new DialogueLineMessage(speaker, text, duration, kind);
+                            return true;
+                        }
+                        case MessageType.DialogueStart:
+                            message = new DialogueStartMessage(reader.ReadInt32(), reader.ReadInt32());
+                            return true;
+                        case MessageType.DialogueAdvance:
+                            message = new DialogueAdvanceMessage(reader.ReadInt32(), reader.ReadInt32());
+                            return true;
+                        case MessageType.DialogueChoice:
+                            message = new DialogueChoiceMessage(reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32());
+                            return true;
+                        case MessageType.DialogueEnd:
+                            message = new DialogueEndMessage(reader.ReadInt32());
+                            return true;
                         default:
                             error = "Unknown message type";
                             return false;
@@ -586,6 +826,15 @@ namespace WoodburySpectatorSync.Net
             writer.Write(value.y);
             writer.Write(value.z);
             writer.Write(value.w);
+        }
+
+        private static void WritePlayerTransform(BinaryWriter writer, PlayerTransformState state)
+        {
+            writer.Write(state.PlayerId);
+            WriteVector3(writer, state.Position);
+            WriteQuaternion(writer, state.Rotation);
+            WriteVector3(writer, state.CameraPosition);
+            WriteQuaternion(writer, state.CameraRotation);
         }
 
         private static Quaternion ReadQuaternion(BinaryReader reader)

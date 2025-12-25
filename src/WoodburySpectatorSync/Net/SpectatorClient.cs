@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.IO;
 using System.Net.Sockets;
 using System.Threading;
 using BepInEx.Logging;
@@ -54,12 +53,12 @@ namespace WoodburySpectatorSync.Net
 
         public bool TryDequeue(out Message message)
         {
-            if (TryDequeueUdp(out message))
+            if (_incoming.TryDequeue(out message))
             {
                 return true;
             }
 
-            return _incoming.TryDequeue(out message);
+            return TryDequeueUdp(out message);
         }
 
         private void ConnectLoop()
@@ -108,16 +107,13 @@ namespace WoodburySpectatorSync.Net
                 var lengthBuffer = new byte[4];
                 while (_running && _client != null && _client.Connected)
                 {
-                    if (!ReadExact(_stream, lengthBuffer, 4)) break;
-                    var payloadLength = BitConverter.ToInt32(lengthBuffer, 0);
-                    if (payloadLength <= 0 || payloadLength > Protocol.MaxPayloadBytes)
+                    var readResult = TcpFraming.TryReadFrame(_stream, lengthBuffer, out var payload);
+                    if (readResult == FrameReadResult.Disconnected) break;
+                    if (readResult == FrameReadResult.BadFrame)
                     {
                         Status = "Bad frame";
                         break;
                     }
-
-                    var payload = new byte[payloadLength];
-                    if (!ReadExact(_stream, payload, payloadLength)) break;
 
                     if (Protocol.TryParsePayload(payload, out var message, out var error))
                     {
@@ -164,19 +160,6 @@ namespace WoodburySpectatorSync.Net
                 }
                 catch { }
             }
-        }
-
-        private static bool ReadExact(NetworkStream stream, byte[] buffer, int count)
-        {
-            var offset = 0;
-            while (offset < count)
-            {
-                var read = stream.Read(buffer, offset, count - offset);
-                if (read <= 0) return false;
-                offset += read;
-            }
-
-            return true;
         }
 
         private void Cleanup()
