@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-[BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.2.30")]
+[BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.2.33")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -58,7 +58,11 @@ namespace WoodburySpectatorSync
             _coopServer = new CoopServer(Logger, _settings);
             _coopClient = new CoopClient(Logger, _settings);
             _coopHost = new CoopHostCoordinator(Logger, _settings, _coopServer);
-            _coopClientCoordinator = new CoopClientCoordinator(Logger, _settings, _coopClient);
+            _coopClientCoordinator = new CoopClientCoordinator(
+                Logger,
+                _settings,
+                _coopClient,
+                _sessionLog != null ? new Action<string>(_sessionLog.Write) : null);
 
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
             Logger.LogInfo("Woodbury Spectator Sync loaded (runInBackground enabled)");
@@ -387,16 +391,21 @@ namespace WoodburySpectatorSync
                 var latestSeq = _coopClient.LatestHostTransformSeq;
                 var consumedSeq = _coopClient.LastConsumedHostTransformSeq;
                 var latestNetMs = Math.Max(_coopClient.LastTcpTransformMs, _coopClient.LastUdpTransformMs);
+                var appliedSeq = _coopClientCoordinator.LastAppliedHostTransformSeq;
+                var appliedCount = _coopClientCoordinator.HostTransformAppliedCount;
+                var appliedNetMs = _coopClientCoordinator.LastAppliedHostNetMs;
                 return new[]
                 {
                     "Ping: " + FormatPing(_coopClient.LastPingRttMs) + ", TCP lastRx: " + FormatAge(nowMs, _coopClient.LastTcpReceiveMs),
                     BuildUdpLine(_coopClient.HasUdp, _coopClient.UdpLastReceiveMs, nowMs),
                     "SceneSync: " + sceneState + ", pending=" + pendingScene,
                     "Pending queues: doors=" + _coopClientCoordinator.PendingDoorCount + ", holdables=" + _coopClientCoordinator.PendingHoldableCount + ", ai=" + _coopClientCoordinator.PendingAiCount,
-                    "HostRx: " + FormatAge(nowMs, _coopClientCoordinator.LastHostTransformReceiveMs) + ", count=" + _coopClientCoordinator.HostTransformReceiveCount + ", id=" + hostId,
+                    "HostRxAge: " + FormatAge(nowMs, _coopClientCoordinator.LastHostTransformReceiveMs),
+                    "HostRx: count=" + _coopClientCoordinator.HostTransformReceiveCount + ", id=" + hostId,
                     "HostNet: tcp=" + _coopClient.TcpTransformCount + " (" + FormatAge(nowMs, _coopClient.LastTcpTransformMs) + "), udp=" + _coopClient.UdpTransformCount + " (" + FormatAge(nowMs, _coopClient.LastUdpTransformMs) + "), last=" + _coopClient.LastTransformSource,
                     "HostState: read=" + _coopClient.HostStateReadCount + ", enq=" + _coopClient.HostStateEnqueuedCount + ", applied=" + _coopClientCoordinator.HostStateAppliedCount,
                     "HostLatch: seq=" + latestSeq + ", consumed=" + consumedSeq + ", lastNet=" + FormatAge(nowMs, latestNetMs),
+                    "HostApplied: count=" + appliedCount + ", seq=" + appliedSeq + ", net=" + FormatAge(nowMs, appliedNetMs),
                     "HostUpdateAge: " + _coopClientCoordinator.LastHostUpdateAgeSeconds.ToString("0.0") + "s",
                     "Sequence: " + sequenceLabel,
                     BuildDialogueStatus("DialogueHost", _coopClientCoordinator.HostDialogueConversationId, _coopClientCoordinator.HostDialogueEntryId, _coopClientCoordinator.HostDialogueChoiceIndex, _coopClientCoordinator.HostDialogueEventMs, nowMs),
@@ -514,7 +523,7 @@ namespace WoodburySpectatorSync
                 _sessionLog.Write(
                     "Heartbeat client: tcpRx=" + FormatAge(nowMs, _coopClient.LastTcpReceiveMs) +
                     " udpRx=" + FormatAge(nowMs, _coopClient.UdpLastReceiveMs) +
-                    " hostRx=" + FormatAge(nowMs, _coopClientCoordinator.LastHostTransformReceiveMs) +
+                    " hostRxAge=" + FormatAge(nowMs, _coopClientCoordinator.LastHostTransformReceiveMs) +
                     " hostRxCount=" + _coopClientCoordinator.HostTransformReceiveCount +
                     " hostUpdateAge=" + _coopClientCoordinator.LastHostUpdateAgeSeconds.ToString("0.0") + "s" +
                     " tcpXform=" + _coopClient.TcpTransformCount +

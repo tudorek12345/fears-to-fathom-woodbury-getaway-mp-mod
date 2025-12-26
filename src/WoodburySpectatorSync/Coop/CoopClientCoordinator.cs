@@ -19,7 +19,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly Settings _settings;
         private readonly CoopClient _client;
         private readonly CoopClientInteractor _interactor;
-        private readonly RemoteAvatar _hostAvatar;
+        private RemoteAvatar _hostAvatar;
+        private readonly Action<string> _sessionLogWrite;
 
         private CoopClientController _controller;
         private Camera _camera;
@@ -39,7 +40,7 @@ namespace WoodburySpectatorSync.Coop
         private string _lastSceneReadySent = string.Empty;
         private float _lastSceneReadySentTime;
         private float _nextPingTime;
-        private float _lastHostUpdateTime;
+        private long _lastHostAppliedTick;
         private long _lastHostTransformReceiveMs;
         private int _hostTransformReceiveCount;
         private float _lastTeleportTime;
@@ -78,7 +79,11 @@ namespace WoodburySpectatorSync.Coop
         private long _lastAppliedHostNetMs;
         private long _hostStateAppliedCount;
         private int _lastAppliedHostTransformSeq;
+        private long _hostTransformAppliedCount;
+        private float _nextHostTransformApplyLogTime;
+        private float _nextHostTransformForceLogTime;
         private float _nextHostTransformErrorLogTime;
+        private float _nextDialogueUnlockTime;
         private readonly HashSet<int> _disabledTriggerBehaviours = new HashSet<int>();
         private readonly HashSet<int> _disabledTriggerColliders = new HashSet<int>();
         private readonly HashSet<int> _disabledInteractables = new HashSet<int>();
@@ -113,11 +118,12 @@ namespace WoodburySpectatorSync.Coop
         private readonly MethodInfo _doorScriptClose;
         private readonly FieldInfo _playerFirstPersonField;
 
-        public CoopClientCoordinator(ManualLogSource logger, Settings settings, CoopClient client)
+        public CoopClientCoordinator(ManualLogSource logger, Settings settings, CoopClient client, Action<string> sessionLogWrite = null)
         {
             _logger = logger;
             _settings = settings;
             _client = client;
+            _sessionLogWrite = sessionLogWrite;
             _interactor = new CoopClientInteractor(client);
             _hostAvatar = new RemoteAvatar("CoopHostAvatar", new Color(1f, 0.2f, 0.2f, 0.8f));
 
@@ -147,12 +153,13 @@ namespace WoodburySpectatorSync.Coop
         public int PendingDoorCount => _pendingDoorStates.Count;
         public int PendingHoldableCount => _pendingHoldableStates.Count;
         public int PendingAiCount => _pendingAiStates.Count;
-        public float LastHostUpdateAgeSeconds => _lastHostUpdateTime <= 0f
-            ? 0f
-            : Mathf.Max(0f, Time.realtimeSinceStartup - _lastHostUpdateTime);
+        public float LastHostUpdateAgeSeconds => GetHostAppliedAgeSeconds();
         public long LastHostTransformReceiveMs => _lastHostTransformReceiveMs;
         public int HostTransformReceiveCount => _hostTransformReceiveCount;
         public long HostStateAppliedCount => Interlocked.Read(ref _hostStateAppliedCount);
+        public long HostTransformAppliedCount => Interlocked.Read(ref _hostTransformAppliedCount);
+        public int LastAppliedHostTransformSeq => _lastAppliedHostTransformSeq;
+        public long LastAppliedHostNetMs => _lastAppliedHostNetMs;
         public bool HasPendingHostCamera => _hasPendingHostCam;
         public float LoadingProgress => _loading != null ? _loading.progress : (_isLoading ? 0f : 1f);
         public int HostDialogueConversationId => _hostDialogueConversationId;
@@ -184,13 +191,17 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!_client.IsConnected)
             {
-                _lastHostUpdateTime = 0f;
+                Interlocked.Exchange(ref _lastHostAppliedTick, 0);
                 _lastHostTransformReceiveMs = 0;
                 _hostTransformReceiveCount = 0;
+                Interlocked.Exchange(ref _hostTransformAppliedCount, 0);
+                _lastAppliedHostTransformSeq = 0;
+                _lastAppliedHostNetMs = 0;
                 return;
             }
 
             DrainIncoming();
+            ForceApplyLatchedTransform();
             UpdateHostTransformHeartbeat();
             UpdateSceneLoad();
             SendSceneReadyIfNeeded();
@@ -223,6 +234,8 @@ namespace WoodburySpectatorSync.Coop
             ApplyPendingStates();
             MaybeTeleportToHost();
             SendPingIfDue();
+
+            UnlockLocalDialogueCamera();
 
             if (_settings.CoopSnapToHostOnSceneLoad.Value && !_isLoading && !_initialCameraSet && GetActiveCamera() != null && _hasPendingHostCam)
             {
@@ -481,6 +494,85 @@ namespace WoodburySpectatorSync.Coop
                         _logger.LogWarning("ApplyHostTransform failed: " + ex.Message);
                     }
                 }
+            }
+            else
+            {
+                ConsumeLatestHostTransform();
+            }
+        }
+
+        private void ForceApplyLatchedTransform()
+        {
+            var latestSeq = _client.LatestHostTransformSeq;
+            if (latestSeq <= 0)
+            {
+                return;
+            }
+            if (latestSeq <= _lastAppliedHostTransformSeq)
+            {
+                var now = Time.realtimeSinceStartup;
+                if (now >= _nextHostTransformForceLogTime)
+                {
+                    _nextHostTransformForceLogTime = now + 5f;
+                    var message = "ForceApplyLatchedTransform early: latestSeq=" + latestSeq +
+                        " appliedSeq=" + _lastAppliedHostTransformSeq +
+                        " appliedCount=" + Interlocked.Read(ref _hostTransformAppliedCount) +
+                        " reason=seq-not-advanced";
+                    _logger.LogInfo(message);
+                    _sessionLogWrite?.Invoke(message);
+                }
+                return;
+            }
+            if (!_client.TryGetLatestHostTransform(out var state))
+            {
+                var now = Time.realtimeSinceStartup;
+                if (now >= _nextHostTransformForceLogTime)
+                {
+                    _nextHostTransformForceLogTime = now + 5f;
+                    var message = "ForceApplyLatchedTransform skip: latestSeq=" + latestSeq +
+                        " appliedSeq=" + _lastAppliedHostTransformSeq +
+                        " reason=no-latched-state";
+                    _logger.LogInfo(message);
+                    _sessionLogWrite?.Invoke(message);
+                }
+                return;
+            }
+
+            var beforeCount = Interlocked.Read(ref _hostTransformAppliedCount);
+            var appliedOk = false;
+            try
+            {
+                _lastHostPlayerId = state.PlayerId;
+                ApplyHostTransform(state);
+                _client.MarkLatestHostTransformConsumed();
+                appliedOk = true;
+            }
+            catch (Exception ex)
+            {
+                var now = Time.realtimeSinceStartup;
+                if (now >= _nextHostTransformErrorLogTime)
+                {
+                    _nextHostTransformErrorLogTime = now + 5f;
+                    _logger.LogWarning("ForceApplyLatchedTransform failed: " + ex.Message);
+                    _sessionLogWrite?.Invoke("ForceApplyLatchedTransform failed: " + ex);
+                }
+            }
+
+            if (appliedOk && Interlocked.Read(ref _hostTransformAppliedCount) == beforeCount)
+            {
+                // Safety net: if ApplyHostTransform didn't bump the counters, do it here.
+                MarkHostTransformAppliedFallback();
+            }
+
+            var logNow = Time.realtimeSinceStartup;
+            if (appliedOk && logNow >= _nextHostTransformForceLogTime)
+            {
+                _nextHostTransformForceLogTime = logNow + 5f;
+                var message = "ForceApplyLatchedTransform ok: latestSeq=" + latestSeq +
+                    " appliedSeq=" + _lastAppliedHostTransformSeq +
+                    " appliedCount=" + Interlocked.Read(ref _hostTransformAppliedCount);
+                _logger.LogInfo(message);
+                _sessionLogWrite?.Invoke(message);
             }
         }
 
@@ -749,7 +841,7 @@ namespace WoodburySpectatorSync.Coop
                 if (activeCamera == null) return;
                 distance = Vector3.Distance(activeCamera.transform.position, _pendingHostCamPos);
             }
-            var stale = now - _lastHostUpdateTime > Mathf.Max(1f, _settings.CoopTeleportStaleSeconds.Value);
+            var stale = GetHostAppliedAgeSeconds() > Mathf.Max(1f, _settings.CoopTeleportStaleSeconds.Value);
 
             if (distance >= _settings.CoopTeleportDistance.Value || stale)
             {
@@ -825,7 +917,7 @@ namespace WoodburySpectatorSync.Coop
             _hasPendingHostCam = false;
             _pendingHostPlayerPos = Vector3.zero;
             _pendingHostPlayerRot = Quaternion.identity;
-            _lastHostUpdateTime = Time.realtimeSinceStartup;
+            Interlocked.Exchange(ref _lastHostAppliedTick, Stopwatch.GetTimestamp());
             _lastTeleportTime = 0f;
             _nextInputSendTime = 0f;
             _lastSceneReadySent = string.Empty;
@@ -862,6 +954,7 @@ namespace WoodburySpectatorSync.Coop
             _lastAppliedHostNetMs = 0;
             _lastAppliedHostTransformSeq = 0;
             Interlocked.Exchange(ref _hostStateAppliedCount, 0);
+            Interlocked.Exchange(ref _hostTransformAppliedCount, 0);
             _pendingDoorStates.Clear();
             _pendingHoldableStates.Clear();
             _pendingAiStates.Clear();
@@ -1027,11 +1120,58 @@ namespace WoodburySpectatorSync.Coop
             _dialogueUiDisabled = true;
         }
 
+        private void UnlockLocalDialogueCamera()
+        {
+            if (_settings.ModeSetting.Value != Mode.CoopClient) return;
+
+            var now = Time.realtimeSinceStartup;
+            if (now < _nextDialogueUnlockTime) return;
+            _nextDialogueUnlockTime = now + 0.2f;
+
+            if (DialogueManager.isConversationActive)
+            {
+                DialogueManager.StopConversation();
+            }
+
+            var cabin = UnityEngine.Object.FindObjectOfType<CabinPlayerController>();
+            if (cabin != null)
+            {
+                if (cabin.dialogueCamera != null && cabin.dialogueCamera.gameObject.activeSelf)
+                {
+                    cabin.dialogueCamera.gameObject.SetActive(false);
+                }
+
+                if (cabin.lockCameraMovement != null && cabin.lockCameraMovement.enabled)
+                {
+                    cabin.lockCameraMovement.enabled = false;
+                    cabin.lockCameraMovement.disableFov = false;
+                }
+
+                if (cabin.firstPersonController != null && !cabin.firstPersonController.enabled)
+                {
+                    cabin.firstPersonController.enabled = true;
+                }
+            }
+
+            if (_localFpc != null)
+            {
+                if (!_localFpc.enabled) _localFpc.enabled = true;
+                if (_localFpc.characterController != null && !_localFpc.characterController.enabled)
+                {
+                    _localFpc.characterController.enabled = true;
+                }
+            }
+
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
         private void DisableStoryTriggers()
         {
             var allowLocalInput = _settings.CoopUseLocalPlayer.Value;
             var routeInteractions = _settings.CoopRouteInteractions.Value;
-            var allowInteractableBehaviours = allowLocalInput && !routeInteractions;
+            var disableLocalProgression = true;
+            var allowInteractableBehaviours = allowLocalInput && !routeInteractions && !disableLocalProgression;
             var behaviours = UnityEngine.Object.FindObjectsOfType<MonoBehaviour>();
             foreach (var behaviour in behaviours)
             {
@@ -1270,45 +1410,39 @@ namespace WoodburySpectatorSync.Coop
 
         private void UpdateHostTransformHeartbeat()
         {
-            var latestTick = _client.LastHostTransformReceivedTick;
-            if (latestTick <= 0) return;
+            var lastMs = _client.LastHostTransformReceivedMs;
+            var lastNetMs = Math.Max(_client.LastTcpTransformMs, _client.LastUdpTransformMs);
+            if (lastMs <= 0 || lastNetMs > lastMs)
+            {
+                lastMs = lastNetMs;
+            }
+            if (lastMs <= 0) return;
 
-            _lastHostTransformReceiveMs = _client.LastHostTransformReceivedMs;
-            var receiveCount = _client.TcpTransformCount + _client.UdpTransformCount;
-            _hostTransformReceiveCount = receiveCount;
-
-            var nowTick = Stopwatch.GetTimestamp();
-            var ageTicks = nowTick - latestTick;
-            if (ageTicks < 0) ageTicks = 0;
-            var ageSeconds = ageTicks / (double)Stopwatch.Frequency;
-            _lastHostUpdateTime = Mathf.Max(0f, Time.realtimeSinceStartup - (float)ageSeconds);
+            _lastHostTransformReceiveMs = lastMs;
+            _hostTransformReceiveCount = _client.TcpTransformCount + _client.UdpTransformCount;
         }
 
         private void ApplyHostTransform(PlayerTransformState state)
         {
             var latestNetMs = Math.Max(_client.LastTcpTransformMs, _client.LastUdpTransformMs);
-            if (latestNetMs > 0)
-            {
-                _lastAppliedHostNetMs = latestNetMs;
-            }
             var latestSeq = _client.LatestHostTransformSeq;
-            if (latestSeq > 0)
-            {
-                _lastAppliedHostTransformSeq = latestSeq;
-            }
 
+            EnsureHostAvatar();
             EnsureHostProxy();
             if (_hostProxy != null && _hostProxy.Root != null)
             {
                 _hostProxy.SetActive(true);
                 _hostProxy.ApplyTransform(state);
-                _hostAvatar.SetActive(false);
+                _hostAvatar?.SetActive(false);
             }
             else
             {
-                _hostAvatar.SetActive(true);
-                _hostAvatar.Root.position = state.Position;
-                _hostAvatar.Root.rotation = state.Rotation;
+                if (_hostAvatar != null && _hostAvatar.Root != null)
+                {
+                    _hostAvatar.SetActive(true);
+                    _hostAvatar.Root.position = state.Position;
+                    _hostAvatar.Root.rotation = state.Rotation;
+                }
             }
 
             _pendingHostPlayerPos = state.Position;
@@ -1316,6 +1450,69 @@ namespace WoodburySpectatorSync.Coop
             _pendingHostCamPos = state.CameraPosition;
             _pendingHostCamRot = state.CameraRotation;
             _hasPendingHostCam = true;
+            var appliedTick = MarkHostTransformApplied();
+            if (latestNetMs > 0)
+            {
+                _lastAppliedHostNetMs = latestNetMs;
+            }
+            if (latestSeq > 0)
+            {
+                _lastAppliedHostTransformSeq = latestSeq;
+            }
+            var appliedCount = Interlocked.Read(ref _hostTransformAppliedCount);
+
+            var now = Time.realtimeSinceStartup;
+            if (now >= _nextHostTransformApplyLogTime)
+            {
+                _nextHostTransformApplyLogTime = now + 5f;
+                var message = "ApplyHostTransform ok: count=" + appliedCount +
+                    " seq=" + _lastAppliedHostTransformSeq +
+                    " net=" + _lastAppliedHostNetMs +
+                    " tick=" + appliedTick;
+                _logger.LogInfo(message);
+                _sessionLogWrite?.Invoke(message);
+            }
+        }
+
+        private long MarkHostTransformApplied()
+        {
+            var appliedTick = Stopwatch.GetTimestamp();
+            Interlocked.Exchange(ref _lastHostAppliedTick, appliedTick);
+            Interlocked.Increment(ref _hostTransformAppliedCount);
+            return appliedTick;
+        }
+
+        private void EnsureHostAvatar()
+        {
+            if (_hostAvatar == null)
+            {
+                _hostAvatar = new RemoteAvatar("CoopHostAvatar", new Color(1f, 0.2f, 0.2f, 0.8f));
+                return;
+            }
+            _hostAvatar.EnsureAlive();
+        }
+
+        private void MarkHostTransformAppliedFallback()
+        {
+            var appliedTick = MarkHostTransformApplied();
+            var message = "ApplyHostTransform fallback: count=" +
+                Interlocked.Read(ref _hostTransformAppliedCount) +
+                " seq=" + _lastAppliedHostTransformSeq +
+                " net=" + _lastAppliedHostNetMs +
+                " tick=" + appliedTick;
+            _logger.LogWarning(message);
+            _sessionLogWrite?.Invoke(message);
+        }
+
+        private float GetHostAppliedAgeSeconds()
+        {
+            var lastTick = Interlocked.Read(ref _lastHostAppliedTick);
+            if (lastTick <= 0) return 0f;
+
+            var deltaTicks = Stopwatch.GetTimestamp() - lastTick;
+            if (deltaTicks <= 0) return 0f;
+
+            return (float)(deltaTicks / (double)Stopwatch.Frequency);
         }
 
         private string ResolveCabinSequenceName()
