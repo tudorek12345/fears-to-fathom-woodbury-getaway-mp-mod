@@ -1,10 +1,9 @@
 # Woodbury Spectator Sync (Co-op Focus)
 
-A BepInEx 5 (Mono) LAN mod for "Fears to Fathom: Woodbury Getaway".
+A BepInEx 5 (Mono) LAN mod Co-Op mod for "Fears to Fathom: Woodbury Getaway".
 Primary focus is co-op; spectator mode remains but is secondary.
 Current work targets the Cabin scene first. In the episode list, select "Board game" to reach the Cabin flow.
 
-TODO (IL2CPP): If the game is IL2CPP, swap to BepInEx IL2CPP and update project references and bootstrapper.
 
 ## Scope
 

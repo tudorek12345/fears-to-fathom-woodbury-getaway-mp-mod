@@ -1128,42 +1128,79 @@ namespace WoodburySpectatorSync.Coop
             if (now < _nextDialogueUnlockTime) return;
             _nextDialogueUnlockTime = now + 0.2f;
 
-            if (DialogueManager.isConversationActive)
+            try
             {
-                DialogueManager.StopConversation();
-            }
+                var conversationActive = DialogueManager.isConversationActive;
+                if (conversationActive)
+                {
+                    DialogueManager.StopConversation();
+                }
 
-            var cabin = UnityEngine.Object.FindObjectOfType<CabinPlayerController>();
-            if (cabin != null)
+                var cabin = UnityEngine.Object.FindObjectOfType<CabinPlayerController>();
+                if (cabin != null)
+                {
+                    var shouldRelease = conversationActive;
+                    if (cabin.dialogueCamera != null && cabin.dialogueCamera.gameObject.activeSelf)
+                    {
+                        shouldRelease = true;
+                    }
+                    if (cabin.lockCameraMovement != null && cabin.lockCameraMovement.enabled)
+                    {
+                        shouldRelease = true;
+                    }
+
+                    if (shouldRelease)
+                    {
+                        cabin.EndConvoWithMike();
+                        cabin.ResumeCameraControl();
+                    }
+
+                    if (cabin.dialogueCamera != null && cabin.dialogueCamera.gameObject.activeSelf)
+                    {
+                        cabin.dialogueCamera.gameObject.SetActive(false);
+                    }
+
+                    if (cabin.lockCameraMovement != null && cabin.lockCameraMovement.enabled)
+                    {
+                        cabin.lockCameraMovement.enabled = false;
+                        cabin.lockCameraMovement.disableFov = false;
+                    }
+
+                    var cabinFpc = _playerFirstPersonField != null
+                        ? _playerFirstPersonField.GetValue(cabin) as FirstPersonController
+                        : null;
+                    if (cabinFpc != null && !cabinFpc.enabled)
+                    {
+                        cabinFpc.enabled = true;
+                    }
+
+                    if (shouldRelease)
+                    {
+                        var cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+                        if (cabinGameManager != null &&
+                            cabinGameManager.currentPlayerState != CabinGameManager.PlayerState.Normal)
+                        {
+                            cabinGameManager.ChangePlayerState(CabinGameManager.PlayerState.Normal);
+                        }
+                    }
+                }
+
+                if (_localFpc != null)
+                {
+                    if (!_localFpc.enabled) _localFpc.enabled = true;
+                    if (_localFpc.characterController != null && !_localFpc.characterController.enabled)
+                    {
+                        _localFpc.characterController.enabled = true;
+                    }
+                }
+
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
+            catch (Exception ex)
             {
-                if (cabin.dialogueCamera != null && cabin.dialogueCamera.gameObject.activeSelf)
-                {
-                    cabin.dialogueCamera.gameObject.SetActive(false);
-                }
-
-                if (cabin.lockCameraMovement != null && cabin.lockCameraMovement.enabled)
-                {
-                    cabin.lockCameraMovement.enabled = false;
-                    cabin.lockCameraMovement.disableFov = false;
-                }
-
-                if (cabin.firstPersonController != null && !cabin.firstPersonController.enabled)
-                {
-                    cabin.firstPersonController.enabled = true;
-                }
+                _logger.LogWarning("UnlockLocalDialogueCamera failed: " + ex.Message);
             }
-
-            if (_localFpc != null)
-            {
-                if (!_localFpc.enabled) _localFpc.enabled = true;
-                if (_localFpc.characterController != null && !_localFpc.characterController.enabled)
-                {
-                    _localFpc.characterController.enabled = true;
-                }
-            }
-
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
         }
 
         private void DisableStoryTriggers()
