@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- Client: forcibly release dialogue camera locks during Mike conversations (StopConversation + ResumeCameraControl + reset player state).
+- Co-op: HostUpdateAge now reports time since applied host transform; HostRxAge remains for receive timing.
+- Co-op: host avatar now recreates safely after scene changes to prevent ApplyHostTransform failures.
+- Notes: door and fridge interactions mirror on both host and client in Cabin (Board Game flow).
+
 ## 0.2.30
 - Co-op: enqueue TCP host transforms for main-thread apply and update applied latch timestamps from ApplyHostTransform.
 

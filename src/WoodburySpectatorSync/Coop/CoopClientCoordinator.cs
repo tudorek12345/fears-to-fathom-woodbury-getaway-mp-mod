@@ -1151,7 +1151,7 @@ namespace WoodburySpectatorSync.Coop
 
                     if (shouldRelease)
                     {
-                        cabin.EndConvoWithMike();
+                        cabin.EndConvoWith();
                         cabin.ResumeCameraControl();
                     }
 

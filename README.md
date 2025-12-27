@@ -1,6 +1,6 @@
-# Woodbury Spectator Sync (Co-op Focus)
+# Woodbury Co-op Mod (WIP)
 
-A BepInEx 5 (Mono) LAN mod Co-Op mod for "Fears to Fathom: Woodbury Getaway".
+A BepInEx 5 (Mono) LAN co-op mod for "Fears to Fathom: Woodbury Getaway".
 Primary focus is co-op; spectator mode remains but is secondary.
 Current work targets the Cabin scene first. In the episode list, select "Board game" to reach the Cabin flow.
 
@@ -17,15 +17,22 @@ Current work targets the Cabin scene first. In the episode list, select "Board g
 - Scene handshake uses SceneReady; host resends SceneChange until client acks, then sends a full snapshot.
 - Sync includes player transforms, door states, holdables, basic AI transforms, and story flags.
 - Interaction routing is available: client clicks are sent to the host and applied there.
+- Door interactions (including the cabin fridge door) now mirror on both host and client.
+- Client no longer gets camera-locked during Mike dialogue; free movement is preserved.
 - UDP is used for high-frequency transforms; TCP carries scene and world state.
 - Transform backlog control and UDP drain budgeting are in place to reduce starvation.
 - Dialogue events are transmitted, but full dialogue UI mirroring is not complete.
 
 Known issues (latest build):
-- HostUpdateAge can climb even while transforms are flowing; still under investigation.
+- Story progression beyond the initial Cabin/Board Game flow is not synced yet.
 - Dialogue UI can flicker or appear briefly on the client instead of staying in sync.
 - Item ownership and physics replication are incomplete.
+- AI behavior/animation sync is transform-only (no full state/brain sync).
 - Other scenes are not yet validated beyond Cabin.
+
+Latest session observations (Dec 26, 2025):
+- HostUpdateAge stays near 0.0s while HostApplied count increases (transform apply confirmed).
+- HostState enqueued/sent on host and read/applied on client are tracking correctly.
 
 ## Install (BepInEx Mono)
 
