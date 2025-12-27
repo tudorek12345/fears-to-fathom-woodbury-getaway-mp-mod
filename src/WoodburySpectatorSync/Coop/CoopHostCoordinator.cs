@@ -24,6 +24,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, DoorState> _doorStates = new Dictionary<string, DoorState>();
         private readonly Dictionary<string, HoldableState> _holdableStates = new Dictionary<string, HoldableState>();
         private readonly Dictionary<string, int> _storyFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _cabinHouseFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _cabinGameFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, AiTransformState> _aiStates = new Dictionary<string, AiTransformState>();
         private PlayerTransformState _pendingClientTransform;
         private bool _hasPendingClientTransform;
@@ -33,11 +35,18 @@ namespace WoodburySpectatorSync.Coop
         private Holdable[] _holdables = new Holdable[0];
         private NavmeshPathAgent[] _aiAgents = new NavmeshPathAgent[0];
         private NavMeshAgent[] _navMeshAgents = new NavMeshAgent[0];
+        private CabinHouseManager _cabinHouseManager;
+        private CabinGameManager _cabinGameManager;
 
         private readonly FieldInfo _doorScriptOpened;
         private readonly MethodInfo _doorScriptOpen;
         private readonly MethodInfo _doorScriptClose;
         private readonly FieldInfo _playerFirstPersonField;
+        private readonly List<FieldInfo> _cabinHouseBoolFields = new List<FieldInfo>();
+        private readonly List<FieldInfo> _cabinGameFields = new List<FieldInfo>();
+
+        private const string CabinHouseFlagPrefix = "CabinHouse.";
+        private const string CabinGameFlagPrefix = "CabinGM.";
 
         private long _nextPlayerSendMs;
         private long _nextWorldSendMs;
@@ -94,6 +103,48 @@ namespace WoodburySpectatorSync.Coop
             PlayerPrefKeys.START_SEQ
         };
 
+        private readonly string[] _cabinHouseFieldNames = new[]
+        {
+            "fridgeStocked",
+            "isMikeTouring",
+            "doLivingRoomDialogue",
+            "livingRoomDialogueDone",
+            "doKitchenDialogue",
+            "kitchenDialogueDone",
+            "dobackyardDialogue",
+            "backyardDialogueDone",
+            "doshedDialogue",
+            "shedDialogueDone",
+            "dobasementDialogue",
+            "basementDialogueDone",
+            "dolaundryDialogue",
+            "laundryDialogueDone",
+            "doMikeBedroomDialogue",
+            "mikeBedroomDialogueDone",
+            "doUpstairdBathroomDialogue",
+            "upstairsBathroomDialogueDone",
+            "doDownstairsBathroomDialogue",
+            "downstairsBathroomDialogueDone",
+            "dofishingAreaDialogue",
+            "fishingAreaDialogueDone",
+            "doBasementDoorDialogue",
+            "basementDoorDialogueDone",
+            "mikeBedroomJumpscare",
+            "insideMikeBedroomTrigger",
+            "mikePostJumpscareActive",
+            "mikePostJumpscareConvoDone",
+            "lookAtStairsRepeat",
+            "startedStairsRepeat",
+            "washedHands"
+        };
+
+        private readonly string[] _cabinGameFieldNames = new[]
+        {
+            "CurrentSequence",
+            "currentPlayerState",
+            "inConversation"
+        };
+
         public CoopHostCoordinator(ManualLogSource logger, Settings settings, CoopServer server)
         {
             _logger = logger;
@@ -108,6 +159,8 @@ namespace WoodburySpectatorSync.Coop
             _playerFirstPersonField = typeof(PlayerController).GetField("firstPersonController", BindingFlags.Instance | BindingFlags.NonPublic);
 
             SceneManager.activeSceneChanged += OnSceneChanged;
+            CacheCabinHouseFields();
+            CacheCabinGameFields();
             CacheSceneObjects();
         }
 
@@ -444,6 +497,76 @@ namespace WoodburySpectatorSync.Coop
                     _server.Enqueue(new StoryFlagMessage(key, value));
                 }
             }
+
+            if (SceneManager.GetActiveScene().name == "CabinScene")
+            {
+                SendCabinHouseFlags();
+                SendCabinGameFlags();
+            }
+        }
+
+        private void SendCabinHouseFlags()
+        {
+            if (_cabinHouseBoolFields.Count == 0) return;
+
+            if (_cabinHouseManager == null)
+            {
+                _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
+                if (_cabinHouseManager == null) return;
+            }
+
+            foreach (var field in _cabinHouseBoolFields)
+            {
+                var value = (bool)field.GetValue(_cabinHouseManager) ? 1 : 0;
+                var key = CabinHouseFlagPrefix + field.Name;
+                if (!_cabinHouseFlags.TryGetValue(key, out var last) || last != value)
+                {
+                    _cabinHouseFlags[key] = value;
+                    _lastStoryEventKey = key;
+                    _lastStoryEventValue = value;
+                    _lastStoryEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    _server.Enqueue(new StoryFlagMessage(key, value));
+                }
+            }
+        }
+
+        private void SendCabinGameFlags()
+        {
+            if (_cabinGameFields.Count == 0) return;
+
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+                if (_cabinGameManager == null) return;
+            }
+
+            foreach (var field in _cabinGameFields)
+            {
+                var rawValue = field.GetValue(_cabinGameManager);
+                var value = 0;
+                if (field.FieldType == typeof(bool))
+                {
+                    value = (bool)rawValue ? 1 : 0;
+                }
+                else if (field.FieldType.IsEnum)
+                {
+                    value = Convert.ToInt32(rawValue);
+                }
+                else if (field.FieldType == typeof(int))
+                {
+                    value = (int)rawValue;
+                }
+
+                var key = CabinGameFlagPrefix + field.Name;
+                if (!_cabinGameFlags.TryGetValue(key, out var last) || last != value)
+                {
+                    _cabinGameFlags[key] = value;
+                    _lastStoryEventKey = key;
+                    _lastStoryEventValue = value;
+                    _lastStoryEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    _server.Enqueue(new StoryFlagMessage(key, value));
+                }
+            }
         }
 
         private void SendAiStates()
@@ -502,11 +625,15 @@ namespace WoodburySpectatorSync.Coop
                 _holdableStates.Clear();
                 _aiStates.Clear();
                 _storyFlags.Clear();
+                _cabinHouseFlags.Clear();
+                _cabinGameFlags.Clear();
             }
 
             SendDoorStates();
             SendHoldableStates();
             SendStoryFlags();
+            SendCabinHouseFlags();
+            SendCabinGameFlags();
             SendAiStates();
         }
 
@@ -579,6 +706,8 @@ namespace WoodburySpectatorSync.Coop
             _holdables = UnityEngine.Object.FindObjectsOfType<Holdable>();
             _aiAgents = UnityEngine.Object.FindObjectsOfType<NavmeshPathAgent>();
             _navMeshAgents = UnityEngine.Object.FindObjectsOfType<NavMeshAgent>();
+            _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
+            _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
             BindDialogueEvents();
             BindDialogueUiSelection();
         }
@@ -646,6 +775,10 @@ namespace WoodburySpectatorSync.Coop
             _holdableStates.Clear();
             _aiStates.Clear();
             _storyFlags.Clear();
+            _cabinHouseFlags.Clear();
+            _cabinGameFlags.Clear();
+            _cabinHouseManager = null;
+            _cabinGameManager = null;
             _lastDialogueText = string.Empty;
             _lastDialogueSpeaker = string.Empty;
             _lastDialogueSentTime = 0f;
@@ -674,6 +807,31 @@ namespace WoodburySpectatorSync.Coop
                 _clientSceneName = string.Empty;
                 _hasPendingClientTransform = false;
                 SendSceneChange();
+            }
+        }
+
+        private void CacheCabinHouseFields()
+        {
+            _cabinHouseBoolFields.Clear();
+            var type = typeof(CabinHouseManager);
+            foreach (var name in _cabinHouseFieldNames)
+            {
+                var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (field == null || field.FieldType != typeof(bool)) continue;
+                _cabinHouseBoolFields.Add(field);
+            }
+        }
+
+        private void CacheCabinGameFields()
+        {
+            _cabinGameFields.Clear();
+            var type = typeof(CabinGameManager);
+            foreach (var name in _cabinGameFieldNames)
+            {
+                var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (field == null) continue;
+                if (field.FieldType != typeof(bool) && !field.FieldType.IsEnum && field.FieldType != typeof(int)) continue;
+                _cabinGameFields.Add(field);
             }
         }
 

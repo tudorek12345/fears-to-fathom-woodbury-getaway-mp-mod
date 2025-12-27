@@ -26,6 +26,7 @@ namespace WoodburySpectatorSync.Coop
         private Camera _camera;
         private bool _gameplayDisabled;
         private bool _aiDisabled;
+        private bool _mikeControllersDisabled;
         private string _pendingScene;
         private int _pendingSceneIndex = -1;
         private int _pendingStartSeq = -1;
@@ -50,10 +51,28 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, DoorState> _pendingDoorStates = new Dictionary<string, DoorState>();
         private readonly Dictionary<string, HoldableState> _pendingHoldableStates = new Dictionary<string, HoldableState>();
         private readonly Dictionary<string, AiTransformState> _pendingAiStates = new Dictionary<string, AiTransformState>();
+        private readonly Dictionary<string, int> _pendingCabinHouseFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _pendingCabinGameFlags = new Dictionary<string, int>();
         private float _loadingStartTime;
         private float _loadingLastProgress;
         private float _loadingLastProgressTime;
         private string _loadingSceneName;
+        private CabinHouseManager _cabinHouseManager;
+        private CabinGameManager _cabinGameManager;
+        private readonly Dictionary<string, FieldInfo> _cabinHouseFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinGameFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Transform> _aiFallbackTargets = new Dictionary<string, Transform>(StringComparer.Ordinal);
+        private readonly HashSet<string> _aiMissingLogged = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _aiFallbackLogged = new HashSet<string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Vector3> _aiLastPositions = new Dictionary<string, Vector3>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _aiLastTimes = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Animator> _aiAnimatorCache = new Dictionary<string, Animator>(StringComparer.Ordinal);
+        private readonly Dictionary<string, AnimatorDriveInfo> _aiAnimatorParams = new Dictionary<string, AnimatorDriveInfo>(StringComparer.Ordinal);
+        private float _nextAiMissingLogTime;
+        private float _nextAiFallbackLogTime;
+
+        private const string CabinHouseFlagPrefix = "CabinHouse.";
+        private const string CabinGameFlagPrefix = "CabinGM.";
         private int _loadingSceneIndex = -1;
         private const float LoadingTimeoutSeconds = 40f;
         private const float LoadingStallSeconds = 6f;
@@ -83,6 +102,9 @@ namespace WoodburySpectatorSync.Coop
         private float _nextHostTransformApplyLogTime;
         private float _nextHostTransformForceLogTime;
         private float _nextHostTransformErrorLogTime;
+        private Transform _forcedMikeTarget;
+        private string _forcedMikeReason = string.Empty;
+        private float _nextMikeSyncLogTime;
         private float _nextDialogueUnlockTime;
         private readonly HashSet<int> _disabledTriggerBehaviours = new HashSet<int>();
         private readonly HashSet<int> _disabledTriggerColliders = new HashSet<int>();
@@ -295,6 +317,7 @@ namespace WoodburySpectatorSync.Coop
             DisableDialogueUIComponents();
             DisableStoryTriggers();
             DisableLocalAi();
+            DisableLocalMikeControllers();
 
             if (!_settings.CoopUseLocalPlayer.Value)
             {
@@ -425,10 +448,7 @@ namespace WoodburySpectatorSync.Coop
                 }
                 else if (message is StoryFlagMessage flag)
                 {
-                    PlayerPrefs.SetInt(flag.Key, flag.Value);
-                    _lastStoryEventKey = flag.Key;
-                    _lastStoryEventValue = flag.Value;
-                    _lastStoryEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    ApplyStoryFlag(flag);
                     IncrementHostStateApplied();
                 }
                 else if (message is AiTransformMessage ai)
@@ -683,6 +703,28 @@ namespace WoodburySpectatorSync.Coop
             _pendingDoorStates.Remove(state.Path);
         }
 
+        private void ApplyStoryFlag(StoryFlagMessage flag)
+        {
+            if (flag == null) return;
+            var key = flag.Key ?? string.Empty;
+            if (key.StartsWith(CabinHouseFlagPrefix, StringComparison.Ordinal))
+            {
+                TryApplyCabinHouseFlag(key, flag.Value, allowDefer: true);
+            }
+            else if (key.StartsWith(CabinGameFlagPrefix, StringComparison.Ordinal))
+            {
+                TryApplyCabinGameFlag(key, flag.Value, allowDefer: true);
+            }
+            else
+            {
+                PlayerPrefs.SetInt(key, flag.Value);
+            }
+
+            _lastStoryEventKey = flag.Key;
+            _lastStoryEventValue = flag.Value;
+            _lastStoryEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        }
+
         private void ApplyHoldableState(HoldableState state)
         {
             if (_isLoading || !TryApplyHoldableState(state))
@@ -746,6 +788,129 @@ namespace WoodburySpectatorSync.Coop
             return true;
         }
 
+        private bool TryApplyCabinHouseFlag(string key, int value, bool allowDefer)
+        {
+            if (string.IsNullOrEmpty(key) || !key.StartsWith(CabinHouseFlagPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (SceneManager.GetActiveScene().name != "CabinScene")
+            {
+                if (allowDefer)
+                {
+                    _pendingCabinHouseFlags[key] = value;
+                }
+                return false;
+            }
+
+            if (_cabinHouseManager == null)
+            {
+                _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
+                if (_cabinHouseManager == null)
+                {
+                    if (allowDefer)
+                    {
+                        _pendingCabinHouseFlags[key] = value;
+                    }
+                    return false;
+                }
+            }
+
+            var fieldName = key.Substring(CabinHouseFlagPrefix.Length);
+            if (!_cabinHouseFieldCache.TryGetValue(fieldName, out var field))
+            {
+                field = typeof(CabinHouseManager).GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                _cabinHouseFieldCache[fieldName] = field;
+            }
+
+            if (field == null || field.FieldType != typeof(bool))
+            {
+                return true;
+            }
+
+            try
+            {
+                field.SetValue(_cabinHouseManager, value != 0);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ApplyCabinHouseFlag failed: " + ex.Message);
+            }
+
+            return true;
+        }
+
+        private bool TryApplyCabinGameFlag(string key, int value, bool allowDefer)
+        {
+            if (string.IsNullOrEmpty(key) || !key.StartsWith(CabinGameFlagPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (SceneManager.GetActiveScene().name != "CabinScene")
+            {
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                }
+                return false;
+            }
+
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+                if (_cabinGameManager == null)
+                {
+                    if (allowDefer)
+                    {
+                        _pendingCabinGameFlags[key] = value;
+                    }
+                    return false;
+                }
+            }
+
+            var fieldName = key.Substring(CabinGameFlagPrefix.Length);
+            if (!_cabinGameFieldCache.TryGetValue(fieldName, out var field))
+            {
+                field = typeof(CabinGameManager).GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                _cabinGameFieldCache[fieldName] = field;
+            }
+
+            if (field == null)
+            {
+                return true;
+            }
+
+            try
+            {
+                if (field.FieldType == typeof(bool))
+                {
+                    field.SetValue(_cabinGameManager, value != 0);
+                }
+                else if (field.FieldType.IsEnum)
+                {
+                    var enumValue = Enum.ToObject(field.FieldType, value);
+                    field.SetValue(_cabinGameManager, enumValue);
+                }
+                else if (field.FieldType == typeof(int))
+                {
+                    field.SetValue(_cabinGameManager, value);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ApplyCabinGameFlag failed: " + ex.Message);
+            }
+
+            if (fieldName == "CurrentSequence" || fieldName == "currentMike")
+            {
+                UpdateMikeVariantFromState();
+            }
+
+            return true;
+        }
+
         private bool TryApplyHoldableState(HoldableState state)
         {
             var target = NetPath.FindByPath(state.Path);
@@ -760,7 +925,33 @@ namespace WoodburySpectatorSync.Coop
         private bool TryApplyAiState(AiTransformState state)
         {
             var target = NetPath.FindByPath(state.Path);
-            if (target == null) return false;
+            if (IsMikePath(state.Path))
+            {
+                var preferred = GetPreferredMikeTarget();
+                if (preferred != null)
+                {
+                    target = preferred;
+                }
+            }
+
+            if (target != null && IsMikePath(state.Path) && !HasRenderable(target))
+            {
+                var fallback = ResolveAiFallback(state);
+                if (fallback != null)
+                {
+                    target = fallback;
+                }
+            }
+
+            if (target == null)
+            {
+                target = ResolveAiFallback(state);
+                if (target == null)
+                {
+                    MaybeLogMissingAi(state.Path);
+                    return false;
+                }
+            }
 
             var agent = target.GetComponent<NavmeshPathAgent>();
             if (agent != null)
@@ -777,7 +968,492 @@ namespace WoodburySpectatorSync.Coop
             target.gameObject.SetActive(state.Active);
             target.position = state.Position;
             target.rotation = state.Rotation;
+            ApplyAiAnimator(target, state);
             return true;
+        }
+
+        private Transform ResolveAiFallback(AiTransformState state)
+        {
+            if (string.IsNullOrEmpty(state.Path)) return null;
+
+            if (_aiFallbackTargets.TryGetValue(state.Path, out var cached))
+            {
+                if (cached != null && HasRenderable(cached)) return cached;
+                _aiFallbackTargets.Remove(state.Path);
+            }
+
+            var leafName = ExtractLeafName(state.Path);
+            if (!IsMikePath(state.Path) && leafName.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return null;
+            }
+
+            var candidates = new List<Component>();
+            var cabinTarget = GetActiveCabinMikeTarget();
+            if (cabinTarget != null)
+            {
+                candidates.Add(cabinTarget);
+            }
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikeCabinCookController>());
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikeCabin>());
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikeFishing>());
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikePostEating>());
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikeAfterHiding>());
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikeRizzlerController>());
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikeEndGame>());
+            TryAddComponent(candidates, UnityEngine.Object.FindObjectOfType<MikeInCar>());
+
+            Transform best = null;
+            Transform bestActive = null;
+            var hasLeaf = !string.IsNullOrEmpty(leafName);
+            foreach (var candidate in candidates)
+            {
+                if (candidate == null) continue;
+                var transform = candidate.transform;
+                if (transform == null) continue;
+                if (hasLeaf && transform.name.IndexOf(leafName, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    if (IsActiveRenderable(transform))
+                    {
+                        bestActive = transform;
+                        break;
+                    }
+                    if (best == null)
+                    {
+                        best = transform;
+                    }
+                }
+                if (bestActive == null && IsActiveRenderable(transform))
+                {
+                    bestActive = transform;
+                }
+                if (best == null)
+                {
+                    best = transform;
+                }
+            }
+
+            if (bestActive == null)
+            {
+                var agents = UnityEngine.Object.FindObjectsOfType<NavMeshAgent>();
+                foreach (var agent in agents)
+                {
+                    if (agent == null) continue;
+                    if (agent.gameObject != null &&
+                        agent.gameObject.name.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        if (IsActiveRenderable(agent.transform))
+                        {
+                            bestActive = agent.transform;
+                            break;
+                        }
+                        if (best == null)
+                        {
+                            best = agent.transform;
+                        }
+                    }
+                }
+            }
+
+            if (bestActive == null)
+            {
+                bestActive = best;
+            }
+
+            if (bestActive != null)
+            {
+                if (HasRenderable(bestActive))
+                {
+                    _aiFallbackTargets[state.Path] = bestActive;
+                }
+                MaybeLogAiFallback(state.Path, bestActive);
+            }
+
+            return bestActive;
+        }
+
+        private Transform GetPreferredMikeTarget()
+        {
+            if (_forcedMikeTarget != null && HasRenderable(_forcedMikeTarget))
+            {
+                return _forcedMikeTarget;
+            }
+
+            var active = GetActiveCabinMikeTarget();
+            if (active != null && HasRenderable(active))
+            {
+                return active;
+            }
+
+            return _forcedMikeTarget ?? active;
+        }
+
+        private void UpdateMikeVariantFromState()
+        {
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            if (_cabinGameManager == null) return;
+
+            var desired = ResolveMikeTargetForSequence(out var reason, out var forceActive);
+            if (desired == null) return;
+
+            var changed = !ReferenceEquals(_forcedMikeTarget, desired) || _forcedMikeReason != reason;
+            _forcedMikeTarget = desired;
+            _forcedMikeReason = reason;
+
+            if (forceActive || _forcedMikeTarget != null)
+            {
+                SetOnlyMikeActive(desired);
+            }
+
+            if (changed)
+            {
+                var now = Time.realtimeSinceStartup;
+                if (now >= _nextMikeSyncLogTime)
+                {
+                    _nextMikeSyncLogTime = now + 5f;
+                    _logger.LogInfo("Mike sync: seq=" + _cabinGameManager.CurrentSequence +
+                                    " currentMike=" + _cabinGameManager.currentMike +
+                                    " target=" + desired.name +
+                                    " reason=" + reason +
+                                    " active=" + desired.gameObject.activeInHierarchy);
+                }
+            }
+        }
+
+        private Transform ResolveMikeTargetForSequence(out string reason, out bool forceActive)
+        {
+            reason = string.Empty;
+            forceActive = false;
+
+            if (_cabinGameManager == null) return null;
+
+            var seq = _cabinGameManager.CurrentSequence;
+            if (seq == SequenceType.GoingToPlayOuija || seq == SequenceType.PlayingOuija)
+            {
+                var controller = GetMikeControllerTransform();
+                if (controller != null)
+                {
+                    reason = "seq:" + seq;
+                    forceActive = true;
+                    return controller;
+                }
+            }
+
+            if (seq == SequenceType.Fishing)
+            {
+                var fishing = _cabinGameManager.mikeFishing;
+                if (fishing != null)
+                {
+                    reason = "seq:" + seq;
+                    return fishing.transform;
+                }
+            }
+
+            var currentMike = _cabinGameManager.currentMike;
+            if (currentMike == CabinGameManager.CurrentMike.Fishing && _cabinGameManager.mikeFishing != null)
+            {
+                reason = "currentMike:" + currentMike;
+                return _cabinGameManager.mikeFishing.transform;
+            }
+            if (currentMike == CabinGameManager.CurrentMike.PostEating && _cabinGameManager.mikePostEating != null)
+            {
+                reason = "currentMike:" + currentMike;
+                return _cabinGameManager.mikePostEating.transform;
+            }
+
+            var active = GetActiveCabinMikeTarget();
+            if (active != null)
+            {
+                reason = "active";
+                return active;
+            }
+
+            return null;
+        }
+
+        private void SetOnlyMikeActive(Transform keep)
+        {
+            if (keep == null) return;
+
+            SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikeCabin : null, keep);
+            SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikeFishing : null, keep);
+            SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikePostEating : null, keep);
+            SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikeAfterHiding : null, keep);
+            SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikeEnd : null, keep);
+            SetMikeActive(GetMikeControllerComponent(), keep);
+            SetMikeActive(GetMikeRizzlerComponent(), keep);
+            SetMikeActive(UnityEngine.Object.FindObjectOfType<MikeInCar>(), keep);
+        }
+
+        private static void SetMikeActive(Component component, Transform keep)
+        {
+            if (component == null) return;
+            SetMikeActive(component.transform, keep);
+        }
+
+        private static void SetMikeActive(Transform target, Transform keep)
+        {
+            if (target == null) return;
+            var shouldBeActive = target == keep || target.IsChildOf(keep) || keep.IsChildOf(target);
+            if (target.gameObject.activeSelf != shouldBeActive)
+            {
+                target.gameObject.SetActive(shouldBeActive);
+            }
+        }
+
+        private Transform GetMikeControllerTransform()
+        {
+            var controller = GetMikeControllerComponent();
+            return controller != null ? controller.transform : null;
+        }
+
+        private Component GetMikeControllerComponent()
+        {
+            if (_cabinGameManager == null) return null;
+            var field = typeof(CabinGameManager).GetField("mikeController", BindingFlags.Instance | BindingFlags.NonPublic);
+            return field != null ? field.GetValue(_cabinGameManager) as Component : null;
+        }
+
+        private Component GetMikeRizzlerComponent()
+        {
+            if (_cabinGameManager == null) return null;
+            var field = typeof(CabinGameManager).GetField("mikeRizzlerController", BindingFlags.Instance | BindingFlags.NonPublic);
+            return field != null ? field.GetValue(_cabinGameManager) as Component : null;
+        }
+
+        private void ApplyAiAnimator(Transform target, AiTransformState state)
+        {
+            if (target == null || string.IsNullOrEmpty(state.Path)) return;
+
+            if (!_aiAnimatorCache.TryGetValue(state.Path, out var animator) || animator == null)
+            {
+                animator = target.GetComponentInChildren<Animator>();
+                if (animator != null)
+                {
+                    _aiAnimatorCache[state.Path] = animator;
+                }
+            }
+
+            if (animator == null) return;
+
+            if (!_aiAnimatorParams.TryGetValue(state.Path, out var driveInfo) || driveInfo == null)
+            {
+                driveInfo = BuildAnimatorDriveInfo(animator);
+                _aiAnimatorParams[state.Path] = driveInfo;
+            }
+
+            var now = Time.realtimeSinceStartup;
+            var speed = 0f;
+            if (_aiLastPositions.TryGetValue(state.Path, out var lastPos) &&
+                _aiLastTimes.TryGetValue(state.Path, out var lastTime))
+            {
+                var deltaTime = Mathf.Max(0.001f, now - lastTime);
+                speed = Vector3.Distance(state.Position, lastPos) / deltaTime;
+            }
+
+            _aiLastPositions[state.Path] = state.Position;
+            _aiLastTimes[state.Path] = now;
+
+            var moving = speed > 0.05f;
+            if (!string.IsNullOrEmpty(driveInfo.SpeedFloat))
+            {
+                animator.SetFloat(driveInfo.SpeedFloat, speed);
+            }
+            else if (!string.IsNullOrEmpty(driveInfo.MoveFloat))
+            {
+                animator.SetFloat(driveInfo.MoveFloat, speed);
+            }
+            else if (!string.IsNullOrEmpty(driveInfo.VelocityFloat))
+            {
+                animator.SetFloat(driveInfo.VelocityFloat, speed);
+            }
+
+            if (!string.IsNullOrEmpty(driveInfo.WalkBool))
+            {
+                animator.SetBool(driveInfo.WalkBool, moving);
+            }
+            if (!string.IsNullOrEmpty(driveInfo.MovingBool))
+            {
+                animator.SetBool(driveInfo.MovingBool, moving);
+            }
+        }
+
+        private AnimatorDriveInfo BuildAnimatorDriveInfo(Animator animator)
+        {
+            var info = new AnimatorDriveInfo();
+            if (animator == null) return info;
+
+            foreach (var param in animator.parameters)
+            {
+                var name = param.name;
+                var lower = name.ToLowerInvariant();
+                if (param.type == AnimatorControllerParameterType.Float)
+                {
+                    if (info.SpeedFloat == null && lower.Contains("speed"))
+                    {
+                        info.SpeedFloat = name;
+                    }
+                    else if (info.MoveFloat == null && lower.Contains("move"))
+                    {
+                        info.MoveFloat = name;
+                    }
+                    else if (info.VelocityFloat == null && (lower.Contains("velocity") || lower.Contains("vel")))
+                    {
+                        info.VelocityFloat = name;
+                    }
+                }
+                else if (param.type == AnimatorControllerParameterType.Bool)
+                {
+                    if (info.WalkBool == null && lower.Contains("walk"))
+                    {
+                        info.WalkBool = name;
+                    }
+                    else if (info.MovingBool == null && (lower.Contains("move") || lower.Contains("moving")))
+                    {
+                        info.MovingBool = name;
+                    }
+                }
+            }
+
+            return info;
+        }
+
+        private static string ExtractLeafName(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return string.Empty;
+            var slash = path.LastIndexOf('/');
+            var segment = slash >= 0 ? path.Substring(slash + 1) : path;
+            var bracket = segment.LastIndexOf('[');
+            return bracket > 0 ? segment.Substring(0, bracket) : segment;
+        }
+
+        private void MaybeLogMissingAi(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            if (_aiMissingLogged.Contains(path)) return;
+
+            var now = Time.realtimeSinceStartup;
+            if (now < _nextAiMissingLogTime) return;
+            _nextAiMissingLogTime = now + 5f;
+
+            _aiMissingLogged.Add(path);
+            _logger.LogWarning("AI target not found for path: " + path);
+        }
+
+        private void MaybeLogAiFallback(string path, Transform target)
+        {
+            if (string.IsNullOrEmpty(path) || target == null) return;
+            if (_aiFallbackLogged.Contains(path)) return;
+
+            var now = Time.realtimeSinceStartup;
+            if (now < _nextAiFallbackLogTime) return;
+            _nextAiFallbackLogTime = now + 5f;
+
+            _aiFallbackLogged.Add(path);
+            _logger.LogInfo("AI fallback target: path=" + path + " -> " + target.name +
+                            " active=" + target.gameObject.activeInHierarchy);
+        }
+
+        private Transform GetActiveCabinMikeTarget()
+        {
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            if (_cabinGameManager == null) return null;
+
+            var mikeObject = _cabinGameManager.mikeObject;
+            if (mikeObject != null && mikeObject.activeInHierarchy)
+            {
+                return mikeObject.transform;
+            }
+
+            var mikeCabin = _cabinGameManager.mikeCabin;
+            if (mikeCabin != null && mikeCabin.gameObject.activeInHierarchy)
+            {
+                return mikeCabin.transform;
+            }
+
+            var mikeFishing = _cabinGameManager.mikeFishing;
+            if (mikeFishing != null && mikeFishing.gameObject.activeInHierarchy)
+            {
+                return mikeFishing.transform;
+            }
+
+            var mikePostEating = _cabinGameManager.mikePostEating;
+            if (mikePostEating != null && mikePostEating.gameObject.activeInHierarchy)
+            {
+                return mikePostEating.transform;
+            }
+
+            var mikeAfterHiding = _cabinGameManager.mikeAfterHiding;
+            if (mikeAfterHiding != null && mikeAfterHiding.gameObject.activeInHierarchy)
+            {
+                return mikeAfterHiding.transform;
+            }
+
+            var mikeEnd = _cabinGameManager.mikeEnd;
+            if (mikeEnd != null && mikeEnd.gameObject.activeInHierarchy)
+            {
+                return mikeEnd.transform;
+            }
+
+            var mikeControllerField = typeof(CabinGameManager).GetField("mikeController", BindingFlags.Instance | BindingFlags.NonPublic);
+            var mikeController = mikeControllerField != null ? mikeControllerField.GetValue(_cabinGameManager) as Component : null;
+            if (mikeController != null && mikeController.gameObject.activeInHierarchy)
+            {
+                return mikeController.transform;
+            }
+
+            var mikeRizzlerField = typeof(CabinGameManager).GetField("mikeRizzlerController", BindingFlags.Instance | BindingFlags.NonPublic);
+            var mikeRizzler = mikeRizzlerField != null ? mikeRizzlerField.GetValue(_cabinGameManager) as Component : null;
+            if (mikeRizzler != null && mikeRizzler.gameObject.activeInHierarchy)
+            {
+                return mikeRizzler.transform;
+            }
+
+            return null;
+        }
+
+        private static bool HasRenderable(Transform target)
+        {
+            if (target == null) return false;
+            var renderer = target.GetComponentInChildren<Renderer>(true);
+            return renderer != null;
+        }
+
+        private static bool IsActiveRenderable(Transform target)
+        {
+            if (target == null) return false;
+            if (!target.gameObject.activeInHierarchy) return false;
+            return HasRenderable(target);
+        }
+
+        private static bool IsMikePath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   path.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void TryAddComponent(List<Component> list, Component component)
+        {
+            if (component == null) return;
+            if (list.Contains(component)) return;
+            list.Add(component);
+        }
+
+        private sealed class AnimatorDriveInfo
+        {
+            public string SpeedFloat;
+            public string MoveFloat;
+            public string VelocityFloat;
+            public string WalkBool;
+            public string MovingBool;
         }
 
         private void ApplyPendingStates()
@@ -804,6 +1480,30 @@ namespace WoodburySpectatorSync.Coop
                     if (TryApplyHoldableState(_pendingHoldableStates[key]))
                     {
                         _pendingHoldableStates.Remove(key);
+                    }
+                }
+            }
+
+            if (_pendingCabinHouseFlags.Count > 0)
+            {
+                var keys = new List<string>(_pendingCabinHouseFlags.Keys);
+                foreach (var key in keys)
+                {
+                    if (TryApplyCabinHouseFlag(key, _pendingCabinHouseFlags[key], allowDefer: false))
+                    {
+                        _pendingCabinHouseFlags.Remove(key);
+                    }
+                }
+            }
+
+            if (_pendingCabinGameFlags.Count > 0)
+            {
+                var keys = new List<string>(_pendingCabinGameFlags.Keys);
+                foreach (var key in keys)
+                {
+                    if (TryApplyCabinGameFlag(key, _pendingCabinGameFlags[key], allowDefer: false))
+                    {
+                        _pendingCabinGameFlags.Remove(key);
                     }
                 }
             }
@@ -953,11 +1653,27 @@ namespace WoodburySpectatorSync.Coop
             _lastHostPlayerId = 255;
             _lastAppliedHostNetMs = 0;
             _lastAppliedHostTransformSeq = 0;
+            _forcedMikeTarget = null;
+            _forcedMikeReason = string.Empty;
+            _mikeControllersDisabled = false;
             Interlocked.Exchange(ref _hostStateAppliedCount, 0);
             Interlocked.Exchange(ref _hostTransformAppliedCount, 0);
             _pendingDoorStates.Clear();
             _pendingHoldableStates.Clear();
             _pendingAiStates.Clear();
+            _pendingCabinHouseFlags.Clear();
+            _pendingCabinGameFlags.Clear();
+            _cabinHouseManager = null;
+            _cabinGameManager = null;
+            _cabinHouseFieldCache.Clear();
+            _cabinGameFieldCache.Clear();
+            _aiFallbackTargets.Clear();
+            _aiMissingLogged.Clear();
+            _aiFallbackLogged.Clear();
+            _aiLastPositions.Clear();
+            _aiLastTimes.Clear();
+            _aiAnimatorCache.Clear();
+            _aiAnimatorParams.Clear();
             _disabledTriggerBehaviours.Clear();
             _disabledTriggerColliders.Clear();
             _disabledInteractables.Clear();
@@ -1151,7 +1867,7 @@ namespace WoodburySpectatorSync.Coop
 
                     if (shouldRelease)
                     {
-                        cabin.EndConvoWith();
+                        cabin.EndConvoWithMike();
                         cabin.ResumeCameraControl();
                     }
 
@@ -1289,6 +2005,29 @@ namespace WoodburySpectatorSync.Coop
                 agent.enabled = false;
             }
             _aiDisabled = true;
+        }
+
+        private void DisableLocalMikeControllers()
+        {
+            if (_mikeControllersDisabled) return;
+
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeCabinCookController>());
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeCabin>());
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeFishing>());
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikePostEating>());
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeAfterHiding>());
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeRizzlerController>());
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeEndGame>());
+            DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeInCar>());
+
+            _mikeControllersDisabled = true;
+        }
+
+        private static void DisableMikeBehaviour(MonoBehaviour behaviour)
+        {
+            if (behaviour == null) return;
+            if (!behaviour.enabled) return;
+            behaviour.enabled = false;
         }
 
         private static bool IsLocalPlayerAgent(NavMeshAgent agent)

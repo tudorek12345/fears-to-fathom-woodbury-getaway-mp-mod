@@ -19,12 +19,14 @@ Current work targets the Cabin scene first. In the episode list, select "Board g
 - Interaction routing is available: client clicks are sent to the host and applied there.
 - Door interactions (including the cabin fridge door) now mirror on both host and client.
 - Client no longer gets camera-locked during Mike dialogue; free movement is preserved.
+- CabinHouse progression flags are replicated (WIP; dialogue/sequence triggers).
+- CabinGameManager state flags (CurrentSequence/currentPlayerState/inConversation) are replicated (WIP).
 - UDP is used for high-frequency transforms; TCP carries scene and world state.
 - Transform backlog control and UDP drain budgeting are in place to reduce starvation.
 - Dialogue events are transmitted, but full dialogue UI mirroring is not complete.
 
 Known issues (latest build):
-- Story progression beyond the initial Cabin/Board Game flow is not synced yet.
+- Story progression beyond the initial Cabin/Board Game flow is still unstable; CabinHouse/CabinGame flags now sync but full sequence control is WIP.
 - Dialogue UI can flicker or appear briefly on the client instead of staying in sync.
 - Item ownership and physics replication are incomplete.
 - AI behavior/animation sync is transform-only (no full state/brain sync).
