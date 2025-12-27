@@ -4,6 +4,7 @@ A BepInEx 5 (Mono) LAN co-op mod for "Fears to Fathom: Woodbury Getaway".
 Primary focus is co-op; spectator mode remains but is secondary.
 Current work targets the Cabin scene first. In the episode list, select "Board game" to reach the Cabin flow.
 
+![ezgif-8b5f33baca4fca78](https://github.com/user-attachments/assets/2326f131-7e6d-492c-9153-bd4f5649d130)
 
 ## Scope
 
