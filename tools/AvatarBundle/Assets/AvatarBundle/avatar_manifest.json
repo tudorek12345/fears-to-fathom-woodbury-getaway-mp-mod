@@ -1,0 +1,36 @@
+{
+  "avatars": [
+    {
+      "id": "quaternius_regular_male",
+      "prefabName": "quaternius_regular_male",
+      "displayName": "Quaternius Regular Male",
+      "rigProfile": "ThirdPersonBasic",
+      "scale": 1.0,
+      "yOffset": 0.0
+    },
+    {
+      "id": "quaternius_regular_female",
+      "prefabName": "quaternius_regular_female",
+      "displayName": "Quaternius Regular Female",
+      "rigProfile": "ThirdPersonBasic",
+      "scale": 1.0,
+      "yOffset": 0.0
+    },
+    {
+      "id": "quaternius_teen_male",
+      "prefabName": "quaternius_teen_male",
+      "displayName": "Quaternius Teen Male",
+      "rigProfile": "ThirdPersonBasic",
+      "scale": 1.0,
+      "yOffset": 0.0
+    },
+    {
+      "id": "quaternius_teen_female",
+      "prefabName": "quaternius_teen_female",
+      "displayName": "Quaternius Teen Female",
+      "rigProfile": "ThirdPersonBasic",
+      "scale": 1.0,
+      "yOffset": 0.0
+    }
+  ]
+}

@@ -2,22 +2,25 @@
 
 ## Current status
 
-- Primary focus is co-op. Cabin is the first scene being stabilized.
-- Entry path: use the "Board game" episode in the menu to reach the Cabin flow.
+- Primary focus is co-op scene-wide sync across RoadTrip, Pizzeria, and Cabin.
+- Entry path: use the normal flow or launcher pair; Cabin "Board game" remains the deepest validated flow.
 - Co-op is host-authoritative with SceneReady handshake and full snapshot on connect.
 - Client interactions can be routed to host (RouteInteractionsToHost).
-- Sync covers player transforms, door states, holdables, basic AI transforms, and story flags.
+- Sync covers player transforms, door states, holdables, basic AI transforms, story flags, Cabin sequence flags, Pizzeria Mike/player flags, and RoadTrip Mike/truck flags.
+- Visible remote players default to safe in-scene game-model clones (`woodbury_scene_auto`), can force CC0 AssetBundle avatars, and fall back to a compact non-colliding capsule.
 - UDP handles high-frequency transforms; TCP carries scene and world state.
 - Priority queue and UDP drain budgeting reduce transform starvation.
 - Dialogue events are transmitted; UI mirroring is still incomplete.
 
 ## Limitations
 
-- Not a full second player prefab yet; client uses local controller or freecam.
+- AssetBundle avatar support is runtime-wired; the installed Quaternius bundle now passes Unity 2021.3 load validation as a render-only/static avatar bundle.
+- Visible avatars are display proxies, not a full second gameplay controller yet; client uses local controller or freecam.
 - Dialogue UI can flicker or appear briefly on the client.
 - Item ownership, hand attachment, and physics replication are incomplete.
 - AI sync is transform-only; behavior state is not replicated.
-- Other scenes are not validated beyond Cabin.
+- Pizzeria and RoadTrip sync coverage has been expanded but still needs a full end-to-end validation pass.
+- Latest Cabin/Ouija test reached `GoingToPlayOuija`, then host stopped receiving client packets for ~28 seconds before returning to waiting.
 
 ## Future features
 
@@ -30,16 +33,18 @@
 
 ## Next steps to take
 
-1. Validate the Cabin co-op flow end-to-end (doors, simple items, triggers).
-2. Map player prefab spawn points and camera setup for Cabin.
-3. Implement client-held item ownership (host confirms, client mirrors).
-4. Add host-side checks for interaction distance and line of sight.
-5. Extend sync to additional scenes after Cabin stabilizes.
+1. Launch host/client with `RemotePlayerAvatarSource=Auto` and verify Pizzeria shows a game-model avatar or compact capsule, not the tall fallback.
+2. Run RoadTrip -> Pizzeria -> Cabin and inspect session logs for avatar diagnostics plus Pizzeria/RoadTrip scene flag application.
+3. Re-run Cabin/Ouija with separate host/client session logs and inspect the client send loop when host `LastClientPkt` starts aging.
+4. Test each Quaternius avatar id with `RemotePlayerAvatarSource=AssetBundle`; animation can be reintroduced after runtime loading is confirmed in-game.
+5. Implement client-held item ownership (host confirms, client mirrors).
 
 ## TODO
 
-- Add player prefab spawn + true second controller for Cabin.
+- Validate in-scene avatar choices per scene and tune per-avatar scale/y-offset.
+- Reintroduce Quaternius locomotion clips after render-only AssetBundle loading is confirmed in-game.
+- Add true second gameplay controller for Cabin.
 - Sync held items (left/right hand) and throw events.
 - Sync door audio and lock state consistently.
-- Expand story flag coverage beyond PlayerPrefs (in-memory flags).
+- Continue expanding story flag coverage beyond PlayerPrefs for scene-specific in-memory flags.
 - Add UDP stats (drop rate, last packet time) to overlay.

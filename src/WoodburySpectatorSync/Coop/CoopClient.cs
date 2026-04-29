@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net.Sockets;
 using System.Threading;
 using System.Diagnostics;
@@ -45,12 +46,22 @@ namespace WoodburySpectatorSync.Coop
         private PlayerTransformState _latestHostTransform;
         private int _latestHostTransformSeq;
         private int _lastConsumedHostTransformSeq;
+        private int _nextSessionId;
+        private HostSessionInfo _activeHostSession;
         private const int ConnectTimeoutMs = 3000;
         private const int RetryDelayMs = 2000;
         private const int MaxUdpDrainPerCall = 64;
         private const int MaxPendingTransforms = 120;
         private const int MaxUdpDrainPerFrame = 128;
         private const int UdpDrainWindowMs = 16;
+
+        private sealed class HostSessionInfo
+        {
+            public int SessionId;
+            public string Host = string.Empty;
+            public int Port;
+            public long ConnectedAtMs;
+        }
 
         public CoopClient(ManualLogSource logger, Settings settings)
         {
@@ -74,6 +85,7 @@ namespace WoodburySpectatorSync.Coop
         public string LastTransformSource => _lastTransformSource;
         public long HostStateReadCount => Interlocked.Read(ref _hostStateReadCount);
         public long HostStateEnqueuedCount => Interlocked.Read(ref _hostStateEnqueuedCount);
+        public int ActiveSessionId => _activeHostSession != null ? _activeHostSession.SessionId : 0;
         public int LatestHostTransformSeq
         {
             get
@@ -215,6 +227,13 @@ namespace WoodburySpectatorSync.Coop
                     ConnectWithTimeout(_client, _settings.SpectatorHostIP.Value, _settings.HostPort.Value, ConnectTimeoutMs);
                     _stream = _client.GetStream();
                     _connected = true;
+                    _activeHostSession = new HostSessionInfo
+                    {
+                        SessionId = Interlocked.Increment(ref _nextSessionId),
+                        Host = _settings.SpectatorHostIP.Value,
+                        Port = _settings.HostPort.Value,
+                        ConnectedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                    };
                     Status = "Connected";
                     _logger.LogInfo("Co-op connected to host");
 
@@ -318,7 +337,10 @@ namespace WoodburySpectatorSync.Coop
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Co-op receive error: " + ex.Message);
+                if (_running && !IsExpectedDisconnectException(ex))
+                {
+                    _logger.LogWarning("Co-op receive error: " + ex.Message);
+                }
             }
             finally
             {
@@ -344,7 +366,10 @@ namespace WoodburySpectatorSync.Coop
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Co-op send error: " + ex.Message);
+                if (_running && !IsExpectedDisconnectException(ex))
+                {
+                    _logger.LogWarning("Co-op send error: " + ex.Message);
+                }
             }
         }
 
@@ -386,6 +411,7 @@ namespace WoodburySpectatorSync.Coop
             Interlocked.Exchange(ref _pendingTransformMessages, 0);
             _udpDrainBudget = 0;
             _udpDrainBudgetTick = 0;
+            _activeHostSession = null;
             lock (_latestHostTransformLock)
             {
                 _latestHostTransform = default;
@@ -630,10 +656,43 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.DialogueAdvance:
                 case MessageType.DialogueChoice:
                 case MessageType.DialogueEnd:
+                case MessageType.PlayerInput:
                     return true;
                 default:
                     return false;
             }
+        }
+
+        private static bool IsExpectedDisconnectException(Exception ex)
+        {
+            if (ex == null) return false;
+            if (ex is ObjectDisposedException) return true;
+            if (ex is IOException ioEx)
+            {
+                return IsExpectedDisconnectException(ioEx.InnerException);
+            }
+            if (ex is SocketException socketEx)
+            {
+                switch (socketEx.SocketErrorCode)
+                {
+                    case SocketError.OperationAborted:
+                    case SocketError.ConnectionReset:
+                    case SocketError.ConnectionAborted:
+                    case SocketError.Shutdown:
+                    case SocketError.NotConnected:
+                    case SocketError.Interrupted:
+                    case SocketError.TimedOut:
+                    case SocketError.NetworkDown:
+                    case SocketError.NetworkReset:
+                    case SocketError.NetworkUnreachable:
+                        return true;
+                }
+            }
+
+            var message = ex.Message ?? string.Empty;
+            return message.IndexOf("WSACancelBlockingCall", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   message.IndexOf("forcibly closed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   message.IndexOf("transport connection", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

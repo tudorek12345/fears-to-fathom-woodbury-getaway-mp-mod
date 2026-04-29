@@ -31,7 +31,9 @@ $optional = @(
     "UnityEngine.AIModule.dll",
     "UnityEngine.UIModule.dll",
     "UnityEngine.SceneManagementModule.dll",
-    "UnityEngine.UnityWebRequestModule.dll"
+    "UnityEngine.UnityWebRequestModule.dll",
+    "UnityEngine.AssetBundleModule.dll",
+    "UnityEngine.JSONSerializeModule.dll"
 )
 
 foreach ($dll in $required) {

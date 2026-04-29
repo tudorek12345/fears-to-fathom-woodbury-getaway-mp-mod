@@ -10,6 +10,14 @@ namespace WoodburySpectatorSync.Config
         CoopClient
     }
 
+    public enum RemotePlayerAvatarSource
+    {
+        Auto,
+        GameModel,
+        AssetBundle,
+        Capsule
+    }
+
     public sealed class Settings
     {
         public ConfigEntry<Mode> ModeSetting;
@@ -33,6 +41,13 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<bool> CoopAutoConnectClient;
         public ConfigEntry<bool> CoopForceCabinStart;
         public ConfigEntry<string> CoopCabinStartSequence;
+        public ConfigEntry<string> CoopRemotePlayerPrefabPath;
+        public ConfigEntry<string> CoopRemotePlayerRig;
+        public ConfigEntry<RemotePlayerAvatarSource> CoopRemotePlayerAvatarSource;
+        public ConfigEntry<string> CoopRemotePlayerAvatarBundlePath;
+        public ConfigEntry<string> CoopRemotePlayerAvatarId;
+        public ConfigEntry<float> CoopRemotePlayerAvatarScale;
+        public ConfigEntry<float> CoopRemotePlayerAvatarYOffset;
 
         public static Settings Bind(ConfigFile config)
         {
@@ -58,6 +73,13 @@ namespace WoodburySpectatorSync.Config
             settings.CoopAutoConnectClient = config.Bind("Coop", "AutoConnectClient", false, "Auto-connect co-op client on launch");
             settings.CoopForceCabinStart = config.Bind("Coop", "ForceCabinStartSequence", true, "Force the client to start at a cabin testing sequence (skips driving intro)");
             settings.CoopCabinStartSequence = config.Bind("Coop", "CabinStartSequence", "StartAfterShower", "CabinSceneSequences enum name (StartAfterShower, StartInKitchenAfterOvenStart, StartHiding)");
+            settings.CoopRemotePlayerPrefabPath = config.Bind("Coop", "RemotePlayerPrefabPath", string.Empty, "Optional dedicated remote player source path (NetPath or Resources path). If empty, fallback uses local FPC clone.");
+            settings.CoopRemotePlayerRig = config.Bind("Coop", "RemotePlayerRig", "Auto", "Animator rig profile for remote player proxies (Auto, WoodburyFpc, ThirdPersonBasic, LegacyHumanoid).");
+            settings.CoopRemotePlayerAvatarSource = config.Bind("Coop", "RemotePlayerAvatarSource", RemotePlayerAvatarSource.Auto, "Remote player avatar source (Auto, GameModel, AssetBundle, Capsule). Auto prefers safe in-scene game models.");
+            settings.CoopRemotePlayerAvatarBundlePath = config.Bind("Coop", "RemotePlayerAvatarBundlePath", "BepInEx/plugins/WoodburySpectatorSync/avatars/woodbury_avatars.bundle", "Optional Unity AssetBundle for remote player avatars. Used only when RemotePlayerPrefabPath is blank.");
+            settings.CoopRemotePlayerAvatarId = config.Bind("Coop", "RemotePlayerAvatarId", "woodbury_scene_auto", "Avatar id. Use woodbury_scene_auto for in-scene models, or a bundle manifest id such as quaternius_regular_male.");
+            settings.CoopRemotePlayerAvatarScale = config.Bind("Coop", "RemotePlayerAvatarScale", 1f, "Multiplier applied on top of the avatar manifest scale.");
+            settings.CoopRemotePlayerAvatarYOffset = config.Bind("Coop", "RemotePlayerAvatarYOffset", 0f, "Extra vertical offset added on top of the avatar manifest offset.");
             return settings;
         }
     }

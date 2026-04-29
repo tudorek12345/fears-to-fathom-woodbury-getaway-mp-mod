@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-[BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.2.33")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.2.33")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -50,14 +50,18 @@ namespace WoodburySpectatorSync
             Application.runInBackground = true;
             _overlay = new Overlay(_settings);
             _remoteDialogueOverlay = new RemoteDialogueOverlay();
-            _sessionLog = new SessionLog(Logger);
+            _sessionLog = new SessionLog(Logger, _settings.ModeSetting.Value.ToString());
             _cameraFollower = new CameraFollower(_settings);
             _sceneSync = new SceneSync();
             _hostServer = new HostServer(Logger, _settings);
             _spectatorClient = new SpectatorClient(Logger, _settings);
             _coopServer = new CoopServer(Logger, _settings);
             _coopClient = new CoopClient(Logger, _settings);
-            _coopHost = new CoopHostCoordinator(Logger, _settings, _coopServer);
+            _coopHost = new CoopHostCoordinator(
+                Logger,
+                _settings,
+                _coopServer,
+                _sessionLog != null ? new Action<string>(_sessionLog.Write) : null);
             _coopClientCoordinator = new CoopClientCoordinator(
                 Logger,
                 _settings,
@@ -465,6 +469,23 @@ namespace WoodburySpectatorSync
             if (cabin != null)
             {
                 return cabin.CurrentSequence.ToString();
+            }
+
+            var pizzeria = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+            if (pizzeria != null)
+            {
+                var mike = pizzeria.mikePizzeria != null
+                    ? pizzeria.mikePizzeria
+                    : UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+                return "Pizzeria:" + pizzeria.currentPlayerState +
+                       (mike != null ? " mike=" + mike.state : string.Empty);
+            }
+
+            var roadTrip = UnityEngine.Object.FindObjectOfType<RoadTripGameManager>();
+            if (roadTrip != null)
+            {
+                var mike = UnityEngine.Object.FindObjectOfType<MikeInCar>();
+                return "RoadTrip:" + (mike != null ? mike.currentConvo.ToString() : "active");
             }
 
             return "-";

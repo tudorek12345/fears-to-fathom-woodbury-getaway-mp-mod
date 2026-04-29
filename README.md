@@ -22,20 +22,23 @@ Current work targets the Cabin scene first. In the episode list, select "Board g
 - Client no longer gets camera-locked during Mike dialogue; free movement is preserved.
 - CabinHouse progression flags are replicated (WIP; dialogue/sequence triggers).
 - CabinGameManager state flags (CurrentSequence/currentPlayerState/inConversation) are replicated (WIP).
+- Mike animation-state events are replicated in Cabin (`CabinGM.MikeAnim.*`) in addition to transform/state sync.
 - UDP is used for high-frequency transforms; TCP carries scene and world state.
 - Transform backlog control and UDP drain budgeting are in place to reduce starvation.
 - Dialogue events are transmitted, but full dialogue UI mirroring is not complete.
 
 Known issues (latest build):
 - Story progression beyond the initial Cabin/Board Game flow is still unstable; CabinHouse/CabinGame flags now sync but full sequence control is WIP.
+- Latest Cabin/Ouija testing showed host packets continuing while client packets stopped for ~28 seconds before disconnect/waiting state; next debugging pass should focus on client heartbeat/send-loop state during `GoingToPlayOuija`.
 - Dialogue UI can flicker or appear briefly on the client instead of staying in sync.
 - Item ownership and physics replication are incomplete.
-- AI behavior/animation sync is transform-only (no full state/brain sync).
+- AI behavior/brain sync is still limited; Mike has animation-state event sync but full AI brain parity is WIP.
 - Other scenes are not yet validated beyond Cabin.
 
-Latest session observations (Dec 26, 2025):
-- HostUpdateAge stays near 0.0s while HostApplied count increases (transform apply confirmed).
-- HostState enqueued/sent on host and read/applied on client are tracking correctly.
+Latest session observations (Apr 13, 2026):
+- Host accepted `SceneReady` for `MainMenu` and `CabinScene`, then reached `GoingToPlayOuija`.
+- Host state and transform traffic stayed active, but `LastClientPkt` climbed to ~28.6s before the host returned to waiting.
+- Same-PC host/client launches now write distinct session logs by mode/process id, avoiding the old shared filename collision.
 
 ## Install (BepInEx Mono)
 
@@ -131,6 +134,43 @@ Then:
 - Host window: enter Cabin, press `F6`.
 - Client window: stay on main menu, press `F7`.
 
+### Pair launcher script (manual by default)
+
+Use the helper launcher to start exactly two instances with separate configs:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Launch-CoopPair.ps1
+```
+
+Default behavior:
+- Writes host/client configs with manual startup (`AutoStartHost=false`, `AutoConnectClient=false`).
+- Refuses to launch if game instances are already running (prevents runaway windows).
+- Starts both windows as windowed `1440x900` (`-screen-fullscreen 0`).
+
+Optional automation flags:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Launch-CoopPair.ps1 -AutoStartHost -AutoConnectClient
+```
+
+Optional dedicated avatar source/rig:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Launch-CoopPair.ps1 -RemotePlayerPrefabPath "CabinScene/SomeAvatarRoot[0]" -RemotePlayerRig ThirdPersonBasic
+```
+
+Optional CC0 AssetBundle avatar:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Launch-CoopPair.ps1 -RemotePlayerAvatarSource AssetBundle -RemotePlayerAvatarId quaternius_regular_female
+```
+
+Optional force clean start:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Launch-CoopPair.ps1 -ForceStopExisting
+```
+
 ## Config
 
 - `Mode` = Host | Spectator | CoopHost | CoopClient
@@ -152,8 +192,27 @@ Then:
 - `RouteInteractionsToHost` = true
 - `AutoStartHost` = false
 - `AutoConnectClient` = false
+- `RemotePlayerPrefabPath` = (optional NetPath or Resources path; blank = fallback clone)
+- `RemotePlayerRig` = Auto | WoodburyFpc | ThirdPersonBasic | LegacyHumanoid
+- `RemotePlayerAvatarSource` = Auto | GameModel | AssetBundle | Capsule
+- `RemotePlayerAvatarBundlePath` = BepInEx/plugins/WoodburySpectatorSync/avatars/woodbury_avatars.bundle
+- `RemotePlayerAvatarId` = woodbury_scene_auto | woodbury_pizzeria_mike | woodbury_pizzeria_backpacker | woodbury_pizzeria_hobo | woodbury_cabin_mike | woodbury_roadtrip_mike | quaternius_regular_male | quaternius_regular_female | quaternius_teen_male | quaternius_teen_female
+- `RemotePlayerAvatarScale` = 1
+- `RemotePlayerAvatarYOffset` = 0
 - `ForceCabinStartSequence` = true
 - `CabinStartSequence` = StartAfterShower
+
+## Avatar AssetBundle
+
+When `RemotePlayerPrefabPath` is blank, `RemotePlayerAvatarSource=Auto` prefers safe in-scene game models (`woodbury_scene_auto`) and falls back to a compact non-colliding capsule. Use `RemotePlayerAvatarSource=AssetBundle` to force Quaternius bundle avatars by manifest id. Bundle/model failures are logged with source, id, renderer count, bounds, and fallback reason.
+
+Bundle tooling lives in `tools/AvatarBundle` and expects Unity 2021.3.x. The first supported pack is Quaternius Universal Base Characters with optional locomotion clips from Quaternius Universal Animation Library:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Build-AvatarBundle.ps1 -UnityPath "C:\Program Files\Unity\Hub\Editor\2021.3.33f1\Editor\Unity.exe" -InstallToGameDir "C:\Games\Fears to Fathom - Woodbury Getaway"
+```
+
+Current bundle output is render-only/static on purpose. It strips Animator/AnimationClip assets so Unity 2021.3 can validate and the game can prove `AssetBundle.LoadFromFile` before locomotion clips are reintroduced.
 
 ## Networking notes
 

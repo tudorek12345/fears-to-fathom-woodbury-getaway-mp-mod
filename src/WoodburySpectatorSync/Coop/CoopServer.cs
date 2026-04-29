@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -37,12 +38,21 @@ namespace WoodburySpectatorSync.Coop
         private long _hostStateSent;
         private long _lastHostStateSentMs;
         private int _lastHostStateType;
+        private int _nextSessionId;
+        private ClientSessionInfo _activeClientSession;
 
         private struct OutboundFrame
         {
             public byte[] Frame;
             public bool IsHostState;
             public MessageType Type;
+        }
+
+        private sealed class ClientSessionInfo
+        {
+            public int SessionId;
+            public string RemoteEndpoint = string.Empty;
+            public long ConnectedAtMs;
         }
 
         public CoopServer(ManualLogSource logger, Settings settings)
@@ -63,6 +73,7 @@ namespace WoodburySpectatorSync.Coop
         public long HostStateSent => Interlocked.Read(ref _hostStateSent);
         public long LastHostStateSentMs => Interlocked.Read(ref _lastHostStateSentMs);
         public MessageType LastHostStateType => (MessageType)Interlocked.CompareExchange(ref _lastHostStateType, 0, 0);
+        public int ActiveSessionId => _activeClientSession != null ? _activeClientSession.SessionId : 0;
 
         public void UpdateHostTransform(PlayerTransformState state)
         {
@@ -183,6 +194,14 @@ namespace WoodburySpectatorSync.Coop
                         _client = client;
                         _stream = client.GetStream();
                         _clientConnected = true;
+                        _activeClientSession = new ClientSessionInfo
+                        {
+                            SessionId = Interlocked.Increment(ref _nextSessionId),
+                            RemoteEndpoint = client.Client != null && client.Client.RemoteEndPoint != null
+                                ? client.Client.RemoteEndPoint.ToString()
+                                : string.Empty,
+                            ConnectedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                        };
                     }
 
                     if (_udpChannel != null)
@@ -247,7 +266,10 @@ namespace WoodburySpectatorSync.Coop
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning("Co-op send loop error: " + ex.Message);
+                    if (_running && !IsExpectedDisconnectException(ex))
+                    {
+                        _logger.LogWarning("Co-op send loop error: " + ex.Message);
+                    }
                     DisconnectClient();
                     Thread.Sleep(200);
                 }
@@ -318,7 +340,10 @@ namespace WoodburySpectatorSync.Coop
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Co-op receive loop error: " + ex.Message);
+                if (_running && !IsExpectedDisconnectException(ex))
+                {
+                    _logger.LogWarning("Co-op receive loop error: " + ex.Message);
+                }
             }
             finally
             {
@@ -346,6 +371,7 @@ namespace WoodburySpectatorSync.Coop
                 _stream = null;
                 _client = null;
                 _clientConnected = false;
+                _activeClientSession = null;
             }
             Interlocked.Exchange(ref _lastTcpReceiveMs, 0);
             Interlocked.Exchange(ref _lastTransformSentTcpMs, 0);
@@ -406,6 +432,7 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.DialogueAdvance:
                 case MessageType.DialogueChoice:
                 case MessageType.DialogueEnd:
+                case MessageType.PlayerInput:
                     return true;
                 default:
                     return false;
@@ -468,6 +495,8 @@ namespace WoodburySpectatorSync.Coop
                     var msg = (DialogueEndMessage)message;
                     return Protocol.BuildDialogueEnd(msg.ConversationId);
                 }
+                case MessageType.PlayerInput:
+                    return Protocol.BuildPlayerInput(((PlayerInputMessage)message).State);
                 case MessageType.Ping:
                     return Protocol.BuildPing();
                 case MessageType.Pong:
@@ -478,6 +507,38 @@ namespace WoodburySpectatorSync.Coop
                 default:
                     return null;
             }
+        }
+
+        private static bool IsExpectedDisconnectException(Exception ex)
+        {
+            if (ex == null) return false;
+            if (ex is ObjectDisposedException) return true;
+            if (ex is IOException ioEx)
+            {
+                return IsExpectedDisconnectException(ioEx.InnerException);
+            }
+            if (ex is SocketException socketEx)
+            {
+                switch (socketEx.SocketErrorCode)
+                {
+                    case SocketError.OperationAborted:
+                    case SocketError.ConnectionReset:
+                    case SocketError.ConnectionAborted:
+                    case SocketError.Shutdown:
+                    case SocketError.NotConnected:
+                    case SocketError.Interrupted:
+                    case SocketError.TimedOut:
+                    case SocketError.NetworkDown:
+                    case SocketError.NetworkReset:
+                    case SocketError.NetworkUnreachable:
+                        return true;
+                }
+            }
+
+            var message = ex.Message ?? string.Empty;
+            return message.IndexOf("WSACancelBlockingCall", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   message.IndexOf("forcibly closed", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   message.IndexOf("transport connection", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

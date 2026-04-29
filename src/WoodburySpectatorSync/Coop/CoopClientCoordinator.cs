@@ -53,31 +53,69 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, AiTransformState> _pendingAiStates = new Dictionary<string, AiTransformState>();
         private readonly Dictionary<string, int> _pendingCabinHouseFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _pendingCabinGameFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _pendingPizzeriaFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _pendingRoadTripFlags = new Dictionary<string, int>();
         private float _loadingStartTime;
         private float _loadingLastProgress;
         private float _loadingLastProgressTime;
         private string _loadingSceneName;
         private CabinHouseManager _cabinHouseManager;
         private CabinGameManager _cabinGameManager;
+        private PizzeriaGameManager _pizzeriaGameManager;
+        private PizzeriaTruckDoor _pizzeriaTruckDoor;
+        private MikePizzeria _pizzeriaMike;
+        private RoadTripGameManager _roadTripGameManager;
+        private MikeInCar _roadTripMikeInCar;
+        private MikeTruckInLoopScene _roadTripTruck;
         private readonly Dictionary<string, FieldInfo> _cabinHouseFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinGameFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _pizzeriaFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _pizzeriaMikeFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _pizzeriaGameObjectFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _pizzeriaMikeGameObjectFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _roadTripFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _roadTripMikeFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _roadTripTruckFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, Transform> _aiFallbackTargets = new Dictionary<string, Transform>(StringComparer.Ordinal);
         private readonly HashSet<string> _aiMissingLogged = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> _aiFallbackLogged = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _aiDebugPaths = new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> _missingSceneFieldLogged = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<string, Vector3> _aiLastPositions = new Dictionary<string, Vector3>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _aiLastTimes = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, Animator> _aiAnimatorCache = new Dictionary<string, Animator>(StringComparer.Ordinal);
         private readonly Dictionary<string, AnimatorDriveInfo> _aiAnimatorParams = new Dictionary<string, AnimatorDriveInfo>(StringComparer.Ordinal);
         private float _nextAiMissingLogTime;
         private float _nextAiFallbackLogTime;
+        private float _nextAiDebugLogTime;
+        private int _aiDebugLogCount;
+        private readonly List<ICoopClientSceneAdapter> _sceneAdapters = new List<ICoopClientSceneAdapter>();
+        private readonly Dictionary<string, float> _pendingDoorFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _pendingHoldableFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _pendingAiFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _pendingCabinHouseFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _pendingCabinGameFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _pendingPizzeriaFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _pendingRoadTripFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private float _nextPendingRetryLogTime;
 
         private const string CabinHouseFlagPrefix = "CabinHouse.";
         private const string CabinGameFlagPrefix = "CabinGM.";
+        private const string CabinMikeAnimFieldPrefix = "MikeAnim.";
+        private const string PizzeriaFlagPrefix = "PizzeriaGM.";
+        private const string PizzeriaMikeFlagPrefix = PizzeriaFlagPrefix + "Mike.";
+        private const string PizzeriaActiveGamePrefix = PizzeriaFlagPrefix + "Active.Game.";
+        private const string PizzeriaActiveMikePrefix = PizzeriaFlagPrefix + "Active.Mike.";
+        private const string RoadTripFlagPrefix = "RoadTripGM.";
+        private const string RoadTripMikeFlagPrefix = RoadTripFlagPrefix + "Mike.";
+        private const string RoadTripTruckFlagPrefix = RoadTripFlagPrefix + "Truck.";
         private int _loadingSceneIndex = -1;
         private const float LoadingTimeoutSeconds = 40f;
         private const float LoadingStallSeconds = 6f;
         private const int MaxMessagesPerFrame = 200;
         private const int MaxTransformsPerFrame = 60;
+        private const float PendingRetryLogIntervalSeconds = 5f;
+        private const float PendingRetryWarnAgeSeconds = 8f;
         private bool _forcedCabinSpawn;
         private bool _cabinPrefsPrepared;
         private bool _dialogueUiDisabled;
@@ -105,7 +143,27 @@ namespace WoodburySpectatorSync.Coop
         private Transform _forcedMikeTarget;
         private string _forcedMikeReason = string.Empty;
         private float _nextMikeSyncLogTime;
+        private SequenceType _lastMikeSequence = SequenceType.NotInAnySequence;
+        private CabinGameManager.CurrentMike _lastMikeState = CabinGameManager.CurrentMike.Prefishing;
+        private bool _hasMikeState;
+        private int _remoteMikeAnimStateHash;
+        private int _remoteMikeAnimLoop = -1;
+        private int _remoteMikeAnimPhase10 = -1;
+        private int _remoteMikeAnimTransition;
+        private int _remoteMikeAnimNextStateHash;
+        private int _appliedMikeAnimStateHash;
+        private int _appliedMikeAnimLoop = -1;
+        private int _appliedMikeAnimPhase10 = -1;
+        private int _appliedMikeAnimTransition;
+        private int _appliedMikeAnimNextStateHash;
         private float _nextDialogueUnlockTime;
+        private int _sceneReadyGeneration;
+        private int _sceneReadySentGeneration = -1;
+        private bool _sceneReadyDirty = true;
+        private bool _wasConnected;
+        private string _lastStartPrefScene = string.Empty;
+        private int _lastStartPrefSeq = int.MinValue;
+        private int _lastStartPrefFromMenu = int.MinValue;
         private readonly HashSet<int> _disabledTriggerBehaviours = new HashSet<int>();
         private readonly HashSet<int> _disabledTriggerColliders = new HashSet<int>();
         private readonly HashSet<int> _disabledInteractables = new HashSet<int>();
@@ -135,6 +193,92 @@ namespace WoodburySpectatorSync.Coop
             "BarkTrigger"
         };
 
+        private readonly string[] _pizzeriaFieldNames = new[]
+        {
+            "currentPlayerState",
+            "phoneUIState",
+            "playerTalking",
+            "playerGotPizza",
+            "canBurp",
+            "burp",
+            "autoStartFirstConvo",
+            "completedFirstConvo",
+            "playerCanSendMessage"
+        };
+
+        private readonly string[] _pizzeriaMikeFieldNames = new[]
+        {
+            "currentConvo",
+            "onDialogue",
+            "firstConvoComplete",
+            "completedPizzeria",
+            "moving",
+            "state",
+            "haveCounterConversation",
+            "sittingConvo1Done",
+            "sittingConvoCanDo",
+            "sittingConvo2Done",
+            "triggeredTexts",
+            "pizzaConversationDone",
+            "sittingDownConvoTriggered",
+            "goGetPizza",
+            "pizzaReadyConvoCalled",
+            "mikeGotThePizzaInHand",
+            "cashierAllSetConvoStarted",
+            "cashierAllSetConvoDone",
+            "goTrashCan",
+            "pizzaInHand",
+            "eatingPizza",
+            "mikeThrowPizza"
+        };
+
+        private readonly string[] _pizzeriaGameObjectFieldNames = new[]
+        {
+            "keysUI"
+        };
+
+        private readonly string[] _pizzeriaMikeGameObjectFieldNames = new[]
+        {
+            "doorCollider",
+            "phone",
+            "pizzaBox",
+            "pizzaBoxOnTable",
+            "pizzaBoxOnCounter",
+            "pizzaSlice",
+            "orderConvoTrigger"
+        };
+
+        private readonly string[] _roadTripFieldNames = new[]
+        {
+            "playerTalking",
+            "autoStartConversation",
+            "convoCompleted",
+            "phoneUIState",
+            "startBump",
+            "playerCanSendMessage"
+        };
+
+        private readonly string[] _roadTripMikeFieldNames = new[]
+        {
+            "currentConvo",
+            "mikeinConversation",
+            "busConvoCompleted",
+            "deerConvoCompleted",
+            "finalConvoCompleted",
+            "passedBus",
+            "passedDeer"
+        };
+
+        private readonly string[] _roadTripTruckFieldNames = new[]
+        {
+            "speed",
+            "distanceTravelled",
+            "pushBreak",
+            "accelerateFromStop",
+            "dialogueBreak",
+            "run"
+        };
+
         private readonly FieldInfo _doorScriptOpened;
         private readonly MethodInfo _doorScriptOpen;
         private readonly MethodInfo _doorScriptClose;
@@ -154,6 +298,9 @@ namespace WoodburySpectatorSync.Coop
             _doorScriptOpen = doorType.GetMethod("OpenDoor", BindingFlags.Instance | BindingFlags.NonPublic);
             _doorScriptClose = doorType.GetMethod("CloseDoor", BindingFlags.Instance | BindingFlags.NonPublic);
             _playerFirstPersonField = typeof(PlayerController).GetField("firstPersonController", BindingFlags.Instance | BindingFlags.NonPublic);
+            CacheSceneAdapterFields();
+            InitializeSceneAdapters();
+            OnSceneEnterAdapters(SceneManager.GetActiveScene().name);
 
             SceneManager.activeSceneChanged += OnSceneChanged;
         }
@@ -211,14 +358,28 @@ namespace WoodburySpectatorSync.Coop
 
         public void Update()
         {
+            if (_client.IsConnected && !_wasConnected)
+            {
+                _wasConnected = true;
+                MarkSceneReadyDirty("connect");
+                _sceneReadySentGeneration = -1;
+            }
+            else if (!_client.IsConnected && _wasConnected)
+            {
+                _wasConnected = false;
+                ResetDisconnectedOverlayState();
+            }
+
             if (!_client.IsConnected)
             {
-                Interlocked.Exchange(ref _lastHostAppliedTick, 0);
-                _lastHostTransformReceiveMs = 0;
-                _hostTransformReceiveCount = 0;
-                Interlocked.Exchange(ref _hostTransformAppliedCount, 0);
-                _lastAppliedHostTransformSeq = 0;
-                _lastAppliedHostNetMs = 0;
+                if (_sceneReadySentGeneration != -1 ||
+                    _lastAppliedHostNetMs != 0 ||
+                    _lastAppliedHostTransformSeq != 0 ||
+                    Interlocked.Read(ref _hostStateAppliedCount) != 0 ||
+                    Interlocked.Read(ref _hostTransformAppliedCount) != 0)
+                {
+                    ResetDisconnectedOverlayState();
+                }
                 return;
             }
 
@@ -243,6 +404,8 @@ namespace WoodburySpectatorSync.Coop
             {
                 EnsureLocalPlayerRefs();
             }
+            EnsureCabinGameManager();
+            SyncMikeVariantIfChanged();
             DisableLocalGameplay();
             _controller?.Update();
             if (_settings.CoopRouteInteractions.Value || !_settings.CoopUseLocalPlayer.Value)
@@ -317,7 +480,6 @@ namespace WoodburySpectatorSync.Coop
             DisableDialogueUIComponents();
             DisableStoryTriggers();
             DisableLocalAi();
-            DisableLocalMikeControllers();
 
             if (!_settings.CoopUseLocalPlayer.Value)
             {
@@ -461,7 +623,7 @@ namespace WoodburySpectatorSync.Coop
                     RequestSceneLoad(scene.SceneName, scene.BuildIndex, scene.StartSequence, scene.FromMenu);
                     if (!_isLoading && scene.SceneName == SceneManager.GetActiveScene().name)
                     {
-                        SendSceneReady(scene.SceneName);
+                        SendSceneReady(scene.SceneName, force: true);
                     }
                     IncrementHostStateApplied();
                 }
@@ -488,6 +650,12 @@ namespace WoodburySpectatorSync.Coop
                 else if (message is DialogueEndMessage dialogueEnd)
                 {
                     UpdateHostDialogueState(dialogueEnd.ConversationId, -1, -1, ended: true);
+                    IncrementHostStateApplied();
+                }
+                else if (message is PlayerInputMessage hostInput)
+                {
+                    _lastHostPlayerId = hostInput.State.PlayerId;
+                    _hostProxy?.ApplyInput(hostInput.State);
                     IncrementHostStateApplied();
                 }
 
@@ -531,7 +699,7 @@ namespace WoodburySpectatorSync.Coop
             if (latestSeq <= _lastAppliedHostTransformSeq)
             {
                 var now = Time.realtimeSinceStartup;
-                if (now >= _nextHostTransformForceLogTime)
+                if (_settings.VerboseLogging.Value && now >= _nextHostTransformForceLogTime)
                 {
                     _nextHostTransformForceLogTime = now + 5f;
                     var message = "ForceApplyLatchedTransform early: latestSeq=" + latestSeq +
@@ -546,7 +714,7 @@ namespace WoodburySpectatorSync.Coop
             if (!_client.TryGetLatestHostTransform(out var state))
             {
                 var now = Time.realtimeSinceStartup;
-                if (now >= _nextHostTransformForceLogTime)
+                if (_settings.VerboseLogging.Value && now >= _nextHostTransformForceLogTime)
                 {
                     _nextHostTransformForceLogTime = now + 5f;
                     var message = "ForceApplyLatchedTransform skip: latestSeq=" + latestSeq +
@@ -585,7 +753,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var logNow = Time.realtimeSinceStartup;
-            if (appliedOk && logNow >= _nextHostTransformForceLogTime)
+            if (_settings.VerboseLogging.Value && appliedOk && logNow >= _nextHostTransformForceLogTime)
             {
                 _nextHostTransformForceLogTime = logNow + 5f;
                 var message = "ForceApplyLatchedTransform ok: latestSeq=" + latestSeq +
@@ -609,10 +777,16 @@ namespace WoodburySpectatorSync.Coop
                 _pendingStartSeq = -1;
             }
 
-            if (sceneName == SceneManager.GetActiveScene().name) return;
+            if (sceneName == SceneManager.GetActiveScene().name)
+            {
+                MarkSceneReadyDirty("host-scene-mismatch-recovery");
+                return;
+            }
+
             _pendingScene = sceneName;
             _pendingSceneIndex = buildIndex;
             _lastSceneReadySent = string.Empty;
+            MarkSceneReadyDirty("host-scene-change");
         }
 
         private void UpdateSceneLoad()
@@ -656,6 +830,7 @@ namespace WoodburySpectatorSync.Coop
                         _loading = null;
                         _loadingSceneName = null;
                         _loadingSceneIndex = -1;
+                        MarkSceneReadyDirty("scene-load-complete");
                     }
                 }
                 return;
@@ -678,18 +853,88 @@ namespace WoodburySpectatorSync.Coop
         private void SendSceneReadyIfNeeded()
         {
             if (_isLoading || !string.IsNullOrEmpty(_pendingScene)) return;
-            SendSceneReady(SceneManager.GetActiveScene().name);
+            if (!_sceneReadyDirty) return;
+            SendSceneReady(SceneManager.GetActiveScene().name, force: false);
         }
 
-        private void SendSceneReady(string sceneName)
+        private void SendSceneReady(string sceneName, bool force)
         {
             if (string.IsNullOrEmpty(sceneName)) return;
-            var now = Time.realtimeSinceStartup;
-            if (sceneName == _lastSceneReadySent && now - _lastSceneReadySentTime < 1f) return;
+            if (!force &&
+                _sceneReadySentGeneration == _sceneReadyGeneration &&
+                string.Equals(sceneName, _lastSceneReadySent, StringComparison.Ordinal))
+            {
+                return;
+            }
 
             _client.Enqueue(new SceneReadyMessage(sceneName));
             _lastSceneReadySent = sceneName;
-            _lastSceneReadySentTime = now;
+            _lastSceneReadySentTime = Time.realtimeSinceStartup;
+            _sceneReadySentGeneration = _sceneReadyGeneration;
+            _sceneReadyDirty = false;
+        }
+
+        private void MarkSceneReadyDirty(string reason)
+        {
+            unchecked
+            {
+                _sceneReadyGeneration++;
+            }
+
+            _sceneReadyDirty = true;
+            if (_settings.VerboseLogging.Value)
+            {
+                _logger.LogInfo("SceneReady marked dirty: gen=" + _sceneReadyGeneration + " reason=" + reason);
+            }
+        }
+
+        private void ResetDisconnectedOverlayState()
+        {
+            Interlocked.Exchange(ref _lastHostAppliedTick, 0);
+            _lastHostTransformReceiveMs = 0;
+            _hostTransformReceiveCount = 0;
+            Interlocked.Exchange(ref _hostStateAppliedCount, 0);
+            Interlocked.Exchange(ref _hostTransformAppliedCount, 0);
+            _lastAppliedHostTransformSeq = 0;
+            _lastAppliedHostNetMs = 0;
+            _lastHostPlayerId = 255;
+            _hostDialogueConversationId = -1;
+            _hostDialogueEntryId = -1;
+            _hostDialogueChoiceIndex = -1;
+            _hostDialogueEventMs = 0;
+            _lastStoryEventKey = string.Empty;
+            _lastStoryEventValue = 0;
+            _lastStoryEventMs = 0;
+            _remoteMikeAnimStateHash = 0;
+            _remoteMikeAnimLoop = -1;
+            _remoteMikeAnimPhase10 = -1;
+            _remoteMikeAnimTransition = 0;
+            _remoteMikeAnimNextStateHash = 0;
+            _appliedMikeAnimStateHash = 0;
+            _appliedMikeAnimLoop = -1;
+            _appliedMikeAnimPhase10 = -1;
+            _appliedMikeAnimTransition = 0;
+            _appliedMikeAnimNextStateHash = 0;
+            _lastSceneReadySent = string.Empty;
+            _lastSceneReadySentTime = 0f;
+            _sceneReadySentGeneration = -1;
+            _sceneReadyDirty = true;
+            _pendingDoorStates.Clear();
+            _pendingHoldableStates.Clear();
+            _pendingAiStates.Clear();
+            _pendingCabinHouseFlags.Clear();
+            _pendingCabinGameFlags.Clear();
+            _pendingPizzeriaFlags.Clear();
+            _pendingRoadTripFlags.Clear();
+            _pendingDoorFirstSeen.Clear();
+            _pendingHoldableFirstSeen.Clear();
+            _pendingAiFirstSeen.Clear();
+            _pendingCabinHouseFirstSeen.Clear();
+            _pendingCabinGameFirstSeen.Clear();
+            _pendingPizzeriaFirstSeen.Clear();
+            _pendingRoadTripFirstSeen.Clear();
+            _nextPendingRetryLogTime = 0f;
+            ClearRemoteDialogue();
         }
 
         private void ApplyDoorState(DoorState state)
@@ -697,25 +942,19 @@ namespace WoodburySpectatorSync.Coop
             if (_isLoading || !TryApplyDoorState(state))
             {
                 _pendingDoorStates[state.Path] = state;
+                TrackPendingState(_pendingDoorFirstSeen, state.Path);
                 return;
             }
 
             _pendingDoorStates.Remove(state.Path);
+            ClearPendingState(_pendingDoorFirstSeen, state.Path);
         }
 
         private void ApplyStoryFlag(StoryFlagMessage flag)
         {
             if (flag == null) return;
             var key = flag.Key ?? string.Empty;
-            if (key.StartsWith(CabinHouseFlagPrefix, StringComparison.Ordinal))
-            {
-                TryApplyCabinHouseFlag(key, flag.Value, allowDefer: true);
-            }
-            else if (key.StartsWith(CabinGameFlagPrefix, StringComparison.Ordinal))
-            {
-                TryApplyCabinGameFlag(key, flag.Value, allowDefer: true);
-            }
-            else
+            if (!TryApplySceneAdapterFlag(key, flag.Value, allowDefer: true))
             {
                 PlayerPrefs.SetInt(key, flag.Value);
             }
@@ -730,10 +969,12 @@ namespace WoodburySpectatorSync.Coop
             if (_isLoading || !TryApplyHoldableState(state))
             {
                 _pendingHoldableStates[state.Path] = state;
+                TrackPendingState(_pendingHoldableFirstSeen, state.Path);
                 return;
             }
 
             _pendingHoldableStates.Remove(state.Path);
+            ClearPendingState(_pendingHoldableFirstSeen, state.Path);
         }
 
         private void ApplyAiState(AiTransformState state)
@@ -741,10 +982,12 @@ namespace WoodburySpectatorSync.Coop
             if (_isLoading || !TryApplyAiState(state))
             {
                 _pendingAiStates[state.Path] = state;
+                TrackPendingState(_pendingAiFirstSeen, state.Path);
                 return;
             }
 
             _pendingAiStates.Remove(state.Path);
+            ClearPendingState(_pendingAiFirstSeen, state.Path);
         }
 
         private bool TryApplyDoorState(DoorState state)
@@ -800,6 +1043,7 @@ namespace WoodburySpectatorSync.Coop
                 if (allowDefer)
                 {
                     _pendingCabinHouseFlags[key] = value;
+                    TrackPendingState(_pendingCabinHouseFirstSeen, key);
                 }
                 return false;
             }
@@ -812,6 +1056,7 @@ namespace WoodburySpectatorSync.Coop
                     if (allowDefer)
                     {
                         _pendingCabinHouseFlags[key] = value;
+                        TrackPendingState(_pendingCabinHouseFirstSeen, key);
                     }
                     return false;
                 }
@@ -838,6 +1083,9 @@ namespace WoodburySpectatorSync.Coop
                 _logger.LogWarning("ApplyCabinHouseFlag failed: " + ex.Message);
             }
 
+            _pendingCabinHouseFlags.Remove(key);
+            ClearPendingState(_pendingCabinHouseFirstSeen, key);
+
             return true;
         }
 
@@ -853,6 +1101,7 @@ namespace WoodburySpectatorSync.Coop
                 if (allowDefer)
                 {
                     _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
                 }
                 return false;
             }
@@ -865,12 +1114,30 @@ namespace WoodburySpectatorSync.Coop
                     if (allowDefer)
                     {
                         _pendingCabinGameFlags[key] = value;
+                        TrackPendingState(_pendingCabinGameFirstSeen, key);
                     }
                     return false;
                 }
             }
 
             var fieldName = key.Substring(CabinGameFlagPrefix.Length);
+            if (fieldName.StartsWith(CabinMikeAnimFieldPrefix, StringComparison.Ordinal))
+            {
+                if (!TryApplyCabinMikeAnimationFlag(fieldName, value))
+                {
+                    if (allowDefer)
+                    {
+                        _pendingCabinGameFlags[key] = value;
+                        TrackPendingState(_pendingCabinGameFirstSeen, key);
+                    }
+                    return false;
+                }
+
+                _pendingCabinGameFlags.Remove(key);
+                ClearPendingState(_pendingCabinGameFirstSeen, key);
+                return true;
+            }
+
             if (!_cabinGameFieldCache.TryGetValue(fieldName, out var field))
             {
                 field = typeof(CabinGameManager).GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -879,7 +1146,8 @@ namespace WoodburySpectatorSync.Coop
 
             if (field == null)
             {
-                return true;
+                LogMissingSceneField(_cabinGameManager.GetType(), fieldName);
+                return false;
             }
 
             try
@@ -908,7 +1176,591 @@ namespace WoodburySpectatorSync.Coop
                 UpdateMikeVariantFromState();
             }
 
+            _pendingCabinGameFlags.Remove(key);
+            ClearPendingState(_pendingCabinGameFirstSeen, key);
+
             return true;
+        }
+
+        private void CacheSceneAdapterFields()
+        {
+            _pizzeriaFieldCache.Clear();
+            for (var i = 0; i < _pizzeriaFieldNames.Length; i++)
+            {
+                var name = _pizzeriaFieldNames[i];
+                _pizzeriaFieldCache[name] = FindInstanceField(typeof(PizzeriaGameManager), name);
+            }
+
+            _pizzeriaMikeFieldCache.Clear();
+            for (var i = 0; i < _pizzeriaMikeFieldNames.Length; i++)
+            {
+                var name = _pizzeriaMikeFieldNames[i];
+                _pizzeriaMikeFieldCache[name] = FindInstanceField(typeof(MikePizzeria), name);
+            }
+
+            _pizzeriaGameObjectFieldCache.Clear();
+            for (var i = 0; i < _pizzeriaGameObjectFieldNames.Length; i++)
+            {
+                var name = _pizzeriaGameObjectFieldNames[i];
+                _pizzeriaGameObjectFieldCache[name] = FindInstanceField(typeof(PizzeriaGameManager), name);
+            }
+
+            _pizzeriaMikeGameObjectFieldCache.Clear();
+            for (var i = 0; i < _pizzeriaMikeGameObjectFieldNames.Length; i++)
+            {
+                var name = _pizzeriaMikeGameObjectFieldNames[i];
+                _pizzeriaMikeGameObjectFieldCache[name] = FindInstanceField(typeof(MikePizzeria), name);
+            }
+
+            _roadTripFieldCache.Clear();
+            for (var i = 0; i < _roadTripFieldNames.Length; i++)
+            {
+                var name = _roadTripFieldNames[i];
+                _roadTripFieldCache[name] = FindInstanceField(typeof(RoadTripGameManager), name);
+            }
+
+            _roadTripMikeFieldCache.Clear();
+            for (var i = 0; i < _roadTripMikeFieldNames.Length; i++)
+            {
+                var name = _roadTripMikeFieldNames[i];
+                _roadTripMikeFieldCache[name] = FindInstanceField(typeof(MikeInCar), name);
+            }
+
+            _roadTripTruckFieldCache.Clear();
+            for (var i = 0; i < _roadTripTruckFieldNames.Length; i++)
+            {
+                var name = _roadTripTruckFieldNames[i];
+                _roadTripTruckFieldCache[name] = FindInstanceField(typeof(MikeTruckInLoopScene), name);
+            }
+        }
+
+        private void InitializeSceneAdapters()
+        {
+            _sceneAdapters.Clear();
+            _sceneAdapters.Add(new DelegateClientSceneAdapter(
+                "Cabin",
+                scene => string.Equals(scene, "CabinScene", StringComparison.Ordinal) ||
+                         string.Equals(scene, "CabinDarkScene", StringComparison.Ordinal),
+                onSceneEnter: () =>
+                {
+                    _cabinHouseManager = null;
+                    _cabinGameManager = null;
+                },
+                applyStoryFlag: (key, value, allowDefer) =>
+                {
+                    if (key.StartsWith(CabinHouseFlagPrefix, StringComparison.Ordinal))
+                    {
+                        return TryApplyCabinHouseFlag(key, value, allowDefer);
+                    }
+
+                    if (key.StartsWith(CabinGameFlagPrefix, StringComparison.Ordinal))
+                    {
+                        return TryApplyCabinGameFlag(key, value, allowDefer);
+                    }
+
+                    return false;
+                }));
+
+            _sceneAdapters.Add(new DelegateClientSceneAdapter(
+                "Pizzeria",
+                scene => IsPizzeriaScene(scene),
+                onSceneEnter: () =>
+                {
+                    _pizzeriaGameManager = null;
+                    _pizzeriaTruckDoor = null;
+                    _pizzeriaMike = null;
+                },
+                applyStoryFlag: (key, value, allowDefer) => TryApplyPizzeriaFlag(key, value, allowDefer)));
+
+            _sceneAdapters.Add(new DelegateClientSceneAdapter(
+                "RoadTrip",
+                scene => IsRoadTripScene(scene),
+                onSceneEnter: () =>
+                {
+                    _roadTripGameManager = null;
+                    _roadTripMikeInCar = null;
+                    _roadTripTruck = null;
+                },
+                applyStoryFlag: (key, value, allowDefer) => TryApplyRoadTripFlag(key, value, allowDefer)));
+        }
+
+        private void OnSceneEnterAdapters(string sceneName)
+        {
+            for (var i = 0; i < _sceneAdapters.Count; i++)
+            {
+                var adapter = _sceneAdapters[i];
+                if (!adapter.MatchesScene(sceneName))
+                {
+                    continue;
+                }
+
+                adapter.OnSceneEnter();
+            }
+        }
+
+        private bool TryApplySceneAdapterFlag(string key, int value, bool allowDefer)
+        {
+            for (var i = 0; i < _sceneAdapters.Count; i++)
+            {
+                var adapter = _sceneAdapters[i];
+                if (adapter.TryApplyStoryFlag(key, value, allowDefer))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TryApplyPizzeriaFlag(string key, int value, bool allowDefer)
+        {
+            if (string.IsNullOrEmpty(key) || !key.StartsWith(PizzeriaFlagPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (!IsPizzeriaScene(SceneManager.GetActiveScene().name))
+            {
+                if (allowDefer)
+                {
+                    _pendingPizzeriaFlags[key] = value;
+                    TrackPendingState(_pendingPizzeriaFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(PizzeriaActiveGamePrefix, StringComparison.Ordinal))
+            {
+                if (_pizzeriaGameManager == null)
+                {
+                    _pizzeriaGameManager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                }
+
+                if (_pizzeriaGameManager == null)
+                {
+                    if (allowDefer)
+                    {
+                        _pendingPizzeriaFlags[key] = value;
+                        TrackPendingState(_pendingPizzeriaFirstSeen, key);
+                    }
+                    return false;
+                }
+
+                var activeFieldName = key.Substring(PizzeriaActiveGamePrefix.Length);
+                if (TryApplyGameObjectActiveFlag(_pizzeriaGameManager, activeFieldName, _pizzeriaGameObjectFieldCache, value))
+                {
+                    _pendingPizzeriaFlags.Remove(key);
+                    ClearPendingState(_pendingPizzeriaFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingPizzeriaFlags[key] = value;
+                    TrackPendingState(_pendingPizzeriaFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(PizzeriaActiveMikePrefix, StringComparison.Ordinal))
+            {
+                if (!TryEnsurePizzeriaMike(allowDefer, key, value))
+                {
+                    return false;
+                }
+
+                var activeFieldName = key.Substring(PizzeriaActiveMikePrefix.Length);
+                if (TryApplyGameObjectActiveFlag(_pizzeriaMike, activeFieldName, _pizzeriaMikeGameObjectFieldCache, value))
+                {
+                    _pendingPizzeriaFlags.Remove(key);
+                    ClearPendingState(_pendingPizzeriaFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingPizzeriaFlags[key] = value;
+                    TrackPendingState(_pendingPizzeriaFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(PizzeriaMikeFlagPrefix, StringComparison.Ordinal))
+            {
+                if (!TryEnsurePizzeriaMike(allowDefer, key, value))
+                {
+                    return false;
+                }
+
+                var mikeFieldName = key.Substring(PizzeriaMikeFlagPrefix.Length);
+                if (TryApplyObjectFieldFlag(_pizzeriaMike, mikeFieldName, _pizzeriaMikeFieldCache, value))
+                {
+                    _pendingPizzeriaFlags.Remove(key);
+                    ClearPendingState(_pendingPizzeriaFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingPizzeriaFlags[key] = value;
+                    TrackPendingState(_pendingPizzeriaFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (string.Equals(key, PizzeriaFlagPrefix + "TruckDoorInteractable", StringComparison.Ordinal))
+            {
+                if (_pizzeriaTruckDoor == null)
+                {
+                    if (_pizzeriaGameManager == null)
+                    {
+                        _pizzeriaGameManager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                    }
+
+                    _pizzeriaTruckDoor = _pizzeriaGameManager != null
+                        ? _pizzeriaGameManager.truckDoor
+                        : null;
+                    if (_pizzeriaTruckDoor == null)
+                    {
+                        _pizzeriaTruckDoor = UnityEngine.Object.FindObjectOfType<PizzeriaTruckDoor>();
+                    }
+                }
+
+                if (_pizzeriaTruckDoor == null)
+                {
+                    if (allowDefer)
+                    {
+                        _pendingPizzeriaFlags[key] = value;
+                        TrackPendingState(_pendingPizzeriaFirstSeen, key);
+                    }
+                    return false;
+                }
+
+                _pizzeriaTruckDoor.isinteractable = value != 0;
+                _pendingPizzeriaFlags.Remove(key);
+                ClearPendingState(_pendingPizzeriaFirstSeen, key);
+                return true;
+            }
+
+            if (_pizzeriaGameManager == null)
+            {
+                _pizzeriaGameManager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                if (_pizzeriaGameManager == null)
+                {
+                    if (allowDefer)
+                    {
+                        _pendingPizzeriaFlags[key] = value;
+                        TrackPendingState(_pendingPizzeriaFirstSeen, key);
+                    }
+                    return false;
+                }
+            }
+
+            var fieldName = key.Substring(PizzeriaFlagPrefix.Length);
+            if (TryApplyObjectFieldFlag(_pizzeriaGameManager, fieldName, _pizzeriaFieldCache, value))
+            {
+                _pendingPizzeriaFlags.Remove(key);
+                ClearPendingState(_pendingPizzeriaFirstSeen, key);
+                return true;
+            }
+
+            if (allowDefer)
+            {
+                _pendingPizzeriaFlags[key] = value;
+                TrackPendingState(_pendingPizzeriaFirstSeen, key);
+            }
+            return false;
+        }
+
+        private bool TryApplyRoadTripFlag(string key, int value, bool allowDefer)
+        {
+            if (string.IsNullOrEmpty(key) || !key.StartsWith(RoadTripFlagPrefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (!IsRoadTripScene(SceneManager.GetActiveScene().name))
+            {
+                if (allowDefer)
+                {
+                    _pendingRoadTripFlags[key] = value;
+                    TrackPendingState(_pendingRoadTripFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(RoadTripMikeFlagPrefix, StringComparison.Ordinal))
+            {
+                if (_roadTripMikeInCar == null)
+                {
+                    _roadTripMikeInCar = UnityEngine.Object.FindObjectOfType<MikeInCar>();
+                    if (_roadTripMikeInCar == null)
+                    {
+                        if (allowDefer)
+                        {
+                            _pendingRoadTripFlags[key] = value;
+                            TrackPendingState(_pendingRoadTripFirstSeen, key);
+                        }
+                        return false;
+                    }
+                }
+
+                var fieldName = key.Substring(RoadTripMikeFlagPrefix.Length);
+                if (TryApplyObjectFieldFlag(_roadTripMikeInCar, fieldName, _roadTripMikeFieldCache, value))
+                {
+                    _pendingRoadTripFlags.Remove(key);
+                    ClearPendingState(_pendingRoadTripFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingRoadTripFlags[key] = value;
+                    TrackPendingState(_pendingRoadTripFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(RoadTripTruckFlagPrefix, StringComparison.Ordinal))
+            {
+                if (_roadTripTruck == null)
+                {
+                    _roadTripTruck = UnityEngine.Object.FindObjectOfType<MikeTruckInLoopScene>();
+                    if (_roadTripTruck == null)
+                    {
+                        if (allowDefer)
+                        {
+                            _pendingRoadTripFlags[key] = value;
+                            TrackPendingState(_pendingRoadTripFirstSeen, key);
+                        }
+                        return false;
+                    }
+                }
+
+                var fieldName = key.Substring(RoadTripTruckFlagPrefix.Length);
+                if (TryApplyObjectFieldFlag(_roadTripTruck, fieldName, _roadTripTruckFieldCache, value))
+                {
+                    _pendingRoadTripFlags.Remove(key);
+                    ClearPendingState(_pendingRoadTripFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingRoadTripFlags[key] = value;
+                    TrackPendingState(_pendingRoadTripFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (_roadTripGameManager == null)
+            {
+                _roadTripGameManager = UnityEngine.Object.FindObjectOfType<RoadTripGameManager>();
+                if (_roadTripGameManager == null)
+                {
+                    if (allowDefer)
+                    {
+                        _pendingRoadTripFlags[key] = value;
+                        TrackPendingState(_pendingRoadTripFirstSeen, key);
+                    }
+                    return false;
+                }
+            }
+
+            var gameFieldName = key.Substring(RoadTripFlagPrefix.Length);
+            if (TryApplyObjectFieldFlag(_roadTripGameManager, gameFieldName, _roadTripFieldCache, value))
+            {
+                _pendingRoadTripFlags.Remove(key);
+                ClearPendingState(_pendingRoadTripFirstSeen, key);
+                return true;
+            }
+
+            if (allowDefer)
+            {
+                _pendingRoadTripFlags[key] = value;
+                TrackPendingState(_pendingRoadTripFirstSeen, key);
+            }
+            return false;
+        }
+
+        private bool TryEnsurePizzeriaMike(bool allowDefer, string key, int value)
+        {
+            if (_pizzeriaMike != null)
+            {
+                return true;
+            }
+
+            if (_pizzeriaGameManager == null)
+            {
+                _pizzeriaGameManager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+            }
+
+            _pizzeriaMike = _pizzeriaGameManager != null
+                ? _pizzeriaGameManager.mikePizzeria
+                : null;
+            if (_pizzeriaMike == null)
+            {
+                _pizzeriaMike = UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+            }
+
+            if (_pizzeriaMike != null)
+            {
+                return true;
+            }
+
+            if (allowDefer)
+            {
+                _pendingPizzeriaFlags[key] = value;
+                TrackPendingState(_pendingPizzeriaFirstSeen, key);
+            }
+            return false;
+        }
+
+        private bool TryApplyObjectFieldFlag(
+            object target,
+            string fieldName,
+            Dictionary<string, FieldInfo> cache,
+            int value)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName))
+            {
+                return false;
+            }
+
+            if (!cache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                cache[fieldName] = field;
+            }
+
+            if (field == null)
+            {
+                return true;
+            }
+
+            try
+            {
+                if (field.FieldType == typeof(bool))
+                {
+                    field.SetValue(target, value != 0);
+                    return true;
+                }
+
+                if (field.FieldType.IsEnum)
+                {
+                    field.SetValue(target, Enum.ToObject(field.FieldType, value));
+                    return true;
+                }
+
+                if (field.FieldType == typeof(int))
+                {
+                    field.SetValue(target, value);
+                    return true;
+                }
+
+                if (field.FieldType == typeof(byte))
+                {
+                    field.SetValue(target, (byte)Mathf.Clamp(value, byte.MinValue, byte.MaxValue));
+                    return true;
+                }
+
+                if (field.FieldType == typeof(float))
+                {
+                    field.SetValue(target, value / 1000f);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ApplyStoryFlag failed for " + fieldName + ": " + ex.Message);
+            }
+
+            LogMissingSceneField(target.GetType(), fieldName + ":" + field.FieldType.Name);
+            return false;
+        }
+
+        private bool TryApplyGameObjectActiveFlag(
+            object target,
+            string fieldName,
+            Dictionary<string, FieldInfo> cache,
+            int value)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName))
+            {
+                return false;
+            }
+
+            if (!cache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                cache[fieldName] = field;
+            }
+
+            if (field == null || field.FieldType != typeof(GameObject))
+            {
+                LogMissingSceneField(target.GetType(), fieldName + ":GameObject");
+                return false;
+            }
+
+            try
+            {
+                var gameObject = field.GetValue(target) as GameObject;
+                if (gameObject == null)
+                {
+                    return false;
+                }
+
+                gameObject.SetActive(value != 0);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Apply active scene flag failed for " + fieldName + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        private void LogMissingSceneField(Type type, string fieldName)
+        {
+            var typeName = type != null ? type.FullName : "?";
+            var key = typeName + "." + fieldName;
+            if (!_missingSceneFieldLogged.Add(key))
+            {
+                return;
+            }
+
+            _logger.LogWarning("Scene sync field not found or unsupported: " + key);
+            _sessionLogWrite?.Invoke("Scene sync field not found or unsupported: " + key);
+        }
+
+        private static FieldInfo FindInstanceField(Type type, string name)
+        {
+            while (type != null)
+            {
+                var field = type.GetField(
+                    name,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (field != null)
+                {
+                    return field;
+                }
+
+                type = type.BaseType;
+            }
+
+            return null;
+        }
+
+        private static bool IsPizzeriaScene(string sceneName)
+        {
+            return !string.IsNullOrEmpty(sceneName) &&
+                   sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsRoadTripScene(string sceneName)
+        {
+            return !string.IsNullOrEmpty(sceneName) &&
+                   sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private bool TryApplyHoldableState(HoldableState state)
@@ -924,34 +1776,67 @@ namespace WoodburySpectatorSync.Coop
 
         private bool TryApplyAiState(AiTransformState state)
         {
-            var target = NetPath.FindByPath(state.Path);
-            if (IsMikePath(state.Path))
+            Transform target = null;
+            var source = "path";
+            var isMike = IsMikePath(state.Path);
+
+            if (!string.IsNullOrEmpty(state.Path))
+            {
+                target = NetPath.FindByPath(state.Path);
+            }
+
+            if (isMike)
             {
                 var preferred = GetPreferredMikeTarget();
                 if (preferred != null)
                 {
                     target = preferred;
+                    source = "preferred";
                 }
             }
 
-            if (target != null && IsMikePath(state.Path) && !HasRenderable(target))
+            if (target != null && isMike && !HasRenderable(target))
             {
                 var fallback = ResolveAiFallback(state);
                 if (fallback != null)
                 {
                     target = fallback;
+                    source = "fallback";
                 }
             }
 
             if (target == null)
             {
                 target = ResolveAiFallback(state);
-                if (target == null)
+                if (target != null)
                 {
-                    MaybeLogMissingAi(state.Path);
-                    return false;
+                    source = "fallback";
                 }
             }
+
+            if (isMike)
+            {
+                var needsNearest = target == null || !HasRenderable(target);
+                if (!needsNearest)
+                {
+                    var currentDistance = Vector3.Distance(target.position, state.Position);
+                    needsNearest = currentDistance > 6f;
+                }
+
+                if (needsNearest && TryResolveNearestMike(state.Position, out var nearest, out var distance, 8f))
+                {
+                    target = nearest;
+                    source = "nearest:" + distance.ToString("0.00");
+                }
+            }
+
+            if (target == null)
+            {
+                MaybeLogMissingAi(state.Path);
+                return false;
+            }
+
+            MaybeLogAiPath(state.Path, target, source);
 
             var agent = target.GetComponent<NavmeshPathAgent>();
             if (agent != null)
@@ -1085,7 +1970,7 @@ namespace WoodburySpectatorSync.Coop
                 return active;
             }
 
-            return _forcedMikeTarget ?? active;
+            return active ?? _forcedMikeTarget;
         }
 
         private void UpdateMikeVariantFromState()
@@ -1104,9 +1989,10 @@ namespace WoodburySpectatorSync.Coop
             _forcedMikeTarget = desired;
             _forcedMikeReason = reason;
 
-            if (forceActive || _forcedMikeTarget != null)
+            if (forceActive && HasRenderable(desired))
             {
                 SetOnlyMikeActive(desired);
+                DisableLocalMikeControllers();
             }
 
             if (changed)
@@ -1122,6 +2008,125 @@ namespace WoodburySpectatorSync.Coop
                                     " active=" + desired.gameObject.activeInHierarchy);
                 }
             }
+
+            TryApplyRemoteMikeAnimation();
+        }
+
+        private bool TryApplyCabinMikeAnimationFlag(string fieldName, int value)
+        {
+            if (string.IsNullOrEmpty(fieldName))
+            {
+                return true;
+            }
+
+            switch (fieldName)
+            {
+                case "MikeAnim.StateHash":
+                    _remoteMikeAnimStateHash = value;
+                    break;
+                case "MikeAnim.Loop":
+                    _remoteMikeAnimLoop = Mathf.Max(0, value);
+                    break;
+                case "MikeAnim.Phase10":
+                    _remoteMikeAnimPhase10 = Mathf.Clamp(value, 0, 9);
+                    break;
+                case "MikeAnim.Transition":
+                    _remoteMikeAnimTransition = value != 0 ? 1 : 0;
+                    break;
+                case "MikeAnim.NextStateHash":
+                    _remoteMikeAnimNextStateHash = value;
+                    break;
+                default:
+                    return true;
+            }
+
+            return TryApplyRemoteMikeAnimation();
+        }
+
+        private bool TryApplyRemoteMikeAnimation()
+        {
+            if (_remoteMikeAnimStateHash == 0)
+            {
+                return true;
+            }
+
+            if (!TryResolveMikeAnimator(out var animator))
+            {
+                return false;
+            }
+
+            var desiredPhase = _remoteMikeAnimPhase10 >= 0
+                ? Mathf.Clamp01(_remoteMikeAnimPhase10 / 10f)
+                : 0f;
+
+            if (_remoteMikeAnimTransition != 0 &&
+                _remoteMikeAnimNextStateHash != 0 &&
+                (_appliedMikeAnimTransition == 0 || _appliedMikeAnimNextStateHash != _remoteMikeAnimNextStateHash))
+            {
+                animator.CrossFade(_remoteMikeAnimNextStateHash, 0.08f, 0, desiredPhase);
+            }
+            else
+            {
+                var current = animator.GetCurrentAnimatorStateInfo(0);
+                var currentHash = current.fullPathHash != 0 ? current.fullPathHash : current.shortNameHash;
+                var currentPhase10 = Mathf.Clamp(Mathf.FloorToInt(Mathf.Repeat(current.normalizedTime, 1f) * 10f), 0, 9);
+                var stateChanged = currentHash != _remoteMikeAnimStateHash;
+                var phaseDrift = _remoteMikeAnimPhase10 >= 0
+                    ? Mathf.Abs(currentPhase10 - _remoteMikeAnimPhase10)
+                    : 0;
+                if (stateChanged || phaseDrift >= 4)
+                {
+                    animator.Play(_remoteMikeAnimStateHash, 0, desiredPhase);
+                }
+            }
+
+            _appliedMikeAnimStateHash = _remoteMikeAnimStateHash;
+            _appliedMikeAnimLoop = _remoteMikeAnimLoop;
+            _appliedMikeAnimPhase10 = _remoteMikeAnimPhase10;
+            _appliedMikeAnimTransition = _remoteMikeAnimTransition;
+            _appliedMikeAnimNextStateHash = _remoteMikeAnimNextStateHash;
+            return true;
+        }
+
+        private bool TryResolveMikeAnimator(out Animator animator)
+        {
+            animator = null;
+
+            var preferred = GetPreferredMikeTarget();
+            if (preferred != null)
+            {
+                animator = preferred.GetComponentInChildren<Animator>(true);
+                if (animator != null)
+                {
+                    return true;
+                }
+            }
+
+            var active = GetActiveCabinMikeTarget();
+            if (active != null)
+            {
+                animator = active.GetComponentInChildren<Animator>(true);
+                if (animator != null)
+                {
+                    return true;
+                }
+            }
+
+            var candidates = new List<Transform>();
+            CollectMikeCandidates(candidates);
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                if (candidate == null) continue;
+                animator = candidate.GetComponentInChildren<Animator>(true);
+                if (animator != null)
+                {
+                    return true;
+                }
+            }
+
+            animator = null;
+            return false;
         }
 
         private Transform ResolveMikeTargetForSequence(out string reason, out bool forceActive)
@@ -1132,14 +2137,22 @@ namespace WoodburySpectatorSync.Coop
             if (_cabinGameManager == null) return null;
 
             var seq = _cabinGameManager.CurrentSequence;
-            if (seq == SequenceType.GoingToPlayOuija || seq == SequenceType.PlayingOuija)
+            if (seq == SequenceType.PickingBoardGame || seq == SequenceType.PlayingJenga ||
+                seq == SequenceType.GoingToPlayOuija || seq == SequenceType.PlayingOuija)
             {
                 var controller = GetMikeControllerTransform();
-                if (controller != null)
+                if (controller != null && HasRenderable(controller))
                 {
                     reason = "seq:" + seq;
                     forceActive = true;
                     return controller;
+                }
+
+                if (_cabinGameManager.mikeCabin != null)
+                {
+                    reason = "seq:" + seq + ":cabinfallback";
+                    forceActive = true;
+                    return _cabinGameManager.mikeCabin.transform;
                 }
             }
 
@@ -1149,19 +2162,30 @@ namespace WoodburySpectatorSync.Coop
                 if (fishing != null)
                 {
                     reason = "seq:" + seq;
+                    forceActive = true;
                     return fishing.transform;
                 }
             }
 
             var currentMike = _cabinGameManager.currentMike;
+            if ((currentMike == CabinGameManager.CurrentMike.Prefishing ||
+                 currentMike == CabinGameManager.CurrentMike.PostFishing) &&
+                _cabinGameManager.mikeCabin != null)
+            {
+                reason = "currentMike:" + currentMike;
+                forceActive = true;
+                return _cabinGameManager.mikeCabin.transform;
+            }
             if (currentMike == CabinGameManager.CurrentMike.Fishing && _cabinGameManager.mikeFishing != null)
             {
                 reason = "currentMike:" + currentMike;
+                forceActive = true;
                 return _cabinGameManager.mikeFishing.transform;
             }
             if (currentMike == CabinGameManager.CurrentMike.PostEating && _cabinGameManager.mikePostEating != null)
             {
                 reason = "currentMike:" + currentMike;
+                forceActive = true;
                 return _cabinGameManager.mikePostEating.transform;
             }
 
@@ -1358,6 +2382,102 @@ namespace WoodburySpectatorSync.Coop
                             " active=" + target.gameObject.activeInHierarchy);
         }
 
+        private void MaybeLogAiPath(string path, Transform target, string source)
+        {
+            if (target == null) return;
+            if (_aiDebugLogCount >= 8) return;
+
+            var key = string.IsNullOrEmpty(path) ? "(empty)" : path;
+            if (_aiDebugPaths.Contains(key)) return;
+
+            var now = Time.realtimeSinceStartup;
+            if (now < _nextAiDebugLogTime) return;
+            _nextAiDebugLogTime = now + 1f;
+
+            _aiDebugPaths.Add(key);
+            _aiDebugLogCount++;
+            _logger.LogInfo("AI path: " + key + " -> " + target.name +
+                            " src=" + source +
+                            " active=" + target.gameObject.activeInHierarchy +
+                            " render=" + HasRenderable(target));
+        }
+
+        private bool TryResolveNearestMike(Vector3 position, out Transform target, out float distance, float maxDistance)
+        {
+            target = null;
+            distance = float.MaxValue;
+
+            var candidates = new List<Transform>();
+            CollectMikeCandidates(candidates);
+            foreach (var candidate in candidates)
+            {
+                if (candidate == null) continue;
+                if (!HasRenderable(candidate)) continue;
+
+                var d = Vector3.Distance(position, candidate.position);
+                if (d < distance)
+                {
+                    distance = d;
+                    target = candidate;
+                }
+            }
+
+            return target != null && distance <= maxDistance;
+        }
+
+        private void CollectMikeCandidates(List<Transform> results)
+        {
+            if (results == null) return;
+
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            if (_cabinGameManager != null)
+            {
+                if (_cabinGameManager.mikeObject != null) results.Add(_cabinGameManager.mikeObject.transform);
+                if (_cabinGameManager.mikeCabin != null) results.Add(_cabinGameManager.mikeCabin.transform);
+                if (_cabinGameManager.mikeFishing != null) results.Add(_cabinGameManager.mikeFishing.transform);
+                if (_cabinGameManager.mikePostEating != null) results.Add(_cabinGameManager.mikePostEating.transform);
+                if (_cabinGameManager.mikeAfterHiding != null) results.Add(_cabinGameManager.mikeAfterHiding.transform);
+                if (_cabinGameManager.mikeEnd != null) results.Add(_cabinGameManager.mikeEnd.transform);
+
+                var mikeController = GetMikeControllerComponent();
+                if (mikeController != null) results.Add(mikeController.transform);
+                var mikeRizzler = GetMikeRizzlerComponent();
+                if (mikeRizzler != null) results.Add(mikeRizzler.transform);
+            }
+            else
+            {
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikeCabinCookController>());
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikeCabin>());
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikeFishing>());
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikePostEating>());
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikeAfterHiding>());
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikeRizzlerController>());
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikeEndGame>());
+                TryAddTransform(results, UnityEngine.Object.FindObjectOfType<MikeInCar>());
+            }
+
+            if (results.Count == 0)
+            {
+                var agents = UnityEngine.Object.FindObjectsOfType<NavMeshAgent>();
+                foreach (var agent in agents)
+                {
+                    if (agent == null || agent.gameObject == null) continue;
+                    if (agent.gameObject.name.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    results.Add(agent.transform);
+                }
+            }
+        }
+
+        private static void TryAddTransform(List<Transform> results, Component component)
+        {
+            if (component == null || results == null) return;
+            results.Add(component.transform);
+        }
+
         private Transform GetActiveCabinMikeTarget()
         {
             if (_cabinGameManager == null)
@@ -1367,57 +2487,35 @@ namespace WoodburySpectatorSync.Coop
 
             if (_cabinGameManager == null) return null;
 
-            var mikeObject = _cabinGameManager.mikeObject;
-            if (mikeObject != null && mikeObject.activeInHierarchy)
+            var candidates = new List<Transform>();
+            if (_cabinGameManager.mikeObject != null) candidates.Add(_cabinGameManager.mikeObject.transform);
+            if (_cabinGameManager.mikeCabin != null) candidates.Add(_cabinGameManager.mikeCabin.transform);
+            if (_cabinGameManager.mikeFishing != null) candidates.Add(_cabinGameManager.mikeFishing.transform);
+            if (_cabinGameManager.mikePostEating != null) candidates.Add(_cabinGameManager.mikePostEating.transform);
+            if (_cabinGameManager.mikeAfterHiding != null) candidates.Add(_cabinGameManager.mikeAfterHiding.transform);
+            if (_cabinGameManager.mikeEnd != null) candidates.Add(_cabinGameManager.mikeEnd.transform);
+
+            var mikeController = GetMikeControllerComponent();
+            if (mikeController != null) candidates.Add(mikeController.transform);
+
+            var mikeRizzler = GetMikeRizzlerComponent();
+            if (mikeRizzler != null) candidates.Add(mikeRizzler.transform);
+
+            Transform fallback = null;
+            foreach (var candidate in candidates)
             {
-                return mikeObject.transform;
+                if (candidate == null || !candidate.gameObject.activeInHierarchy) continue;
+                if (HasRenderable(candidate))
+                {
+                    return candidate;
+                }
+                if (fallback == null)
+                {
+                    fallback = candidate;
+                }
             }
 
-            var mikeCabin = _cabinGameManager.mikeCabin;
-            if (mikeCabin != null && mikeCabin.gameObject.activeInHierarchy)
-            {
-                return mikeCabin.transform;
-            }
-
-            var mikeFishing = _cabinGameManager.mikeFishing;
-            if (mikeFishing != null && mikeFishing.gameObject.activeInHierarchy)
-            {
-                return mikeFishing.transform;
-            }
-
-            var mikePostEating = _cabinGameManager.mikePostEating;
-            if (mikePostEating != null && mikePostEating.gameObject.activeInHierarchy)
-            {
-                return mikePostEating.transform;
-            }
-
-            var mikeAfterHiding = _cabinGameManager.mikeAfterHiding;
-            if (mikeAfterHiding != null && mikeAfterHiding.gameObject.activeInHierarchy)
-            {
-                return mikeAfterHiding.transform;
-            }
-
-            var mikeEnd = _cabinGameManager.mikeEnd;
-            if (mikeEnd != null && mikeEnd.gameObject.activeInHierarchy)
-            {
-                return mikeEnd.transform;
-            }
-
-            var mikeControllerField = typeof(CabinGameManager).GetField("mikeController", BindingFlags.Instance | BindingFlags.NonPublic);
-            var mikeController = mikeControllerField != null ? mikeControllerField.GetValue(_cabinGameManager) as Component : null;
-            if (mikeController != null && mikeController.gameObject.activeInHierarchy)
-            {
-                return mikeController.transform;
-            }
-
-            var mikeRizzlerField = typeof(CabinGameManager).GetField("mikeRizzlerController", BindingFlags.Instance | BindingFlags.NonPublic);
-            var mikeRizzler = mikeRizzlerField != null ? mikeRizzlerField.GetValue(_cabinGameManager) as Component : null;
-            if (mikeRizzler != null && mikeRizzler.gameObject.activeInHierarchy)
-            {
-                return mikeRizzler.transform;
-            }
-
-            return null;
+            return fallback;
         }
 
         private static bool HasRenderable(Transform target)
@@ -1468,6 +2566,7 @@ namespace WoodburySpectatorSync.Coop
                     if (TryApplyDoorState(_pendingDoorStates[key]))
                     {
                         _pendingDoorStates.Remove(key);
+                        ClearPendingState(_pendingDoorFirstSeen, key);
                     }
                 }
             }
@@ -1480,6 +2579,7 @@ namespace WoodburySpectatorSync.Coop
                     if (TryApplyHoldableState(_pendingHoldableStates[key]))
                     {
                         _pendingHoldableStates.Remove(key);
+                        ClearPendingState(_pendingHoldableFirstSeen, key);
                     }
                 }
             }
@@ -1492,6 +2592,7 @@ namespace WoodburySpectatorSync.Coop
                     if (TryApplyCabinHouseFlag(key, _pendingCabinHouseFlags[key], allowDefer: false))
                     {
                         _pendingCabinHouseFlags.Remove(key);
+                        ClearPendingState(_pendingCabinHouseFirstSeen, key);
                     }
                 }
             }
@@ -1504,6 +2605,33 @@ namespace WoodburySpectatorSync.Coop
                     if (TryApplyCabinGameFlag(key, _pendingCabinGameFlags[key], allowDefer: false))
                     {
                         _pendingCabinGameFlags.Remove(key);
+                        ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    }
+                }
+            }
+
+            if (_pendingPizzeriaFlags.Count > 0)
+            {
+                var keys = new List<string>(_pendingPizzeriaFlags.Keys);
+                foreach (var key in keys)
+                {
+                    if (TryApplyPizzeriaFlag(key, _pendingPizzeriaFlags[key], allowDefer: false))
+                    {
+                        _pendingPizzeriaFlags.Remove(key);
+                        ClearPendingState(_pendingPizzeriaFirstSeen, key);
+                    }
+                }
+            }
+
+            if (_pendingRoadTripFlags.Count > 0)
+            {
+                var keys = new List<string>(_pendingRoadTripFlags.Keys);
+                foreach (var key in keys)
+                {
+                    if (TryApplyRoadTripFlag(key, _pendingRoadTripFlags[key], allowDefer: false))
+                    {
+                        _pendingRoadTripFlags.Remove(key);
+                        ClearPendingState(_pendingRoadTripFirstSeen, key);
                     }
                 }
             }
@@ -1516,9 +2644,85 @@ namespace WoodburySpectatorSync.Coop
                     if (TryApplyAiState(_pendingAiStates[key]))
                     {
                         _pendingAiStates.Remove(key);
+                        ClearPendingState(_pendingAiFirstSeen, key);
                     }
                 }
             }
+
+            MaybeLogPendingRetryAges();
+        }
+
+        private static void TrackPendingState(Dictionary<string, float> firstSeen, string key)
+        {
+            if (firstSeen == null || string.IsNullOrEmpty(key)) return;
+            if (firstSeen.ContainsKey(key)) return;
+            firstSeen[key] = Time.realtimeSinceStartup;
+        }
+
+        private static void ClearPendingState(Dictionary<string, float> firstSeen, string key)
+        {
+            if (firstSeen == null || string.IsNullOrEmpty(key)) return;
+            firstSeen.Remove(key);
+        }
+
+        private static float GetMaxPendingAge(Dictionary<string, float> firstSeen, float now)
+        {
+            if (firstSeen == null || firstSeen.Count == 0) return 0f;
+
+            var maxAge = 0f;
+            foreach (var entry in firstSeen)
+            {
+                var age = now - entry.Value;
+                if (age > maxAge)
+                {
+                    maxAge = age;
+                }
+            }
+
+            return maxAge;
+        }
+
+        private void MaybeLogPendingRetryAges()
+        {
+            var now = Time.realtimeSinceStartup;
+            if (now < _nextPendingRetryLogTime)
+            {
+                return;
+            }
+
+            var maxAge = Mathf.Max(
+                GetMaxPendingAge(_pendingDoorFirstSeen, now),
+                GetMaxPendingAge(_pendingHoldableFirstSeen, now),
+                GetMaxPendingAge(_pendingAiFirstSeen, now),
+                GetMaxPendingAge(_pendingCabinHouseFirstSeen, now),
+                GetMaxPendingAge(_pendingCabinGameFirstSeen, now),
+                GetMaxPendingAge(_pendingPizzeriaFirstSeen, now),
+                GetMaxPendingAge(_pendingRoadTripFirstSeen, now));
+
+            if (maxAge < PendingRetryWarnAgeSeconds && !_settings.VerboseLogging.Value)
+            {
+                return;
+            }
+
+            _nextPendingRetryLogTime = now + PendingRetryLogIntervalSeconds;
+            var message =
+                "Pending retry age: max=" + maxAge.ToString("0.0") + "s" +
+                " doors=" + _pendingDoorStates.Count +
+                " holdables=" + _pendingHoldableStates.Count +
+                " ai=" + _pendingAiStates.Count +
+                " cabinHouse=" + _pendingCabinHouseFlags.Count +
+                " cabinGame=" + _pendingCabinGameFlags.Count +
+                " pizzeria=" + _pendingPizzeriaFlags.Count +
+                " roadTrip=" + _pendingRoadTripFlags.Count;
+            if (maxAge >= PendingRetryWarnAgeSeconds)
+            {
+                _logger.LogWarning(message);
+            }
+            else
+            {
+                _logger.LogInfo(message);
+            }
+            _sessionLogWrite?.Invoke(message);
         }
 
         private void MaybeTeleportToHost()
@@ -1594,12 +2798,65 @@ namespace WoodburySpectatorSync.Coop
                 : null;
         }
 
+        private void EnsureCabinGameManager()
+        {
+            if (_cabinGameManager != null) return;
+            if (SceneManager.GetActiveScene().name != "CabinScene") return;
+
+            _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            if (_cabinGameManager != null)
+            {
+                UpdateMikeVariantFromState();
+            }
+        }
+
+        private void SyncMikeVariantIfChanged()
+        {
+            if (_cabinGameManager == null) return;
+
+            var seq = _cabinGameManager.CurrentSequence;
+            var state = _cabinGameManager.currentMike;
+
+            if (!_hasMikeState || seq != _lastMikeSequence || state != _lastMikeState)
+            {
+                _lastMikeSequence = seq;
+                _lastMikeState = state;
+                _hasMikeState = true;
+                UpdateMikeVariantFromState();
+            }
+        }
+
         private void EnsureHostProxy()
         {
             if (_hostProxy != null) return;
             EnsureLocalPlayerRefs();
-            if (_localFpc == null) return;
-            _hostProxy = new RemotePlayerProxy(_localFpc, new Color(1f, 0.2f, 0.2f, 0.8f));
+            if (_localFpc == null && !HasConfiguredRemotePlayerPath()) return;
+            _hostProxy = RemotePlayerProxy.Create(
+                _settings,
+                _localFpc,
+                new Color(1f, 0.2f, 0.2f, 0.8f),
+                _logger,
+                _sessionLogWrite);
+        }
+
+        private bool HasConfiguredRemotePlayerPath()
+        {
+            if (_settings == null)
+            {
+                return false;
+            }
+
+            if (_settings.CoopRemotePlayerPrefabPath != null &&
+                !string.IsNullOrWhiteSpace(_settings.CoopRemotePlayerPrefabPath.Value))
+            {
+                return true;
+            }
+
+            return _settings.CoopRemotePlayerAvatarSource != null ||
+                   (_settings.CoopRemotePlayerAvatarId != null &&
+                    !string.IsNullOrWhiteSpace(_settings.CoopRemotePlayerAvatarId.Value)) ||
+                   (_settings.CoopRemotePlayerAvatarBundlePath != null &&
+                    !string.IsNullOrWhiteSpace(_settings.CoopRemotePlayerAvatarBundlePath.Value));
         }
 
         private void OnSceneChanged(Scene oldScene, Scene newScene)
@@ -1622,6 +2879,8 @@ namespace WoodburySpectatorSync.Coop
             _nextInputSendTime = 0f;
             _lastSceneReadySent = string.Empty;
             _lastSceneReadySentTime = 0f;
+            _sceneReadySentGeneration = -1;
+            _sceneReadyDirty = true;
             _nextPingTime = 0f;
             _loadingStartTime = 0f;
             _loadingLastProgress = 0f;
@@ -1656,6 +2915,19 @@ namespace WoodburySpectatorSync.Coop
             _forcedMikeTarget = null;
             _forcedMikeReason = string.Empty;
             _mikeControllersDisabled = false;
+            _hasMikeState = false;
+            _lastMikeSequence = SequenceType.NotInAnySequence;
+            _lastMikeState = CabinGameManager.CurrentMike.Prefishing;
+            _remoteMikeAnimStateHash = 0;
+            _remoteMikeAnimLoop = -1;
+            _remoteMikeAnimPhase10 = -1;
+            _remoteMikeAnimTransition = 0;
+            _remoteMikeAnimNextStateHash = 0;
+            _appliedMikeAnimStateHash = 0;
+            _appliedMikeAnimLoop = -1;
+            _appliedMikeAnimPhase10 = -1;
+            _appliedMikeAnimTransition = 0;
+            _appliedMikeAnimNextStateHash = 0;
             Interlocked.Exchange(ref _hostStateAppliedCount, 0);
             Interlocked.Exchange(ref _hostTransformAppliedCount, 0);
             _pendingDoorStates.Clear();
@@ -1663,13 +2935,31 @@ namespace WoodburySpectatorSync.Coop
             _pendingAiStates.Clear();
             _pendingCabinHouseFlags.Clear();
             _pendingCabinGameFlags.Clear();
+            _pendingPizzeriaFlags.Clear();
+            _pendingRoadTripFlags.Clear();
             _cabinHouseManager = null;
             _cabinGameManager = null;
+            _pizzeriaGameManager = null;
+            _pizzeriaTruckDoor = null;
+            _pizzeriaMike = null;
+            _roadTripGameManager = null;
+            _roadTripMikeInCar = null;
+            _roadTripTruck = null;
             _cabinHouseFieldCache.Clear();
             _cabinGameFieldCache.Clear();
+            _pizzeriaFieldCache.Clear();
+            _pizzeriaMikeFieldCache.Clear();
+            _pizzeriaGameObjectFieldCache.Clear();
+            _pizzeriaMikeGameObjectFieldCache.Clear();
+            _roadTripFieldCache.Clear();
+            _roadTripMikeFieldCache.Clear();
+            _roadTripTruckFieldCache.Clear();
             _aiFallbackTargets.Clear();
             _aiMissingLogged.Clear();
             _aiFallbackLogged.Clear();
+            _aiDebugPaths.Clear();
+            _aiDebugLogCount = 0;
+            _nextAiDebugLogTime = 0f;
             _aiLastPositions.Clear();
             _aiLastTimes.Clear();
             _aiAnimatorCache.Clear();
@@ -1677,6 +2967,17 @@ namespace WoodburySpectatorSync.Coop
             _disabledTriggerBehaviours.Clear();
             _disabledTriggerColliders.Clear();
             _disabledInteractables.Clear();
+            _pendingDoorFirstSeen.Clear();
+            _pendingHoldableFirstSeen.Clear();
+            _pendingAiFirstSeen.Clear();
+            _pendingCabinHouseFirstSeen.Clear();
+            _pendingCabinGameFirstSeen.Clear();
+            _pendingPizzeriaFirstSeen.Clear();
+            _pendingRoadTripFirstSeen.Clear();
+            _nextPendingRetryLogTime = 0f;
+            CacheSceneAdapterFields();
+            OnSceneEnterAdapters(newScene.name);
+            MarkSceneReadyDirty("active-scene-changed");
         }
 
         private void SendPingIfDue()
@@ -1767,22 +3068,39 @@ namespace WoodburySpectatorSync.Coop
         {
             if (startSeq >= 0 || fromMenu >= 0)
             {
+                if (string.Equals(_lastStartPrefScene, sceneName, StringComparison.Ordinal) &&
+                    _lastStartPrefSeq == startSeq &&
+                    _lastStartPrefFromMenu == fromMenu)
+                {
+                    return;
+                }
+
+                _lastStartPrefScene = sceneName ?? string.Empty;
+                _lastStartPrefSeq = startSeq;
+                _lastStartPrefFromMenu = fromMenu;
                 var effectiveFromMenu = fromMenu;
                 if (startSeq > 0 && effectiveFromMenu <= 0)
                 {
                     effectiveFromMenu = 1;
                 }
+                var changed = false;
                 if (effectiveFromMenu >= 0)
                 {
-                    PlayerPrefs.SetInt(PlayerPrefKeys.FROM_MENU, effectiveFromMenu);
+                    changed |= SetPlayerPrefIntIfChanged(PlayerPrefKeys.FROM_MENU, effectiveFromMenu);
                 }
                 if (startSeq >= 0)
                 {
-                    PlayerPrefs.SetInt(PlayerPrefKeys.START_SEQ, startSeq);
+                    changed |= SetPlayerPrefIntIfChanged(PlayerPrefKeys.START_SEQ, startSeq);
                 }
-                PlayerPrefs.Save();
+                if (changed)
+                {
+                    PlayerPrefs.Save();
+                }
+                if (changed || _settings.VerboseLogging.Value)
+                {
+                    _logger.LogInfo("Applied host start prefs (seq=" + startSeq + ", fromMenu=" + fromMenu + " -> " + effectiveFromMenu + ", changed=" + changed + ")");
+                }
                 _cabinPrefsPrepared = true;
-                _logger.LogInfo("Applied host start prefs (seq=" + startSeq + ", fromMenu=" + fromMenu + " -> " + effectiveFromMenu + ")");
                 return;
             }
 
@@ -1812,6 +3130,18 @@ namespace WoodburySpectatorSync.Coop
             {
                 _logger.LogWarning("Failed to set Cabin start sequence: " + ex.Message);
             }
+        }
+
+        private static bool SetPlayerPrefIntIfChanged(string key, int value)
+        {
+            if (string.IsNullOrEmpty(key)) return false;
+            if (PlayerPrefs.HasKey(key) && PlayerPrefs.GetInt(key) == value)
+            {
+                return false;
+            }
+
+            PlayerPrefs.SetInt(key, value);
+            return true;
         }
 
         private void DisableDialogueUIComponents()
@@ -2238,7 +3568,7 @@ namespace WoodburySpectatorSync.Coop
             var appliedCount = Interlocked.Read(ref _hostTransformAppliedCount);
 
             var now = Time.realtimeSinceStartup;
-            if (now >= _nextHostTransformApplyLogTime)
+            if (_settings.VerboseLogging.Value && now >= _nextHostTransformApplyLogTime)
             {
                 _nextHostTransformApplyLogTime = now + 5f;
                 var message = "ApplyHostTransform ok: count=" + appliedCount +

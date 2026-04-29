@@ -44,7 +44,7 @@ namespace WoodburySpectatorSync.Coop
         {
             _root = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             _root.name = _name;
-            _root.transform.localScale = new Vector3(0.6f, 1.8f, 0.6f);
+            _root.transform.localScale = new Vector3(0.35f, 0.9f, 0.35f);
 
             var renderer = _root.GetComponent<Renderer>();
             if (renderer != null)

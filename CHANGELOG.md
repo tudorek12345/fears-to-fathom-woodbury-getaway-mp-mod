@@ -1,6 +1,20 @@
 # Changelog
 
 ## Unreleased
+- Co-op avatars: default remote avatar source is now `Auto`/`woodbury_scene_auto`, preferring safe in-scene game models before falling back to a compact non-colliding capsule.
+- Co-op avatars: added avatar diagnostics for source, fallback reason, renderer count, bounds, animator count, and enabled collider count in BepInEx/session logs.
+- Co-op scenes: expanded Pizzeria and RoadTrip state replication with Mike/player/truck fields, active object flags, full SceneReady snapshots, and overlay sequence labels.
+- Tools: avatar bundle builds now enable required built-in Unity modules, validate the produced bundle, fail on disabled Unity AssetBundle/Animation module warnings, and install a render-only Quaternius bundle that Unity 2021.3 can load back.
+- Diagnostics: session log filenames now include mode, millisecond timestamp, and process id so same-PC host/client launches no longer collide on one log path.
+- Co-op avatars: added Unity AssetBundle avatar loading with manifest ids, bundle/id/scale/y-offset config, exact fallback logging, and launcher support for `-RemotePlayerAvatarId`.
+- Tools: added a Unity 2021.3 avatar bundle project and `scripts/Build-AvatarBundle.ps1` for packaging CC0 Quaternius avatar prefabs into `woodbury_avatars.bundle`.
+- Co-op avatars: added `RemotePlayerPrefabPath` and `RemotePlayerRig` config options for dedicated networked player proxy sources and explicit rig parameter maps (with FPC clone fallback).
+- Co-op Cabin: added Mike animation-state event replication (`CabinGM.MikeAnim.StateHash/Loop/Phase10/Transition/NextStateHash`) on top of transform/state sync.
+- Launcher/scripts: `Launch-CoopPair.ps1` now defaults to manual co-op startup (`AutoStartHost=false`, `AutoConnectClient=false`) unless explicit `-AutoStartHost` / `-AutoConnectClient` flags are passed.
+- Launcher/scripts: added instance-cap safety (refuse launch if game is already running unless `-ForceStopExisting`) and default windowed launch args (`1440x900`, `-screen-fullscreen 0`).
+- Co-op Cabin: host now explicitly emits Mike-related AI transforms (mike variants/controllers) so client Mike movement stays synced during board-game/Ouija flow.
+- Co-op avatars: remote player animation is now driven from replicated transform motion (better visible movement on both peers).
+- Co-op avatars: host now forwards `PlayerInput` states to the client so the remote host proxy can drive animator parameters from real input, not only transform deltas.
 - Client: forcibly release dialogue camera locks during Mike conversations (StopConversation + ResumeCameraControl + reset player state).
 - Co-op: HostUpdateAge now reports time since applied host transform; HostRxAge remains for receive timing.
 - Co-op: host avatar now recreates safely after scene changes to prevent ApplyHostTransform failures.

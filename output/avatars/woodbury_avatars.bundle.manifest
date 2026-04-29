@@ -1,0 +1,37 @@
+ManifestFileVersion: 0
+CRC: 1432126383
+Hashes:
+  AssetFileHash:
+    serializedVersion: 2
+    Hash: 2439c928cdf65b256a623b98bba96ba5
+  TypeTreeHash:
+    serializedVersion: 2
+    Hash: db8f4b4401628c4d4ccbc44f7de49239
+HashAppended: 0
+ClassTypes:
+- Class: 1
+  Script: {instanceID: 0}
+- Class: 4
+  Script: {instanceID: 0}
+- Class: 21
+  Script: {instanceID: 0}
+- Class: 23
+  Script: {instanceID: 0}
+- Class: 28
+  Script: {instanceID: 0}
+- Class: 33
+  Script: {instanceID: 0}
+- Class: 43
+  Script: {instanceID: 0}
+- Class: 48
+  Script: {instanceID: 0}
+- Class: 49
+  Script: {instanceID: 0}
+SerializeReferenceClassIdentifiers: []
+Assets:
+- Assets/AvatarBundle/Prefabs/quaternius_teen_female.prefab
+- Assets/AvatarBundle/Prefabs/quaternius_teen_male.prefab
+- Assets/AvatarBundle/Prefabs/quaternius_regular_male.prefab
+- Assets/AvatarBundle/Prefabs/quaternius_regular_female.prefab
+- Assets/AvatarBundle/avatar_manifest.json
+Dependencies: []

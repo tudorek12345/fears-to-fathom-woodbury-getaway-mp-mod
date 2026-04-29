@@ -31,6 +31,14 @@
       <HintPath>..\..\lib\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule" Condition="Exists('..\..\lib\UnityEngine.AssetBundleModule.dll')">
+      <HintPath>..\..\lib\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule" Condition="Exists('..\..\lib\UnityEngine.JSONSerializeModule.dll')">
+      <HintPath>..\..\lib\UnityEngine.JSONSerializeModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.InputLegacyModule" Condition="Exists('..\..\lib\UnityEngine.InputLegacyModule.dll')">
       <HintPath>..\..\lib\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
