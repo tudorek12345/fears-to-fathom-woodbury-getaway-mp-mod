@@ -18,9 +18,9 @@ param(
     [int]$WindowHeight = 900,
     [string]$RemotePlayerPrefabPath = "",
     [string]$RemotePlayerRig = "Auto",
-    [string]$RemotePlayerAvatarSource = "AssetBundle",
+    [string]$RemotePlayerAvatarSource = "Auto",
     [string]$RemotePlayerAvatarBundlePath = "BepInEx/plugins/WoodburySpectatorSync/avatars/woodbury_avatars.bundle",
-    [string]$RemotePlayerAvatarId = "quaternius_regular_male",
+    [string]$RemotePlayerAvatarId = "woodbury_scene_auto",
     [float]$RemotePlayerAvatarScale = 1.0,
     [float]$RemotePlayerAvatarYOffset = 0.0,
     [switch]$ForceStopExisting

@@ -58,6 +58,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly List<FieldInfo> _cabinGameFields = new List<FieldInfo>();
         private readonly Dictionary<string, FieldInfo> _pizzeriaFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaMikeFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinHouseActiveFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaGameObjectFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaMikeGameObjectFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _roadTripFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -73,6 +74,14 @@ namespace WoodburySpectatorSync.Coop
         private const string CabinMikeAnimPhaseKey = CabinMikeAnimPrefix + "Phase10";
         private const string CabinMikeAnimTransitionKey = CabinMikeAnimPrefix + "Transition";
         private const string CabinMikeAnimNextStateKey = CabinMikeAnimPrefix + "NextStateHash";
+        private const string CabinHouseActivePrefix = CabinHouseFlagPrefix + "Active.";
+        private const string CabinPostEatingFlagPrefix = CabinGameFlagPrefix + "MikePostEating.";
+        private const string CabinPostEatingActivePrefix = CabinPostEatingFlagPrefix + "Active.";
+        private const string CabinShedFlagPrefix = CabinGameFlagPrefix + "Shed.";
+        private const string CabinShedActivePrefix = CabinShedFlagPrefix + "Active.";
+        private const string CabinUnderstairsFlagPrefix = CabinGameFlagPrefix + "Understairs.";
+        private const string CabinUnderstairsActivePrefix = CabinUnderstairsFlagPrefix + "Active.";
+        private const string CabinHostHidingFlagPrefix = CabinGameFlagPrefix + "HostHiding.";
         private const string PizzeriaFlagPrefix = "PizzeriaGM.";
         private const string PizzeriaMikeFlagPrefix = PizzeriaFlagPrefix + "Mike.";
         private const string PizzeriaActiveGamePrefix = PizzeriaFlagPrefix + "Active.Game.";
@@ -129,6 +138,8 @@ namespace WoodburySpectatorSync.Coop
         private string _lastCabinMikeSyncReason = string.Empty;
         private float _nextCabinMikeSyncLogTime;
         private string _lastCabinMikeSyncDebug = "-";
+        private string _lastCabinHidingDebug = "-";
+        private float _nextCabinHidingLogTime;
 
         private readonly string[] _storyKeys = new[]
         {
@@ -182,11 +193,28 @@ namespace WoodburySpectatorSync.Coop
             "washedHands"
         };
 
+        private readonly string[] _cabinHouseActiveFieldNames = new[]
+        {
+            "ColliderStairsAfterEating",
+            "ColliderStairsTexting",
+            "triggerMikeTexts2"
+        };
+
+        private readonly string[] _cabinHouseActiveArrayFieldNames = new[]
+        {
+            "hidingSeqTriggers",
+            "hidingSeq2Triggers"
+        };
+
         private readonly string[] _cabinGameFieldNames = new[]
         {
             "currentCabinSceneType",
             "CurrentSequence",
+            "currentPlayerState",
             "currentMike",
+            "playerTalking",
+            "phoneUIState",
+            "inConversation",
             "hasHadJengaConvo",
             "hasHadTurnOffLightsConvo",
             "mikeHasPlacedBasementTable",
@@ -830,6 +858,22 @@ namespace WoodburySpectatorSync.Coop
                     _server.Enqueue(new StoryFlagMessage(key, value));
                 }
             }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            EmitGameObjectActiveFlags(
+                _cabinHouseManager,
+                _cabinHouseActiveFieldNames,
+                _cabinHouseActiveFieldCache,
+                _cabinHouseFlags,
+                CabinHouseActivePrefix,
+                nowMs);
+            EmitGameObjectArrayActiveFlags(
+                _cabinHouseManager,
+                _cabinHouseActiveArrayFieldNames,
+                _cabinHouseActiveFieldCache,
+                _cabinHouseFlags,
+                CabinHouseActivePrefix,
+                nowMs);
         }
 
         private void SendCabinGameFlags()
@@ -869,6 +913,91 @@ namespace WoodburySpectatorSync.Coop
                     _server.Enqueue(new StoryFlagMessage(key, value));
                 }
             }
+
+            SendCabinPostEatingFlags(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        }
+
+        private void SendCabinPostEatingFlags(long nowMs)
+        {
+            if (_cabinGameManager == null) return;
+
+            var mike = _cabinGameManager.mikePostEating;
+            if (mike == null)
+            {
+                mike = UnityEngine.Object.FindObjectOfType<MikePostEating>();
+            }
+
+            if (mike != null)
+            {
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "Active", mike.gameObject.activeSelf ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "state", Convert.ToInt32(mike.state), nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "startedSeeking", mike.startedSeeking ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "mikeOnStairs", mike.mikeOnStairs ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "playerCloseToStairs", mike.playerCloseToStairs ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "playerFound", mike.playerFound ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "knockConvoEnded", mike.knockConvoEnded ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "waitOutsideCloset", mike.waitOutsideCloset ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "catJumpscareDone", mike.catJumpscareDone ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "goingToToolShed", mike.goingToToolShed ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "hidingSeq1", mike.hidingSeq1 ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "mikeInBackyard", mike.mikeInBackyard ? 1 : 0, nowMs);
+                if (mike.bedroomBlockingCollider != null)
+                {
+                    EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingActivePrefix + "bedroomBlockingCollider", mike.bedroomBlockingCollider.activeSelf ? 1 : 0, nowMs);
+                }
+            }
+
+            var house = _cabinGameManager.cabinHouseManager;
+            if (house == null)
+            {
+                house = _cabinHouseManager != null ? _cabinHouseManager : UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
+            }
+
+            var shed = house != null ? house.shedManager : UnityEngine.Object.FindObjectOfType<ShedManager>();
+            if (shed != null)
+            {
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinShedFlagPrefix + "playerInsideShed", shed.playerInsideShed ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinShedFlagPrefix + "playerHidingInside", shed.playerHidingInside ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinShedFlagPrefix + "hidingSeqStarted", shed.hidingSeqStarted ? 1 : 0, nowMs);
+                if (shed.mikeSeekingTrigger != null)
+                {
+                    EmitStoryFlagIfChanged(_cabinGameFlags, CabinShedActivePrefix + "mikeSeekingTrigger", shed.mikeSeekingTrigger.activeSelf ? 1 : 0, nowMs);
+                }
+            }
+
+            var understairs = house != null ? house.understairsDoor : UnityEngine.Object.FindObjectOfType<UnderStairsDoor>();
+            if (understairs != null)
+            {
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinUnderstairsFlagPrefix + "playerInside", understairs.playerInside ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinUnderstairsFlagPrefix + "hidingSeqStarted", understairs.hidingSeqStarted ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinUnderstairsFlagPrefix + "mikeTeleported", understairs.mikeTeleported ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinUnderstairsFlagPrefix + "playerHidingInside", understairs.playerHidingInside ? 1 : 0, nowMs);
+                if (understairs.hidingLight != null)
+                {
+                    EmitStoryFlagIfChanged(_cabinGameFlags, CabinUnderstairsActivePrefix + "hidingLight", understairs.hidingLight.activeSelf ? 1 : 0, nowMs);
+                }
+                if (understairs.blockStairs != null)
+                {
+                    EmitStoryFlagIfChanged(_cabinGameFlags, CabinUnderstairsActivePrefix + "blockStairs", understairs.blockStairs.activeSelf ? 1 : 0, nowMs);
+                }
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinUnderstairsActivePrefix + "triggerHiding", AnyActive(understairs.triggerHiding) ? 1 : 0, nowMs);
+            }
+
+            var hostHiding = _cabinGameManager.hostHiding;
+            if (hostHiding == null)
+            {
+                hostHiding = UnityEngine.Object.FindObjectOfType<HostDuringHiding>();
+            }
+
+            if (hostHiding != null)
+            {
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinHostHidingFlagPrefix + "Active", hostHiding.gameObject.activeSelf ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinHostHidingFlagPrefix + "state", Convert.ToInt32(hostHiding.state), nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinHostHidingFlagPrefix + "moving", hostHiding.moving ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinHostHidingFlagPrefix + "hostSeen", hostHiding.hostSeen ? 1 : 0, nowMs);
+            }
+
+            MaybeLogCabinHidingState(mike, shed, understairs, hostHiding);
         }
 
         private void SendPizzeriaFlags()
@@ -1052,6 +1181,28 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private void EmitGameObjectArrayActiveFlags(
+            object target,
+            string[] fieldNames,
+            Dictionary<string, FieldInfo> fieldCache,
+            Dictionary<string, int> valueCache,
+            string keyPrefix,
+            long nowMs)
+        {
+            if (target == null || fieldNames == null || fieldNames.Length == 0) return;
+
+            for (var i = 0; i < fieldNames.Length; i++)
+            {
+                var fieldName = fieldNames[i];
+                if (!TryGetGameObjectArrayField(target, fieldName, fieldCache, out var gameObjects))
+                {
+                    continue;
+                }
+
+                EmitStoryFlagIfChanged(valueCache, keyPrefix + fieldName, AnyActive(gameObjects) ? 1 : 0, nowMs);
+            }
+        }
+
         private bool TryGetGameObjectField(
             object target,
             string fieldName,
@@ -1082,6 +1233,53 @@ namespace WoodburySpectatorSync.Coop
                 }
                 return false;
             }
+        }
+
+        private bool TryGetGameObjectArrayField(
+            object target,
+            string fieldName,
+            Dictionary<string, FieldInfo> fieldCache,
+            out GameObject[] gameObjects)
+        {
+            gameObjects = null;
+            if (target == null || string.IsNullOrEmpty(fieldName)) return false;
+
+            if (!fieldCache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                fieldCache[fieldName] = field;
+            }
+
+            if (field == null || field.FieldType != typeof(GameObject[])) return false;
+
+            try
+            {
+                gameObjects = field.GetValue(target) as GameObject[];
+                return gameObjects != null;
+            }
+            catch (Exception ex)
+            {
+                if (_settings.VerboseLogging.Value)
+                {
+                    _logger.LogWarning("Read scene GameObject[] field failed: " + fieldName + " (" + ex.Message + ")");
+                }
+                return false;
+            }
+        }
+
+        private static bool AnyActive(GameObject[] gameObjects)
+        {
+            if (gameObjects == null) return false;
+            for (var i = 0; i < gameObjects.Length; i++)
+            {
+                var gameObject = gameObjects[i];
+                if (gameObject != null && gameObject.activeSelf)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void EmitStoryFlagIfChanged(
@@ -1317,6 +1515,13 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var seq = _cabinGameManager.CurrentSequence;
+            var postEatingTarget = ResolveCabinPostEatingTarget(out var postEatingReason);
+            if (postEatingTarget != null)
+            {
+                reason = postEatingReason;
+                return postEatingTarget;
+            }
+
             if (IsCabinCookMikeSequence(seq))
             {
                 var controller = _cabinMikeControllerField != null
@@ -1375,6 +1580,53 @@ namespace WoodburySpectatorSync.Coop
             return GetActiveCabinMikeTarget();
         }
 
+        private Transform ResolveCabinPostEatingTarget(out string reason)
+        {
+            reason = string.Empty;
+            if (_cabinGameManager == null) return null;
+
+            var mike = _cabinGameManager.mikePostEating;
+            if (mike == null) return null;
+            if (!ShouldPreferPostEatingMike(mike)) return null;
+
+            reason = "postEating:" + mike.state;
+            return mike.transform;
+        }
+
+        private bool ShouldPreferPostEatingMike(MikePostEating mike)
+        {
+            if (mike == null) return false;
+            if (_cabinGameManager != null &&
+                _cabinGameManager.currentMike == CabinGameManager.CurrentMike.PostEating)
+            {
+                return true;
+            }
+
+            if (mike.startedSeeking ||
+                mike.playerFound ||
+                mike.goingToToolShed ||
+                mike.catJumpscareDone ||
+                mike.mikeInBackyard ||
+                !mike.waitOutsideCloset ||
+                !mike.hidingSeq1)
+            {
+                return true;
+            }
+
+            if (mike.gameObject.activeInHierarchy &&
+                mike.state != MikePostEating.State.None &&
+                mike.state != MikePostEating.State.IdleStanding)
+            {
+                return true;
+            }
+
+            var house = _cabinGameManager != null ? _cabinGameManager.cabinHouseManager : _cabinHouseManager;
+            return house != null &&
+                   (house.mikeBedroomJumpscare ||
+                    house.mikePostJumpscareActive ||
+                    house.mikePostJumpscareConvoDone);
+        }
+
         private static bool IsCabinCookMikeSequence(SequenceType seq)
         {
             return seq == SequenceType.Cooking ||
@@ -1413,6 +1665,42 @@ namespace WoodburySpectatorSync.Coop
                             " reason=" + reason +
                             " active=" + target.gameObject.activeInHierarchy +
                             " renderable=" + HasRenderable(target));
+        }
+
+        private void MaybeLogCabinHidingState(
+            MikePostEating mike,
+            ShedManager shed,
+            UnderStairsDoor understairs,
+            HostDuringHiding hostHiding)
+        {
+            var debug =
+                "MPE=" + (mike != null ? mike.state.ToString() : "-") +
+                " seek=" + BoolText(mike != null && mike.startedSeeking) +
+                " found=" + BoolText(mike != null && mike.playerFound) +
+                " shedGo=" + BoolText(mike != null && mike.goingToToolShed) +
+                " Shed hide=" + BoolText(shed != null && shed.playerHidingInside) +
+                " started=" + BoolText(shed != null && shed.hidingSeqStarted) +
+                " Under hide=" + BoolText(understairs != null && understairs.playerHidingInside) +
+                " started=" + BoolText(understairs != null && understairs.hidingSeqStarted) +
+                " HostHiding=" + (hostHiding != null ? hostHiding.state.ToString() : "-");
+
+            var now = Time.realtimeSinceStartup;
+            if (string.Equals(debug, _lastCabinHidingDebug, StringComparison.Ordinal) &&
+                now < _nextCabinHidingLogTime)
+            {
+                return;
+            }
+
+            _lastCabinHidingDebug = debug;
+            _nextCabinHidingLogTime = now + 10f;
+            var message = "Cabin hiding state: " + debug;
+            _logger.LogInfo(message);
+            _sessionLogWrite?.Invoke(message);
+        }
+
+        private static string BoolText(bool value)
+        {
+            return value ? "1" : "0";
         }
 
         private Transform GetActiveCabinMikeTarget()
@@ -1761,6 +2049,7 @@ namespace WoodburySpectatorSync.Coop
             _roadTripGameManager = null;
             _roadTripMikeInCar = null;
             _roadTripTruck = null;
+            _cabinHouseActiveFieldCache.Clear();
             _lastDialogueText = string.Empty;
             _lastDialogueSpeaker = string.Empty;
             _lastDialogueSentTime = 0f;
@@ -1774,6 +2063,8 @@ namespace WoodburySpectatorSync.Coop
             _lastStoryEventKey = string.Empty;
             _lastStoryEventValue = 0;
             _lastStoryEventMs = 0;
+            _lastCabinHidingDebug = "-";
+            _nextCabinHidingLogTime = 0f;
             UnbindDialogueUiSelection();
 
             if (_remotePlayer != null && _remotePlayer.Root != null)

@@ -10,7 +10,7 @@ namespace WoodburySpectatorSync.Diagnostics
     {
         private readonly ManualLogSource _logger;
         private readonly object _lock = new object();
-        private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(5);
         private StreamWriter _writer;
         private string _path;
         private DateTime _nextFlushUtc;
@@ -39,6 +39,7 @@ namespace WoodburySpectatorSync.Diagnostics
                     _writer.WriteLine(stamp + " " + line);
                 }
 
+                _writer.Flush();
                 var nowUtc = DateTime.UtcNow;
                 if (nowUtc >= _nextFlushUtc)
                 {

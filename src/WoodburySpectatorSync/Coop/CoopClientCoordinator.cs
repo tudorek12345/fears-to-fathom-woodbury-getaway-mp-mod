@@ -72,6 +72,10 @@ namespace WoodburySpectatorSync.Coop
         private MikeTruckInLoopScene _roadTripTruck;
         private readonly Dictionary<string, FieldInfo> _cabinHouseFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinGameFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinPostEatingFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinShedFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinUnderstairsFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinHostHidingFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaMikeFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaGameObjectFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -106,6 +110,14 @@ namespace WoodburySpectatorSync.Coop
         private const string CabinHouseFlagPrefix = "CabinHouse.";
         private const string CabinGameFlagPrefix = "CabinGM.";
         private const string CabinMikeAnimFieldPrefix = "MikeAnim.";
+        private const string CabinHouseActivePrefix = CabinHouseFlagPrefix + "Active.";
+        private const string CabinPostEatingFlagPrefix = CabinGameFlagPrefix + "MikePostEating.";
+        private const string CabinPostEatingActivePrefix = CabinPostEatingFlagPrefix + "Active.";
+        private const string CabinShedFlagPrefix = CabinGameFlagPrefix + "Shed.";
+        private const string CabinShedActivePrefix = CabinShedFlagPrefix + "Active.";
+        private const string CabinUnderstairsFlagPrefix = CabinGameFlagPrefix + "Understairs.";
+        private const string CabinUnderstairsActivePrefix = CabinUnderstairsFlagPrefix + "Active.";
+        private const string CabinHostHidingFlagPrefix = CabinGameFlagPrefix + "HostHiding.";
         private const string PizzeriaFlagPrefix = "PizzeriaGM.";
         private const string PizzeriaMikeFlagPrefix = PizzeriaFlagPrefix + "Mike.";
         private const string PizzeriaActiveGamePrefix = PizzeriaFlagPrefix + "Active.Game.";
@@ -153,6 +165,21 @@ namespace WoodburySpectatorSync.Coop
         private string _forcedMikeReason = string.Empty;
         private float _nextMikeSyncLogTime;
         private string _lastMikeSyncDebug = "-";
+        private string _lastCabinHidingDebug = "-";
+        private float _nextCabinHidingLogTime;
+        private float _lastScriptedHostSnapTime;
+        private bool _hostSceneScriptedLock;
+        private int _hostCabinPlayerState = -1;
+        private bool _hostCabinPlayerTalking;
+        private bool _hostCabinInConversation;
+        private bool _hostCabinPhoneUi;
+        private int _hostPizzeriaPlayerState = -1;
+        private bool _hostPizzeriaPlayerTalking;
+        private bool _hostPizzeriaPhoneUi;
+        private bool _hostPizzeriaMikeDialogue;
+        private bool _hostRoadTripPlayerTalking;
+        private bool _hostRoadTripPhoneUi;
+        private bool _hostRoadTripMikeDialogue;
         private SequenceType _lastMikeSequence = SequenceType.NotInAnySequence;
         private CabinGameManager.CurrentMike _lastMikeState = CabinGameManager.CurrentMike.Prefishing;
         private bool _hasMikeState;
@@ -441,10 +468,9 @@ namespace WoodburySpectatorSync.Coop
             TryForceCabinStart();
             ApplyPendingStates();
             UpdateSmoothedAiStates();
+            UnlockLocalDialogueCamera();
             MaybeTeleportToHost();
             SendPingIfDue();
-
-            UnlockLocalDialogueCamera();
 
             if (_settings.CoopSnapToHostOnSceneLoad.Value && !_isLoading && !_initialCameraSet && GetActiveCamera() != null && _hasPendingHostCam)
             {
@@ -1181,15 +1207,6 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var fieldName = key.Substring(CabinHouseFlagPrefix.Length);
-            if (IsClientLocalCabinHouseRuntimeField(fieldName))
-            {
-                LogSuppressedCabinRuntimeSync("house:" + fieldName);
-                StabilizeLocalCabinHouseState();
-                _pendingCabinHouseFlags.Remove(key);
-                ClearPendingState(_pendingCabinHouseFirstSeen, key);
-                return true;
-            }
-
             if (SceneManager.GetActiveScene().name != "CabinScene")
             {
                 if (allowDefer)
@@ -1212,6 +1229,24 @@ namespace WoodburySpectatorSync.Coop
                     }
                     return false;
                 }
+            }
+
+            if (key.StartsWith(CabinHouseActivePrefix, StringComparison.Ordinal))
+            {
+                var activeFieldName = key.Substring(CabinHouseActivePrefix.Length);
+                if (TryApplyCabinHouseActiveFlag(activeFieldName, value))
+                {
+                    _pendingCabinHouseFlags.Remove(key);
+                    ClearPendingState(_pendingCabinHouseFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinHouseFlags[key] = value;
+                    TrackPendingState(_pendingCabinHouseFirstSeen, key);
+                }
+                return false;
             }
 
             if (!_cabinHouseFieldCache.TryGetValue(fieldName, out var field))
@@ -1250,7 +1285,8 @@ namespace WoodburySpectatorSync.Coop
             var fieldName = key.Substring(CabinGameFlagPrefix.Length);
             if (IsClientLocalCabinRuntimeField(fieldName))
             {
-                LogSuppressedCabinRuntimeSync("flag:" + fieldName);
+                StoreHostCabinRuntimeField(fieldName, value);
+                LogSuppressedCabinRuntimeSync("host-only:" + fieldName + "=" + value);
                 StabilizeLocalCabinPlayerState();
                 _pendingCabinGameFlags.Remove(key);
                 ClearPendingState(_pendingCabinGameFirstSeen, key);
@@ -1279,6 +1315,74 @@ namespace WoodburySpectatorSync.Coop
                     }
                     return false;
                 }
+            }
+
+            if (key.StartsWith(CabinPostEatingFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinPostEatingFlag(key.Substring(CabinPostEatingFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(CabinShedFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinShedFlag(key.Substring(CabinShedFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(CabinUnderstairsFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinUnderstairsFlag(key.Substring(CabinUnderstairsFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(CabinHostHidingFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinHostHidingFlag(key.Substring(CabinHostHidingFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
             }
 
             if (fieldName.StartsWith(CabinMikeAnimFieldPrefix, StringComparison.Ordinal))
@@ -1342,6 +1446,375 @@ namespace WoodburySpectatorSync.Coop
             ClearPendingState(_pendingCabinGameFirstSeen, key);
 
             return true;
+        }
+
+        private bool TryApplyCabinHouseActiveFlag(string fieldName, int value)
+        {
+            if (_cabinHouseManager == null)
+            {
+                _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
+            }
+
+            if (_cabinHouseManager == null) return false;
+            return TryApplyGameObjectOrArrayActiveFlag(_cabinHouseManager, fieldName, _cabinHouseFieldCache, value);
+        }
+
+        private bool TryApplyCabinPostEatingFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinGameManager()) return false;
+
+            var mike = _cabinGameManager.mikePostEating;
+            if (mike == null)
+            {
+                mike = UnityEngine.Object.FindObjectOfType<MikePostEating>();
+            }
+
+            if (mike == null) return false;
+
+            if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
+            {
+                mike.gameObject.SetActive(value != 0);
+                if (value != 0)
+                {
+                    ForceMikePostEatingTarget(mike, "postEating:active");
+                }
+                MaybeLogCabinHidingMirror(mike);
+                return true;
+            }
+
+            if (fieldName.StartsWith("Active.", StringComparison.Ordinal))
+            {
+                var activeFieldName = fieldName.Substring("Active.".Length);
+                var applied = TryApplyGameObjectOrArrayActiveFlag(mike, activeFieldName, _cabinPostEatingFieldCache, value);
+                MaybeLogCabinHidingMirror(mike);
+                return applied;
+            }
+
+            if (!TryApplyObjectFieldFlag(mike, fieldName, _cabinPostEatingFieldCache, value))
+            {
+                return false;
+            }
+
+            if (ShouldPreferPostEatingMike(mike))
+            {
+                ForceMikePostEatingTarget(mike, "postEating:" + mike.state);
+            }
+
+            MaybeLogCabinHidingMirror(mike);
+            return true;
+        }
+
+        private bool TryApplyCabinShedFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinHouseManager()) return false;
+
+            var shed = _cabinHouseManager.shedManager;
+            if (shed == null)
+            {
+                shed = UnityEngine.Object.FindObjectOfType<ShedManager>();
+            }
+
+            if (shed == null) return false;
+
+            if (fieldName.StartsWith("Active.", StringComparison.Ordinal))
+            {
+                return TryApplyGameObjectOrArrayActiveFlag(shed, fieldName.Substring("Active.".Length), _cabinShedFieldCache, value);
+            }
+
+            var applied = TryApplyObjectFieldFlag(shed, fieldName, _cabinShedFieldCache, value);
+            MaybeLogCabinHidingMirror(_cabinGameManager != null ? _cabinGameManager.mikePostEating : null);
+            return applied;
+        }
+
+        private bool TryApplyCabinUnderstairsFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinHouseManager()) return false;
+
+            var understairs = _cabinHouseManager.understairsDoor;
+            if (understairs == null)
+            {
+                understairs = UnityEngine.Object.FindObjectOfType<UnderStairsDoor>();
+            }
+
+            if (understairs == null) return false;
+
+            if (fieldName.StartsWith("Active.", StringComparison.Ordinal))
+            {
+                return TryApplyGameObjectOrArrayActiveFlag(understairs, fieldName.Substring("Active.".Length), _cabinUnderstairsFieldCache, value);
+            }
+
+            var applied = TryApplyObjectFieldFlag(understairs, fieldName, _cabinUnderstairsFieldCache, value);
+            MaybeLogCabinHidingMirror(_cabinGameManager != null ? _cabinGameManager.mikePostEating : null);
+            return applied;
+        }
+
+        private bool TryApplyCabinHostHidingFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinGameManager()) return false;
+
+            var host = _cabinGameManager.hostHiding;
+            if (host == null)
+            {
+                host = UnityEngine.Object.FindObjectOfType<HostDuringHiding>();
+            }
+
+            if (host == null) return false;
+
+            if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
+            {
+                host.gameObject.SetActive(value != 0);
+                MaybeLogCabinHidingMirror(_cabinGameManager.mikePostEating);
+                return true;
+            }
+
+            var applied = TryApplyObjectFieldFlag(host, fieldName, _cabinHostHidingFieldCache, value);
+            MaybeLogCabinHidingMirror(_cabinGameManager.mikePostEating);
+            return applied;
+        }
+
+        private bool TryEnsureCabinGameManager()
+        {
+            if (SceneManager.GetActiveScene().name != "CabinScene") return false;
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            return _cabinGameManager != null;
+        }
+
+        private bool TryEnsureCabinHouseManager()
+        {
+            if (SceneManager.GetActiveScene().name != "CabinScene") return false;
+            if (_cabinHouseManager == null)
+            {
+                _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
+            }
+
+            if (_cabinHouseManager == null && _cabinGameManager != null)
+            {
+                _cabinHouseManager = _cabinGameManager.cabinHouseManager;
+            }
+
+            return _cabinHouseManager != null;
+        }
+
+        private bool TryApplyGameObjectOrArrayActiveFlag(
+            object target,
+            string fieldName,
+            Dictionary<string, FieldInfo> cache,
+            int value)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName)) return false;
+
+            if (!cache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                cache[fieldName] = field;
+            }
+
+            if (field == null)
+            {
+                LogMissingSceneField(target.GetType(), fieldName + ":GameObject");
+                return false;
+            }
+
+            try
+            {
+                if (field.FieldType == typeof(GameObject))
+                {
+                    var gameObject = field.GetValue(target) as GameObject;
+                    if (gameObject == null) return false;
+                    gameObject.SetActive(value != 0);
+                    return true;
+                }
+
+                if (field.FieldType == typeof(GameObject[]))
+                {
+                    var gameObjects = field.GetValue(target) as GameObject[];
+                    if (gameObjects == null) return false;
+                    for (var i = 0; i < gameObjects.Length; i++)
+                    {
+                        if (gameObjects[i] != null)
+                        {
+                            gameObjects[i].SetActive(value != 0);
+                        }
+                    }
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Apply active Cabin flag failed for " + fieldName + ": " + ex.Message);
+                return false;
+            }
+
+            LogMissingSceneField(target.GetType(), fieldName + ":" + field.FieldType.Name);
+            return false;
+        }
+
+        private void StoreHostCabinRuntimeField(string fieldName, int value)
+        {
+            if (string.Equals(fieldName, "currentPlayerState", StringComparison.Ordinal))
+            {
+                _hostCabinPlayerState = value;
+            }
+            else if (string.Equals(fieldName, "playerTalking", StringComparison.Ordinal))
+            {
+                _hostCabinPlayerTalking = value != 0;
+            }
+            else if (string.Equals(fieldName, "inConversation", StringComparison.Ordinal))
+            {
+                _hostCabinInConversation = value != 0;
+            }
+            else if (string.Equals(fieldName, "phoneUIState", StringComparison.Ordinal))
+            {
+                _hostCabinPhoneUi = value != 0;
+            }
+        }
+
+        private void StoreHostPizzeriaRuntimeField(string fieldName, int value)
+        {
+            if (string.Equals(fieldName, "currentPlayerState", StringComparison.Ordinal))
+            {
+                _hostPizzeriaPlayerState = value;
+            }
+            else if (string.Equals(fieldName, "playerTalking", StringComparison.Ordinal))
+            {
+                _hostPizzeriaPlayerTalking = value != 0;
+            }
+            else if (string.Equals(fieldName, "phoneUIState", StringComparison.Ordinal))
+            {
+                _hostPizzeriaPhoneUi = value != 0;
+            }
+        }
+
+        private void StoreHostPizzeriaMikeField(string fieldName, int value)
+        {
+            if (string.Equals(fieldName, "onDialogue", StringComparison.Ordinal))
+            {
+                _hostPizzeriaMikeDialogue = value != 0;
+            }
+        }
+
+        private void StoreHostRoadTripRuntimeField(string fieldName, int value)
+        {
+            if (string.Equals(fieldName, "playerTalking", StringComparison.Ordinal))
+            {
+                _hostRoadTripPlayerTalking = value != 0;
+            }
+            else if (string.Equals(fieldName, "phoneUIState", StringComparison.Ordinal))
+            {
+                _hostRoadTripPhoneUi = value != 0;
+            }
+        }
+
+        private void StoreHostRoadTripMikeField(string fieldName, int value)
+        {
+            if (string.Equals(fieldName, "mikeinConversation", StringComparison.Ordinal))
+            {
+                _hostRoadTripMikeDialogue = value != 0;
+            }
+        }
+
+        private void ForceMikePostEatingTarget(MikePostEating mike, string reason)
+        {
+            if (mike == null) return;
+
+            _forcedMikeTarget = mike.transform;
+            _forcedMikeReason = reason ?? "postEating";
+            SetOnlyMikeActive(mike.transform);
+            DisableLocalMikeControllers();
+            TryApplyRemoteMikeAnimation();
+        }
+
+        private bool ShouldPreferPostEatingMike(MikePostEating mike)
+        {
+            if (mike == null) return false;
+            if (_cabinGameManager != null &&
+                _cabinGameManager.currentMike == CabinGameManager.CurrentMike.PostEating)
+            {
+                return true;
+            }
+
+            if (mike.startedSeeking ||
+                mike.playerFound ||
+                mike.goingToToolShed ||
+                mike.catJumpscareDone ||
+                mike.mikeInBackyard ||
+                !mike.waitOutsideCloset ||
+                !mike.hidingSeq1)
+            {
+                return true;
+            }
+
+            if (mike.gameObject.activeInHierarchy &&
+                mike.state != MikePostEating.State.None &&
+                mike.state != MikePostEating.State.IdleStanding)
+            {
+                return true;
+            }
+
+            var house = _cabinHouseManager;
+            if (house == null && _cabinGameManager != null)
+            {
+                house = _cabinGameManager.cabinHouseManager;
+            }
+
+            return house != null &&
+                   (house.mikeBedroomJumpscare ||
+                    house.mikePostJumpscareActive ||
+                    house.mikePostJumpscareConvoDone);
+        }
+
+        private void MaybeLogCabinHidingMirror(MikePostEating mike)
+        {
+            ShedManager shed = null;
+            UnderStairsDoor understairs = null;
+            HostDuringHiding host = null;
+            if (_cabinHouseManager == null && _cabinGameManager != null)
+            {
+                _cabinHouseManager = _cabinGameManager.cabinHouseManager;
+            }
+
+            if (_cabinHouseManager != null)
+            {
+                shed = _cabinHouseManager.shedManager;
+                understairs = _cabinHouseManager.understairsDoor;
+            }
+            if (_cabinGameManager != null)
+            {
+                host = _cabinGameManager.hostHiding;
+            }
+
+            var debug =
+                "MPE=" + (mike != null ? mike.state.ToString() : "-") +
+                " seek=" + BoolText(mike != null && mike.startedSeeking) +
+                " found=" + BoolText(mike != null && mike.playerFound) +
+                " shedGo=" + BoolText(mike != null && mike.goingToToolShed) +
+                " Shed hide=" + BoolText(shed != null && shed.playerHidingInside) +
+                " started=" + BoolText(shed != null && shed.hidingSeqStarted) +
+                " Under hide=" + BoolText(understairs != null && understairs.playerHidingInside) +
+                " started=" + BoolText(understairs != null && understairs.hidingSeqStarted) +
+                " HostHiding=" + (host != null ? host.state.ToString() : "-");
+
+            var now = Time.realtimeSinceStartup;
+            if (string.Equals(debug, _lastCabinHidingDebug, StringComparison.Ordinal) &&
+                now < _nextCabinHidingLogTime)
+            {
+                return;
+            }
+
+            _lastCabinHidingDebug = debug;
+            _nextCabinHidingLogTime = now + 10f;
+            var message = "Cabin hiding mirror: " + debug;
+            _logger.LogInfo(message);
+            _sessionLogWrite?.Invoke(message);
+        }
+
+        private static string BoolText(bool value)
+        {
+            return value ? "1" : "0";
         }
 
         private void CacheSceneAdapterFields()
@@ -1555,6 +2028,7 @@ namespace WoodburySpectatorSync.Coop
                 }
 
                 var mikeFieldName = key.Substring(PizzeriaMikeFlagPrefix.Length);
+                StoreHostPizzeriaMikeField(mikeFieldName, value);
                 if (TryApplyObjectFieldFlag(_pizzeriaMike, mikeFieldName, _pizzeriaMikeFieldCache, value))
                 {
                     _pendingPizzeriaFlags.Remove(key);
@@ -1619,6 +2093,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var fieldName = key.Substring(PizzeriaFlagPrefix.Length);
+            StoreHostPizzeriaRuntimeField(fieldName, value);
             if (TryApplyObjectFieldFlag(_pizzeriaGameManager, fieldName, _pizzeriaFieldCache, value))
             {
                 _pendingPizzeriaFlags.Remove(key);
@@ -1668,6 +2143,7 @@ namespace WoodburySpectatorSync.Coop
                 }
 
                 var fieldName = key.Substring(RoadTripMikeFlagPrefix.Length);
+                StoreHostRoadTripMikeField(fieldName, value);
                 if (TryApplyObjectFieldFlag(_roadTripMikeInCar, fieldName, _roadTripMikeFieldCache, value))
                 {
                     _pendingRoadTripFlags.Remove(key);
@@ -1730,6 +2206,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var gameFieldName = key.Substring(RoadTripFlagPrefix.Length);
+            StoreHostRoadTripRuntimeField(gameFieldName, value);
             if (TryApplyObjectFieldFlag(_roadTripGameManager, gameFieldName, _roadTripFieldCache, value))
             {
                 _pendingRoadTripFlags.Remove(key);
@@ -2508,6 +2985,14 @@ namespace WoodburySpectatorSync.Coop
             if (_cabinGameManager == null) return null;
 
             var seq = _cabinGameManager.CurrentSequence;
+            var postEating = ResolvePostEatingMikeTarget(out var postEatingReason);
+            if (postEating != null)
+            {
+                reason = postEatingReason;
+                forceActive = true;
+                return postEating;
+            }
+
             if (IsCabinCookMikeSequence(seq))
             {
                 var controller = GetMikeControllerTransform();
@@ -2582,6 +3067,19 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return null;
+        }
+
+        private Transform ResolvePostEatingMikeTarget(out string reason)
+        {
+            reason = string.Empty;
+            if (_cabinGameManager == null) return null;
+
+            var mike = _cabinGameManager.mikePostEating;
+            if (mike == null) return null;
+            if (!ShouldPreferPostEatingMike(mike)) return null;
+
+            reason = "postEating:" + mike.state;
+            return mike.transform;
         }
 
         private static bool IsCabinCookMikeSequence(SequenceType seq)
@@ -2992,14 +3490,14 @@ namespace WoodburySpectatorSync.Coop
         private static bool IsClientLocalCabinRuntimeField(string fieldName)
         {
             return string.Equals(fieldName, "currentPlayerState", StringComparison.Ordinal) ||
+                   string.Equals(fieldName, "playerTalking", StringComparison.Ordinal) ||
+                   string.Equals(fieldName, "phoneUIState", StringComparison.Ordinal) ||
                    string.Equals(fieldName, "inConversation", StringComparison.Ordinal);
         }
 
         private static bool IsClientLocalCabinHouseRuntimeField(string fieldName)
         {
-            return string.Equals(fieldName, "mikeBedroomJumpscare", StringComparison.Ordinal) ||
-                   string.Equals(fieldName, "insideMikeBedroomTrigger", StringComparison.Ordinal) ||
-                   string.Equals(fieldName, "mikePostJumpscareActive", StringComparison.Ordinal);
+            return false;
         }
 
         private void LogSuppressedCabinRuntimeSync(string reason)
@@ -3221,6 +3719,17 @@ namespace WoodburySpectatorSync.Coop
             if (_isLoading) return;
 
             var now = Time.realtimeSinceStartup;
+            if (ShouldUseHostScriptedLock())
+            {
+                if (now - _lastScriptedHostSnapTime >= 0.1f)
+                {
+                    TeleportToHost();
+                    _lastScriptedHostSnapTime = now;
+                    _lastTeleportTime = now;
+                }
+                return;
+            }
+
             if (now - _lastTeleportTime < Mathf.Max(0.1f, _settings.CoopTeleportCooldownSeconds.Value)) return;
 
             var distance = 0f;
@@ -3241,6 +3750,40 @@ namespace WoodburySpectatorSync.Coop
                 TeleportToHost();
                 _lastTeleportTime = now;
             }
+        }
+
+        private bool ShouldUseHostScriptedLock()
+        {
+            if (!_hasPendingHostCam) return false;
+            if (_hostDialogueConversationId >= 0) return true;
+            if (!string.IsNullOrEmpty(_remoteDialogueText)) return true;
+            if (_hostSceneScriptedLock) return true;
+            if (_hostCabinPlayerTalking || _hostCabinInConversation || _hostCabinPhoneUi) return true;
+            if (_hostPizzeriaPlayerTalking || _hostPizzeriaPhoneUi || _hostPizzeriaMikeDialogue) return true;
+            if (_hostRoadTripPlayerTalking || _hostRoadTripPhoneUi || _hostRoadTripMikeDialogue) return true;
+
+            if (_hostCabinPlayerState >= 0 &&
+                _hostCabinPlayerState != Convert.ToInt32(CabinGameManager.PlayerState.Normal) &&
+                _hostCabinPlayerState != Convert.ToInt32(CabinGameManager.PlayerState.Driving))
+            {
+                return true;
+            }
+
+            if (_hostPizzeriaPlayerState > Convert.ToInt32(PizzeriaGameManager.PlayerState.Normal))
+            {
+                return true;
+            }
+
+            if (_cabinGameManager != null)
+            {
+                var mike = _cabinGameManager.mikePostEating;
+                if (mike != null && ShouldPreferPostEatingMike(mike))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void TeleportToHost()
@@ -3361,40 +3904,8 @@ namespace WoodburySpectatorSync.Coop
 
         private void StabilizeLocalCabinHouseState()
         {
-            if (SceneManager.GetActiveScene().name != "CabinScene") return;
-
-            if (_cabinHouseManager == null)
-            {
-                _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
-            }
-
-            if (_cabinHouseManager == null) return;
-
-            var stabilized = false;
-            var reason = string.Empty;
-
-            if (SetCabinHouseBoolIfTrue("mikeBedroomJumpscare"))
-            {
-                stabilized = true;
-                reason = "mikeBedroomJumpscare";
-            }
-
-            if (SetCabinHouseBoolIfTrue("insideMikeBedroomTrigger"))
-            {
-                stabilized = true;
-                reason = "insideMikeBedroomTrigger";
-            }
-
-            if (SetCabinHouseBoolIfTrue("mikePostJumpscareActive"))
-            {
-                stabilized = true;
-                reason = "mikePostJumpscareActive";
-            }
-
-            if (stabilized)
-            {
-                LogSuppressedCabinRuntimeSync(reason);
-            }
+            // These fields are now host-authored so the bedroom jumpscare and hiding
+            // sequences can progress consistently on the client.
         }
 
         private bool SetCabinHouseBoolIfTrue(string fieldName)
@@ -3693,6 +4204,10 @@ namespace WoodburySpectatorSync.Coop
             _roadTripTruck = null;
             _cabinHouseFieldCache.Clear();
             _cabinGameFieldCache.Clear();
+            _cabinPostEatingFieldCache.Clear();
+            _cabinShedFieldCache.Clear();
+            _cabinUnderstairsFieldCache.Clear();
+            _cabinHostHidingFieldCache.Clear();
             _pizzeriaFieldCache.Clear();
             _pizzeriaMikeFieldCache.Clear();
             _pizzeriaGameObjectFieldCache.Clear();
@@ -3722,6 +4237,21 @@ namespace WoodburySpectatorSync.Coop
             _pendingPizzeriaFirstSeen.Clear();
             _pendingRoadTripFirstSeen.Clear();
             _nextPendingRetryLogTime = 0f;
+            _lastCabinHidingDebug = "-";
+            _nextCabinHidingLogTime = 0f;
+            _lastScriptedHostSnapTime = 0f;
+            _hostSceneScriptedLock = false;
+            _hostCabinPlayerState = -1;
+            _hostCabinPlayerTalking = false;
+            _hostCabinInConversation = false;
+            _hostCabinPhoneUi = false;
+            _hostPizzeriaPlayerState = -1;
+            _hostPizzeriaPlayerTalking = false;
+            _hostPizzeriaPhoneUi = false;
+            _hostPizzeriaMikeDialogue = false;
+            _hostRoadTripPlayerTalking = false;
+            _hostRoadTripPhoneUi = false;
+            _hostRoadTripMikeDialogue = false;
             CacheSceneAdapterFields();
             OnSceneEnterAdapters(newScene.name);
             MarkSceneReadyDirty("active-scene-changed");

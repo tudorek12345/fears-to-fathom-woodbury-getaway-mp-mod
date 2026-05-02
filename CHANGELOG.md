@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Co-op Cabin: added host-authored post-eating/hiding state sync for MikePostEating, shed/understairs hiding flags, key active triggers, and toolshed crash breadcrumbs.
+- Co-op Cabin: Mike target selection now prefers `Mike Post Eating` during hiding even while the game still reports the broad `Eating` sequence, reducing target oscillation.
+- Co-op client: scripted host states now force short-interval host camera/player snaps during dialogue, phone UI, jumpscare, and hiding sequences.
 - Co-op avatars: reject render-only AssetBundle avatars with no AnimatorController, ground wrapped avatars to their renderer bounds, and use a compact procedural humanoid fallback with an Animator instead of showing static T-poses.
 - Co-op overlay/logging: compacted the overlay into a styled two-column-sized panel, shortened sync labels, and added separate per-instance Unity log files in `Launch-CoopPair.ps1`.
 - Co-op UI/logging: added an always-on bottom-center `F2F WOODBURY CO:OP` brand mark and expanded host/client connect logs with bind endpoint, session id, remote endpoint, retry reason, and disconnect events.
