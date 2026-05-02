@@ -58,17 +58,27 @@ namespace WoodburySpectatorSync.Coop
                 _manifest = LoadManifest(_bundle, logger);
                 if (_manifest == null)
                 {
+                    _manifest = CreateDefaultManifest();
                     LogPathWarningOnce(ref _lastManifestFailurePath, resolvedBundlePath, logger,
                         diagnosticsSink,
-                        "Remote player avatar fallback: avatar_manifest could not be loaded from bundle (" + resolvedBundlePath + ").");
-                    return false;
+                        "Remote player avatar manifest fallback: avatar_manifest could not be loaded from bundle (" +
+                        resolvedBundlePath + "), using built-in Quaternius manifest.");
                 }
             }
 
+            var avatarSource = settings.CoopRemotePlayerAvatarSource != null
+                ? settings.CoopRemotePlayerAvatarSource.Value
+                : RemotePlayerAvatarSource.AssetBundle;
             var avatarId = settings.CoopRemotePlayerAvatarId != null
                 ? settings.CoopRemotePlayerAvatarId.Value
                 : DefaultAvatarId;
             avatarId = string.IsNullOrWhiteSpace(avatarId) ? DefaultAvatarId : avatarId.Trim();
+            if ((avatarSource == RemotePlayerAvatarSource.Auto ||
+                 avatarSource == RemotePlayerAvatarSource.AssetBundle) &&
+                string.Equals(avatarId, "woodbury_scene_auto", StringComparison.OrdinalIgnoreCase))
+            {
+                avatarId = DefaultAvatarId;
+            }
 
             var entry = FindEntry(_manifest, avatarId);
             if (entry == null)
@@ -159,9 +169,9 @@ namespace WoodburySpectatorSync.Coop
         {
             if (bundle == null) return null;
 
-            var manifestAsset = bundle.LoadAsset<TextAsset>("avatar_manifest")
-                                ?? bundle.LoadAsset<TextAsset>("avatar_manifest.json")
-                                ?? bundle.LoadAsset<TextAsset>("AvatarManifest");
+            var manifestAsset = LoadAssetByNameOrPath<TextAsset>(bundle, "avatar_manifest")
+                                ?? LoadAssetByNameOrPath<TextAsset>(bundle, "avatar_manifest.json")
+                                ?? LoadAssetByNameOrPath<TextAsset>(bundle, "AvatarManifest");
 
             if (manifestAsset == null)
             {
@@ -222,6 +232,33 @@ namespace WoodburySpectatorSync.Coop
             return null;
         }
 
+        private static AvatarManifest CreateDefaultManifest()
+        {
+            return new AvatarManifest
+            {
+                avatars = new[]
+                {
+                    CreateManifestEntry("quaternius_regular_male", "Quaternius Regular Male"),
+                    CreateManifestEntry("quaternius_regular_female", "Quaternius Regular Female"),
+                    CreateManifestEntry("quaternius_teen_male", "Quaternius Teen Male"),
+                    CreateManifestEntry("quaternius_teen_female", "Quaternius Teen Female")
+                }
+            };
+        }
+
+        private static AvatarManifestEntry CreateManifestEntry(string id, string displayName)
+        {
+            return new AvatarManifestEntry
+            {
+                id = id,
+                prefabName = id,
+                displayName = displayName,
+                rigProfile = "ThirdPersonBasic",
+                scale = 1f,
+                yOffset = 0f
+            };
+        }
+
         private static GameObject LoadPrefab(AssetBundle bundle, string prefabName)
         {
             if (bundle == null || string.IsNullOrWhiteSpace(prefabName))
@@ -229,7 +266,8 @@ namespace WoodburySpectatorSync.Coop
                 return null;
             }
 
-            var prefab = bundle.LoadAsset<GameObject>(prefabName);
+            var prefab = LoadAssetByNameOrPath<GameObject>(bundle, prefabName)
+                         ?? LoadAssetByNameOrPath<GameObject>(bundle, prefabName + ".prefab");
             if (prefab != null)
             {
                 return prefab;
@@ -243,6 +281,45 @@ namespace WoodburySpectatorSync.Coop
                 if (string.Equals(candidate.name, prefabName, StringComparison.OrdinalIgnoreCase))
                 {
                     return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private static T LoadAssetByNameOrPath<T>(AssetBundle bundle, string assetName)
+            where T : UnityEngine.Object
+        {
+            if (bundle == null || string.IsNullOrWhiteSpace(assetName))
+            {
+                return null;
+            }
+
+            var direct = bundle.LoadAsset<T>(assetName);
+            if (direct != null)
+            {
+                return direct;
+            }
+
+            var names = bundle.GetAllAssetNames();
+            for (var i = 0; i < names.Length; i++)
+            {
+                var path = names[i];
+                if (string.IsNullOrWhiteSpace(path)) continue;
+
+                var fileName = Path.GetFileName(path);
+                var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(path);
+                if (!string.Equals(path, assetName, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(fileName, assetName, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(fileNameWithoutExtension, assetName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var asset = bundle.LoadAsset<T>(path);
+                if (asset != null)
+                {
+                    return asset;
                 }
             }
 

@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Co-op avatars: reject render-only AssetBundle avatars with no AnimatorController, ground wrapped avatars to their renderer bounds, and use a compact procedural humanoid fallback with an Animator instead of showing static T-poses.
+- Co-op overlay/logging: compacted the overlay into a styled two-column-sized panel, shortened sync labels, and added separate per-instance Unity log files in `Launch-CoopPair.ps1`.
+- Co-op UI/logging: added an always-on bottom-center `F2F WOODBURY CO:OP` brand mark and expanded host/client connect logs with bind endpoint, session id, remote endpoint, retry reason, and disconnect events.
+- Tools: Quaternius avatar bundle builder now imports humanoid rigs/animation clips, creates a basic locomotion AnimatorController, and validates that built prefabs include an AnimatorController.
+- Game install: restored missing `sharedassets5.assets.resS` and `sharedassets6.assets.resS` from the cleanup backup after Unity logs showed missing streamed texture data.
 - Co-op avatars: default remote avatar source is now `Auto`/`woodbury_scene_auto`, preferring safe in-scene game models before falling back to a compact non-colliding capsule.
 - Co-op avatars: added avatar diagnostics for source, fallback reason, renderer count, bounds, animator count, and enabled collider count in BepInEx/session logs.
 - Co-op scenes: expanded Pizzeria and RoadTrip state replication with Mike/player/truck fields, active object flags, full SceneReady snapshots, and overlay sequence labels.

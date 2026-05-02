@@ -10,13 +10,16 @@ namespace WoodburySpectatorSync.Diagnostics
     {
         private readonly ManualLogSource _logger;
         private readonly object _lock = new object();
+        private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(30);
         private StreamWriter _writer;
         private string _path;
+        private DateTime _nextFlushUtc;
 
         public SessionLog(ManualLogSource logger, string label = null)
         {
             _logger = logger;
             InitializeWriter(label);
+            _nextFlushUtc = DateTime.UtcNow;
             Write("Session start");
         }
 
@@ -34,6 +37,13 @@ namespace WoodburySpectatorSync.Diagnostics
                 {
                     if (string.IsNullOrEmpty(line)) continue;
                     _writer.WriteLine(stamp + " " + line);
+                }
+
+                var nowUtc = DateTime.UtcNow;
+                if (nowUtc >= _nextFlushUtc)
+                {
+                    _writer.Flush();
+                    _nextFlushUtc = nowUtc + FlushInterval;
                 }
             }
         }
@@ -80,7 +90,8 @@ namespace WoodburySpectatorSync.Diagnostics
                     {
                         var stream = new FileStream(candidate, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
                         _path = candidate;
-                        _writer = new StreamWriter(stream) { AutoFlush = true };
+                        _writer = new StreamWriter(stream) { AutoFlush = false };
+                        _nextFlushUtc = DateTime.UtcNow + FlushInterval;
                         break;
                     }
                     catch (IOException)

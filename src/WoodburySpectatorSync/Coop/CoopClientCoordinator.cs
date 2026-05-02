@@ -26,9 +26,10 @@ namespace WoodburySpectatorSync.Coop
         private Camera _camera;
         private bool _gameplayDisabled;
         private bool _aiDisabled;
-        private bool _mikeControllersDisabled;
         private string _pendingScene;
         private int _pendingSceneIndex = -1;
+        private string _deferredScene;
+        private int _deferredSceneIndex = -1;
         private int _pendingStartSeq = -1;
         private AsyncOperation _loading;
         private bool _isLoading;
@@ -58,6 +59,8 @@ namespace WoodburySpectatorSync.Coop
         private float _loadingStartTime;
         private float _loadingLastProgress;
         private float _loadingLastProgressTime;
+        private float _nextSceneLoadProgressLogTime;
+        private bool _sceneLoadTimeoutLogged;
         private string _loadingSceneName;
         private CabinHouseManager _cabinHouseManager;
         private CabinGameManager _cabinGameManager;
@@ -83,6 +86,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly HashSet<string> _missingSceneFieldLogged = new HashSet<string>(StringComparer.Ordinal);
         private readonly Dictionary<string, Vector3> _aiLastPositions = new Dictionary<string, Vector3>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _aiLastTimes = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, SmoothedAiState> _smoothedAiStates = new Dictionary<string, SmoothedAiState>(StringComparer.Ordinal);
         private readonly Dictionary<string, Animator> _aiAnimatorCache = new Dictionary<string, Animator>(StringComparer.Ordinal);
         private readonly Dictionary<string, AnimatorDriveInfo> _aiAnimatorParams = new Dictionary<string, AnimatorDriveInfo>(StringComparer.Ordinal);
         private float _nextAiMissingLogTime;
@@ -110,12 +114,17 @@ namespace WoodburySpectatorSync.Coop
         private const string RoadTripMikeFlagPrefix = RoadTripFlagPrefix + "Mike.";
         private const string RoadTripTruckFlagPrefix = RoadTripFlagPrefix + "Truck.";
         private int _loadingSceneIndex = -1;
-        private const float LoadingTimeoutSeconds = 40f;
+        private const float LoadingTimeoutWarnSeconds = 45f;
         private const float LoadingStallSeconds = 6f;
+        private const float LoadingProgressLogIntervalSeconds = 5f;
         private const int MaxMessagesPerFrame = 200;
         private const int MaxTransformsPerFrame = 60;
         private const float PendingRetryLogIntervalSeconds = 5f;
         private const float PendingRetryWarnAgeSeconds = 8f;
+        private const float AiSnapDistanceMeters = 4.0f;
+        private const float AiStaleSnapSeconds = 1.0f;
+        private const float AiGeneralSmoothing = 13f;
+        private const float AiMikeSmoothing = 18f;
         private bool _forcedCabinSpawn;
         private bool _cabinPrefsPrepared;
         private bool _dialogueUiDisabled;
@@ -143,6 +152,7 @@ namespace WoodburySpectatorSync.Coop
         private Transform _forcedMikeTarget;
         private string _forcedMikeReason = string.Empty;
         private float _nextMikeSyncLogTime;
+        private string _lastMikeSyncDebug = "-";
         private SequenceType _lastMikeSequence = SequenceType.NotInAnySequence;
         private CabinGameManager.CurrentMike _lastMikeState = CabinGameManager.CurrentMike.Prefishing;
         private bool _hasMikeState;
@@ -157,6 +167,7 @@ namespace WoodburySpectatorSync.Coop
         private int _appliedMikeAnimTransition;
         private int _appliedMikeAnimNextStateHash;
         private float _nextDialogueUnlockTime;
+        private float _nextCabinRuntimeSyncLogTime;
         private int _sceneReadyGeneration;
         private int _sceneReadySentGeneration = -1;
         private bool _sceneReadyDirty = true;
@@ -317,7 +328,15 @@ namespace WoodburySpectatorSync.Coop
         }
 
         public bool IsSceneLoading => _isLoading;
-        public string PendingSceneName => _pendingScene;
+        public string PendingSceneName
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(_pendingScene)) return _pendingScene;
+                if (!string.IsNullOrEmpty(_deferredScene)) return _deferredScene + " (deferred)";
+                return string.Empty;
+            }
+        }
         public int PendingSceneIndex => _pendingSceneIndex;
         public int PendingDoorCount => _pendingDoorStates.Count;
         public int PendingHoldableCount => _pendingHoldableStates.Count;
@@ -339,6 +358,7 @@ namespace WoodburySpectatorSync.Coop
         public int LastStoryEventValue => _lastStoryEventValue;
         public long LastStoryEventMs => _lastStoryEventMs;
         public byte LastHostPlayerId => _lastHostPlayerId;
+        public string LastMikeSyncDebug => _lastMikeSyncDebug;
 
         public bool TryGetRemoteDialogue(out string speaker, out string text, out byte kind)
         {
@@ -405,7 +425,10 @@ namespace WoodburySpectatorSync.Coop
                 EnsureLocalPlayerRefs();
             }
             EnsureCabinGameManager();
+            StabilizeLocalCabinPlayerState();
+            StabilizeLocalCabinHouseState();
             SyncMikeVariantIfChanged();
+            ApplyCabinSequenceVisuals();
             DisableLocalGameplay();
             _controller?.Update();
             if (_settings.CoopRouteInteractions.Value || !_settings.CoopUseLocalPlayer.Value)
@@ -417,6 +440,7 @@ namespace WoodburySpectatorSync.Coop
             SendInputState();
             TryForceCabinStart();
             ApplyPendingStates();
+            UpdateSmoothedAiStates();
             MaybeTeleportToHost();
             SendPingIfDue();
 
@@ -767,6 +791,7 @@ namespace WoodburySpectatorSync.Coop
         private void RequestSceneLoad(string sceneName, int buildIndex, int startSeq, int fromMenu)
         {
             if (string.IsNullOrEmpty(sceneName)) return;
+            var activeSceneName = SceneManager.GetActiveScene().name;
             if (sceneName == "CabinScene" || sceneName == "CabinDarkScene")
             {
                 _pendingStartSeq = sceneName == "CabinScene" ? startSeq : -1;
@@ -777,9 +802,47 @@ namespace WoodburySpectatorSync.Coop
                 _pendingStartSeq = -1;
             }
 
-            if (sceneName == SceneManager.GetActiveScene().name)
+            if (_isLoading && string.Equals(sceneName, _loadingSceneName, StringComparison.Ordinal))
+            {
+                _pendingScene = null;
+                _pendingSceneIndex = -1;
+                if (_settings.VerboseLogging.Value)
+                {
+                    _logger.LogInfo("Scene load request ignored; already loading " + sceneName +
+                        " progress=" + LoadingProgress.ToString("0.00"));
+                }
+                return;
+            }
+
+            if (ShouldDeferBootstrapScene(activeSceneName, sceneName))
+            {
+                var alreadyDeferred = string.Equals(_deferredScene, sceneName, StringComparison.Ordinal);
+                _deferredScene = sceneName;
+                _deferredSceneIndex = buildIndex;
+                _pendingScene = null;
+                _pendingSceneIndex = -1;
+                _lastSceneReadySent = string.Empty;
+                if (!alreadyDeferred)
+                {
+                    _logger.LogInfo("Co-op client deferring " + sceneName +
+                        " load while game bootstrap is already leaving " + activeSceneName);
+                }
+                MarkSceneReadyDirty("host-scene-bootstrap-deferred");
+                return;
+            }
+
+            _deferredScene = null;
+            _deferredSceneIndex = -1;
+
+            if (sceneName == activeSceneName)
             {
                 MarkSceneReadyDirty("host-scene-mismatch-recovery");
+                return;
+            }
+
+            if (string.Equals(sceneName, _pendingScene, StringComparison.Ordinal))
+            {
+                _pendingSceneIndex = buildIndex;
                 return;
             }
 
@@ -789,47 +852,79 @@ namespace WoodburySpectatorSync.Coop
             MarkSceneReadyDirty("host-scene-change");
         }
 
+        private static bool ShouldDeferBootstrapScene(string activeSceneName, string requestedSceneName)
+        {
+            return string.Equals(activeSceneName, "Disclaimer", StringComparison.Ordinal) &&
+                   string.Equals(requestedSceneName, "MainMenu", StringComparison.Ordinal);
+        }
+
         private void UpdateSceneLoad()
         {
             if (_isLoading)
             {
                 if (_loading == null)
                 {
-                    ForceSceneLoad(_loadingSceneName, _loadingSceneIndex);
+                    _logger.LogWarning("Scene load operation missing for " + _loadingSceneName +
+                        "; clearing load state without sync fallback");
+                    _isLoading = false;
+                    _loadingSceneName = null;
+                    _loadingSceneIndex = -1;
                     return;
                 }
 
                 if (_loading != null)
                 {
                     var now = Time.realtimeSinceStartup;
+                    var progress = _loading.progress;
                     if (_loading.progress > _loadingLastProgress + 0.001f)
                     {
-                        _loadingLastProgress = _loading.progress;
+                        _loadingLastProgress = progress;
                         _loadingLastProgressTime = now;
                     }
 
-                    if (!_loading.allowSceneActivation && _loading.progress >= 0.9f)
+                    if (now >= _nextSceneLoadProgressLogTime)
+                    {
+                        _nextSceneLoadProgressLogTime = now + LoadingProgressLogIntervalSeconds;
+                        _logger.LogInfo("Co-op scene load progress scene=" + _loadingSceneName +
+                            " index=" + _loadingSceneIndex +
+                            " progress=" + (progress * 100f).ToString("0") + "%" +
+                            " elapsed=" + (now - _loadingStartTime).ToString("0.0") + "s" +
+                            " stalledFor=" + (now - _loadingLastProgressTime).ToString("0.0") + "s" +
+                            " allowActivation=" + _loading.allowSceneActivation);
+                    }
+
+                    if (!_loading.allowSceneActivation && progress >= 0.9f)
+                    {
+                        _logger.LogInfo("Co-op scene load reached activation threshold scene=" + _loadingSceneName);
+                        _loading.allowSceneActivation = true;
+                    }
+
+                    if (!_loading.isDone && now - _loadingLastProgressTime > LoadingStallSeconds && progress >= 0.9f)
                     {
                         _loading.allowSceneActivation = true;
                     }
 
-                    if (!_loading.isDone && now - _loadingLastProgressTime > LoadingStallSeconds && _loading.progress >= 0.9f)
+                    if (!_loading.isDone &&
+                        !_sceneLoadTimeoutLogged &&
+                        now - _loadingStartTime > LoadingTimeoutWarnSeconds)
                     {
-                        _loading.allowSceneActivation = true;
-                    }
-
-                    if (!_loading.isDone && now - _loadingStartTime > LoadingTimeoutSeconds)
-                    {
-                        ForceSceneLoad(_loadingSceneName, _loadingSceneIndex);
-                        return;
+                        _sceneLoadTimeoutLogged = true;
+                        _logger.LogWarning("Co-op scene load still pending scene=" + _loadingSceneName +
+                            " index=" + _loadingSceneIndex +
+                            " progress=" + (progress * 100f).ToString("0") + "%" +
+                            " elapsed=" + (now - _loadingStartTime).ToString("0.0") + "s" +
+                            "; leaving async load active");
                     }
 
                     if (_loading.isDone)
                     {
+                        _logger.LogInfo("Co-op scene load completed scene=" + _loadingSceneName);
                         _isLoading = false;
                         _loading = null;
                         _loadingSceneName = null;
                         _loadingSceneIndex = -1;
+                        _nextSceneLoadProgressLogTime = 0f;
+                        _sceneLoadTimeoutLogged = false;
                         MarkSceneReadyDirty("scene-load-complete");
                     }
                 }
@@ -844,6 +939,8 @@ namespace WoodburySpectatorSync.Coop
                 _loadingStartTime = Time.realtimeSinceStartup;
                 _loadingLastProgress = 0f;
                 _loadingLastProgressTime = _loadingStartTime;
+                _nextSceneLoadProgressLogTime = _loadingStartTime;
+                _sceneLoadTimeoutLogged = false;
                 _loading = StartSceneLoad(_pendingScene, _pendingSceneIndex);
                 _pendingScene = null;
                 _pendingSceneIndex = -1;
@@ -853,6 +950,11 @@ namespace WoodburySpectatorSync.Coop
         private void SendSceneReadyIfNeeded()
         {
             if (_isLoading || !string.IsNullOrEmpty(_pendingScene)) return;
+            if (!string.IsNullOrEmpty(_deferredScene) &&
+                !string.Equals(SceneManager.GetActiveScene().name, _deferredScene, StringComparison.Ordinal))
+            {
+                return;
+            }
             if (!_sceneReadyDirty) return;
             SendSceneReady(SceneManager.GetActiveScene().name, force: false);
         }
@@ -919,9 +1021,34 @@ namespace WoodburySpectatorSync.Coop
             _lastSceneReadySentTime = 0f;
             _sceneReadySentGeneration = -1;
             _sceneReadyDirty = true;
+            _pendingScene = null;
+            _pendingSceneIndex = -1;
+            _deferredScene = null;
+            _deferredSceneIndex = -1;
+            if (_isLoading && _loading != null)
+            {
+                _loadingStartTime = Time.realtimeSinceStartup;
+                _loadingLastProgress = _loading.progress;
+                _loadingLastProgressTime = _loadingStartTime;
+                _nextSceneLoadProgressLogTime = _loadingStartTime;
+                _sceneLoadTimeoutLogged = false;
+            }
+            else
+            {
+                _loading = null;
+                _isLoading = false;
+                _loadingStartTime = 0f;
+                _loadingLastProgress = 0f;
+                _loadingLastProgressTime = 0f;
+                _nextSceneLoadProgressLogTime = 0f;
+                _sceneLoadTimeoutLogged = false;
+                _loadingSceneName = null;
+                _loadingSceneIndex = -1;
+            }
             _pendingDoorStates.Clear();
             _pendingHoldableStates.Clear();
             _pendingAiStates.Clear();
+            _smoothedAiStates.Clear();
             _pendingCabinHouseFlags.Clear();
             _pendingCabinGameFlags.Clear();
             _pendingPizzeriaFlags.Clear();
@@ -959,9 +1086,12 @@ namespace WoodburySpectatorSync.Coop
                 PlayerPrefs.SetInt(key, flag.Value);
             }
 
-            _lastStoryEventKey = flag.Key;
-            _lastStoryEventValue = flag.Value;
-            _lastStoryEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (!IsHighFrequencyStoryFlag(key))
+            {
+                _lastStoryEventKey = key;
+                _lastStoryEventValue = flag.Value;
+                _lastStoryEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            }
         }
 
         private void ApplyHoldableState(HoldableState state)
@@ -979,6 +1109,18 @@ namespace WoodburySpectatorSync.Coop
 
         private void ApplyAiState(AiTransformState state)
         {
+            if (string.IsNullOrEmpty(state.Path))
+            {
+                return;
+            }
+
+            if (IsCoopProxyPath(state.Path))
+            {
+                _pendingAiStates.Remove(state.Path);
+                ClearPendingState(_pendingAiFirstSeen, state.Path);
+                return;
+            }
+
             if (_isLoading || !TryApplyAiState(state))
             {
                 _pendingAiStates[state.Path] = state;
@@ -1038,6 +1180,16 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            var fieldName = key.Substring(CabinHouseFlagPrefix.Length);
+            if (IsClientLocalCabinHouseRuntimeField(fieldName))
+            {
+                LogSuppressedCabinRuntimeSync("house:" + fieldName);
+                StabilizeLocalCabinHouseState();
+                _pendingCabinHouseFlags.Remove(key);
+                ClearPendingState(_pendingCabinHouseFirstSeen, key);
+                return true;
+            }
+
             if (SceneManager.GetActiveScene().name != "CabinScene")
             {
                 if (allowDefer)
@@ -1062,7 +1214,6 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            var fieldName = key.Substring(CabinHouseFlagPrefix.Length);
             if (!_cabinHouseFieldCache.TryGetValue(fieldName, out var field))
             {
                 field = typeof(CabinHouseManager).GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -1096,6 +1247,16 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            var fieldName = key.Substring(CabinGameFlagPrefix.Length);
+            if (IsClientLocalCabinRuntimeField(fieldName))
+            {
+                LogSuppressedCabinRuntimeSync("flag:" + fieldName);
+                StabilizeLocalCabinPlayerState();
+                _pendingCabinGameFlags.Remove(key);
+                ClearPendingState(_pendingCabinGameFirstSeen, key);
+                return true;
+            }
+
             if (SceneManager.GetActiveScene().name != "CabinScene")
             {
                 if (allowDefer)
@@ -1120,7 +1281,6 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            var fieldName = key.Substring(CabinGameFlagPrefix.Length);
             if (fieldName.StartsWith(CabinMikeAnimFieldPrefix, StringComparison.Ordinal))
             {
                 if (!TryApplyCabinMikeAnimationFlag(fieldName, value))
@@ -1175,6 +1335,8 @@ namespace WoodburySpectatorSync.Coop
             {
                 UpdateMikeVariantFromState();
             }
+
+            ApplyCabinSequenceVisuals();
 
             _pendingCabinGameFlags.Remove(key);
             ClearPendingState(_pendingCabinGameFirstSeen, key);
@@ -1776,16 +1938,53 @@ namespace WoodburySpectatorSync.Coop
 
         private bool TryApplyAiState(AiTransformState state)
         {
+            if (string.IsNullOrEmpty(state.Path) || IsCoopProxyPath(state.Path))
+            {
+                return true;
+            }
             Transform target = null;
+            Transform pathTarget = null;
             var source = "path";
             var isMike = IsMikePath(state.Path);
 
             if (!string.IsNullOrEmpty(state.Path))
             {
-                target = NetPath.FindByPath(state.Path);
+                pathTarget = NetPath.FindByPath(state.Path);
+                target = pathTarget;
             }
 
-            if (isMike)
+            if (!state.Active)
+            {
+                if (isMike)
+                {
+                    RemoveSmoothedAiState(state, pathTarget, true);
+                    if (pathTarget == null)
+                    {
+                        return true;
+                    }
+
+                    if (_forcedMikeTarget != null && IsSameTransformFamily(pathTarget, _forcedMikeTarget))
+                    {
+                        return true;
+                    }
+                }
+                else if (pathTarget == null)
+                {
+                    _smoothedAiStates.Remove(state.Path ?? string.Empty);
+                    return true;
+                }
+
+                target = pathTarget;
+                DisableRemoteAiLocomotion(target);
+                target.position = state.Position;
+                target.rotation = state.Rotation;
+                target.gameObject.SetActive(false);
+                RemoveSmoothedAiState(state, target, isMike);
+                ApplyAiAnimator(target, state, 0f);
+                return true;
+            }
+
+            if (isMike && state.Active)
             {
                 var preferred = GetPreferredMikeTarget();
                 if (preferred != null)
@@ -1838,6 +2037,23 @@ namespace WoodburySpectatorSync.Coop
 
             MaybeLogAiPath(state.Path, target, source);
 
+            if (isMike && IsCabinMikePath(state.Path) && state.Active)
+            {
+                SetOnlyMikeActive(target);
+                DisableLocalMikeControllers();
+            }
+
+            DisableRemoteAiLocomotion(target);
+
+            target.gameObject.SetActive(true);
+            QueueSmoothedAiState(state, target, isMike);
+            return true;
+        }
+
+        private void DisableRemoteAiLocomotion(Transform target)
+        {
+            if (target == null) return;
+
             var agent = target.GetComponent<NavmeshPathAgent>();
             if (agent != null)
             {
@@ -1849,12 +2065,159 @@ namespace WoodburySpectatorSync.Coop
             {
                 navAgent.enabled = false;
             }
+        }
 
-            target.gameObject.SetActive(state.Active);
-            target.position = state.Position;
-            target.rotation = state.Rotation;
-            ApplyAiAnimator(target, state);
-            return true;
+        private void QueueSmoothedAiState(AiTransformState state, Transform target, bool isMike)
+        {
+            if (target == null || string.IsNullOrEmpty(state.Path)) return;
+
+            var now = Time.realtimeSinceStartup;
+            var smoothKey = GetAiSmoothKey(state, target, isMike);
+            if (string.IsNullOrEmpty(smoothKey)) return;
+
+            if (isMike)
+            {
+                RemoveOtherMikeSmoothStates(target);
+            }
+
+            if (!_smoothedAiStates.TryGetValue(smoothKey, out var smooth) || smooth == null)
+            {
+                smooth = new SmoothedAiState
+                {
+                    Path = smoothKey
+                };
+                _smoothedAiStates[smoothKey] = smooth;
+            }
+
+            var targetChanged = smooth.Target != null && !ReferenceEquals(smooth.Target, target);
+            var activeChanged = smooth.Initialized && smooth.Active != state.Active;
+            var stale = smooth.LastPacketTime > 0f && now - smooth.LastPacketTime > AiStaleSnapSeconds;
+            var distance = Vector3.Distance(target.position, state.Position);
+            var shouldSnap = !smooth.Initialized || targetChanged || activeChanged || stale || distance > AiSnapDistanceMeters;
+
+            smooth.Target = target;
+            var animatorState = state;
+            if (isMike)
+            {
+                animatorState.Path = smoothKey;
+            }
+
+            smooth.Latest = animatorState;
+            smooth.TargetPosition = state.Position;
+            smooth.TargetRotation = state.Rotation;
+            smooth.Active = state.Active;
+            smooth.IsMike = isMike;
+            smooth.LastPacketTime = now;
+
+            if (shouldSnap)
+            {
+                target.position = state.Position;
+                target.rotation = state.Rotation;
+                smooth.Initialized = true;
+                smooth.LastRenderTime = now;
+                ApplyAiAnimator(target, state, 0f);
+            }
+        }
+
+        private string GetAiSmoothKey(AiTransformState state, Transform target, bool isMike)
+        {
+            if (isMike && target != null)
+            {
+                var targetPath = NetPath.GetPath(target);
+                if (!string.IsNullOrEmpty(targetPath))
+                {
+                    return "Mike:" + targetPath;
+                }
+            }
+
+            return state.Path ?? string.Empty;
+        }
+
+        private void RemoveSmoothedAiState(AiTransformState state, Transform target, bool isMike)
+        {
+            _smoothedAiStates.Remove(state.Path ?? string.Empty);
+            if (!isMike || target == null) return;
+
+            var smoothKey = GetAiSmoothKey(state, target, true);
+            if (!string.IsNullOrEmpty(smoothKey))
+            {
+                _smoothedAiStates.Remove(smoothKey);
+            }
+        }
+
+        private void RemoveOtherMikeSmoothStates(Transform keep)
+        {
+            if (keep == null || _smoothedAiStates.Count == 0) return;
+
+            var keys = new List<string>(_smoothedAiStates.Keys);
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var key = keys[i];
+                if (!_smoothedAiStates.TryGetValue(key, out var smooth) || smooth == null) continue;
+                if (!smooth.IsMike) continue;
+                if (smooth.Target != null && IsSameTransformFamily(smooth.Target, keep)) continue;
+                _smoothedAiStates.Remove(key);
+            }
+        }
+
+        private void UpdateSmoothedAiStates()
+        {
+            if (_smoothedAiStates.Count == 0) return;
+
+            var now = Time.realtimeSinceStartup;
+            var keys = new List<string>(_smoothedAiStates.Keys);
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var key = keys[i];
+                if (!_smoothedAiStates.TryGetValue(key, out var smooth) || smooth == null)
+                {
+                    continue;
+                }
+
+                var target = smooth.Target;
+                if (target == null || target.gameObject == null)
+                {
+                    _smoothedAiStates.Remove(key);
+                    continue;
+                }
+
+                if (!smooth.Active)
+                {
+                    _smoothedAiStates.Remove(key);
+                    continue;
+                }
+
+                if (!target.gameObject.activeSelf)
+                {
+                    target.gameObject.SetActive(true);
+                }
+
+                DisableRemoteAiLocomotion(target);
+
+                var dt = smooth.LastRenderTime > 0f
+                    ? Mathf.Clamp(now - smooth.LastRenderTime, 0.001f, 0.1f)
+                    : Mathf.Clamp(Time.deltaTime, 0.001f, 0.1f);
+                smooth.LastRenderTime = now;
+
+                var before = target.position;
+                var distance = Vector3.Distance(before, smooth.TargetPosition);
+                if (!smooth.Initialized || distance > AiSnapDistanceMeters)
+                {
+                    target.position = smooth.TargetPosition;
+                    target.rotation = smooth.TargetRotation;
+                    smooth.Initialized = true;
+                    ApplyAiAnimator(target, smooth.Latest, 0f);
+                    continue;
+                }
+
+                var response = smooth.IsMike ? AiMikeSmoothing : AiGeneralSmoothing;
+                var alpha = 1f - Mathf.Exp(-response * dt);
+                target.position = Vector3.Lerp(before, smooth.TargetPosition, alpha);
+                target.rotation = Quaternion.Slerp(target.rotation, smooth.TargetRotation, alpha);
+
+                var speed = Vector3.Distance(target.position, before) / dt;
+                ApplyAiAnimator(target, smooth.Latest, speed);
+            }
         }
 
         private Transform ResolveAiFallback(AiTransformState state)
@@ -2001,13 +2364,21 @@ namespace WoodburySpectatorSync.Coop
                 if (now >= _nextMikeSyncLogTime)
                 {
                     _nextMikeSyncLogTime = now + 5f;
+                    var path = NetPath.GetPath(desired);
                     _logger.LogInfo("Mike sync: seq=" + _cabinGameManager.CurrentSequence +
                                     " currentMike=" + _cabinGameManager.currentMike +
                                     " target=" + desired.name +
+                                    " path=" + (string.IsNullOrEmpty(path) ? "-" : path) +
                                     " reason=" + reason +
-                                    " active=" + desired.gameObject.activeInHierarchy);
+                                    " active=" + desired.gameObject.activeInHierarchy +
+                                    " renderable=" + HasRenderable(desired));
                 }
             }
+
+            _lastMikeSyncDebug =
+                _cabinGameManager.CurrentSequence + "/" +
+                _cabinGameManager.currentMike + " -> " +
+                desired.name + " (" + reason + ")";
 
             TryApplyRemoteMikeAnimation();
         }
@@ -2137,18 +2508,32 @@ namespace WoodburySpectatorSync.Coop
             if (_cabinGameManager == null) return null;
 
             var seq = _cabinGameManager.CurrentSequence;
-            if (seq == SequenceType.PickingBoardGame || seq == SequenceType.PlayingJenga ||
-                seq == SequenceType.GoingToPlayOuija || seq == SequenceType.PlayingOuija)
+            if (IsCabinCookMikeSequence(seq))
             {
                 var controller = GetMikeControllerTransform();
-                if (controller != null && HasRenderable(controller))
+                if (controller != null && IsActiveRenderable(controller))
                 {
                     reason = "seq:" + seq;
                     forceActive = true;
                     return controller;
                 }
 
-                if (_cabinGameManager.mikeCabin != null)
+                var activeCookTarget = GetActiveCabinCookMikeTarget();
+                if (activeCookTarget != null)
+                {
+                    reason = "seq:" + seq + ":activefallback";
+                    forceActive = true;
+                    return activeCookTarget;
+                }
+
+                if (controller != null && HasRenderable(controller))
+                {
+                    reason = "seq:" + seq + ":inactive-controller";
+                    forceActive = true;
+                    return controller;
+                }
+
+                if (_cabinGameManager.mikeCabin != null && IsActiveRenderable(_cabinGameManager.mikeCabin.transform))
                 {
                     reason = "seq:" + seq + ":cabinfallback";
                     forceActive = true;
@@ -2199,10 +2584,21 @@ namespace WoodburySpectatorSync.Coop
             return null;
         }
 
+        private static bool IsCabinCookMikeSequence(SequenceType seq)
+        {
+            return seq == SequenceType.Cooking ||
+                   seq == SequenceType.PickingBoardGame ||
+                   seq == SequenceType.PlayingJenga ||
+                   seq == SequenceType.GoingToPlayOuija ||
+                   seq == SequenceType.PlayingOuija ||
+                   seq == SequenceType.Eating;
+        }
+
         private void SetOnlyMikeActive(Transform keep)
         {
             if (keep == null) return;
 
+            RemoveOtherMikeSmoothStates(keep);
             SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikeCabin : null, keep);
             SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikeFishing : null, keep);
             SetMikeActive(_cabinGameManager != null ? _cabinGameManager.mikePostEating : null, keep);
@@ -2222,11 +2618,17 @@ namespace WoodburySpectatorSync.Coop
         private static void SetMikeActive(Transform target, Transform keep)
         {
             if (target == null) return;
-            var shouldBeActive = target == keep || target.IsChildOf(keep) || keep.IsChildOf(target);
+            var shouldBeActive = IsSameTransformFamily(target, keep);
             if (target.gameObject.activeSelf != shouldBeActive)
             {
                 target.gameObject.SetActive(shouldBeActive);
             }
+        }
+
+        private static bool IsSameTransformFamily(Transform first, Transform second)
+        {
+            if (first == null || second == null) return false;
+            return ReferenceEquals(first, second) || first.IsChildOf(second) || second.IsChildOf(first);
         }
 
         private Transform GetMikeControllerTransform()
@@ -2249,7 +2651,7 @@ namespace WoodburySpectatorSync.Coop
             return field != null ? field.GetValue(_cabinGameManager) as Component : null;
         }
 
-        private void ApplyAiAnimator(Transform target, AiTransformState state)
+        private void ApplyAiAnimator(Transform target, AiTransformState state, float speedOverride = -1f)
         {
             if (target == null || string.IsNullOrEmpty(state.Path)) return;
 
@@ -2271,8 +2673,9 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var now = Time.realtimeSinceStartup;
-            var speed = 0f;
-            if (_aiLastPositions.TryGetValue(state.Path, out var lastPos) &&
+            var speed = Mathf.Max(0f, speedOverride);
+            if (speedOverride < 0f &&
+                _aiLastPositions.TryGetValue(state.Path, out var lastPos) &&
                 _aiLastTimes.TryGetValue(state.Path, out var lastTime))
             {
                 var deltaTime = Mathf.Max(0.001f, now - lastTime);
@@ -2518,6 +2921,33 @@ namespace WoodburySpectatorSync.Coop
             return fallback;
         }
 
+        private Transform GetActiveCabinCookMikeTarget()
+        {
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            if (_cabinGameManager == null) return null;
+
+            var candidates = new List<Transform>();
+            var mikeController = GetMikeControllerComponent();
+            if (mikeController != null) candidates.Add(mikeController.transform);
+            if (_cabinGameManager.mikePostEating != null) candidates.Add(_cabinGameManager.mikePostEating.transform);
+            if (_cabinGameManager.mikeCabin != null) candidates.Add(_cabinGameManager.mikeCabin.transform);
+            if (_cabinGameManager.mikeObject != null) candidates.Add(_cabinGameManager.mikeObject.transform);
+
+            foreach (var candidate in candidates)
+            {
+                if (IsActiveRenderable(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
         private static bool HasRenderable(Transform target)
         {
             if (target == null) return false;
@@ -2538,6 +2968,51 @@ namespace WoodburySpectatorSync.Coop
                    path.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        private static bool IsCabinMikePath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   path.StartsWith("Cabin", StringComparison.OrdinalIgnoreCase) &&
+                   path.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsCoopProxyPath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   (path.IndexOf("CoopRemotePlayer", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    path.IndexOf("CoopHostAvatar", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    path.IndexOf("CoopClientAvatar", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static bool IsHighFrequencyStoryFlag(string key)
+        {
+            return !string.IsNullOrEmpty(key) &&
+                   key.StartsWith(CabinGameFlagPrefix + CabinMikeAnimFieldPrefix, StringComparison.Ordinal);
+        }
+
+        private static bool IsClientLocalCabinRuntimeField(string fieldName)
+        {
+            return string.Equals(fieldName, "currentPlayerState", StringComparison.Ordinal) ||
+                   string.Equals(fieldName, "inConversation", StringComparison.Ordinal);
+        }
+
+        private static bool IsClientLocalCabinHouseRuntimeField(string fieldName)
+        {
+            return string.Equals(fieldName, "mikeBedroomJumpscare", StringComparison.Ordinal) ||
+                   string.Equals(fieldName, "insideMikeBedroomTrigger", StringComparison.Ordinal) ||
+                   string.Equals(fieldName, "mikePostJumpscareActive", StringComparison.Ordinal);
+        }
+
+        private void LogSuppressedCabinRuntimeSync(string reason)
+        {
+            var now = Time.realtimeSinceStartup;
+            if (now < _nextCabinRuntimeSyncLogTime) return;
+
+            _nextCabinRuntimeSyncLogTime = now + 5f;
+            var message = "Cabin client runtime state held local: " + reason;
+            _logger.LogInfo(message);
+            _sessionLogWrite?.Invoke(message);
+        }
+
         private static void TryAddComponent(List<Component> list, Component component)
         {
             if (component == null) return;
@@ -2552,6 +3027,20 @@ namespace WoodburySpectatorSync.Coop
             public string VelocityFloat;
             public string WalkBool;
             public string MovingBool;
+        }
+
+        private sealed class SmoothedAiState
+        {
+            public string Path;
+            public Transform Target;
+            public AiTransformState Latest;
+            public Vector3 TargetPosition;
+            public Quaternion TargetRotation;
+            public bool Active;
+            public bool IsMike;
+            public bool Initialized;
+            public float LastPacketTime;
+            public float LastRenderTime;
         }
 
         private void ApplyPendingStates()
@@ -2810,6 +3299,259 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private void StabilizeLocalCabinPlayerState()
+        {
+            if (SceneManager.GetActiveScene().name != "CabinScene") return;
+
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            if (_cabinGameManager == null) return;
+
+            var stabilized = false;
+            var stabilizedReason = string.Empty;
+
+            if (!_cabinGameFieldCache.TryGetValue("inConversation", out var inConversationField))
+            {
+                inConversationField = FindInstanceField(typeof(CabinGameManager), "inConversation");
+                _cabinGameFieldCache["inConversation"] = inConversationField;
+            }
+
+            if (inConversationField != null && inConversationField.FieldType == typeof(bool))
+            {
+                try
+                {
+                    if ((bool)inConversationField.GetValue(_cabinGameManager))
+                    {
+                        inConversationField.SetValue(_cabinGameManager, false);
+                        stabilized = true;
+                        stabilizedReason = "inConversation";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (_settings.VerboseLogging.Value)
+                    {
+                        _logger.LogWarning("Cabin local conversation stabilizer failed: " + ex.Message);
+                    }
+                }
+            }
+
+            if (_cabinGameManager.playerTalking)
+            {
+                _cabinGameManager.playerTalking = false;
+                stabilized = true;
+                stabilizedReason = "playerTalking";
+            }
+
+            if (IsUnsafeClientCabinPlayerState(_cabinGameManager.currentPlayerState))
+            {
+                stabilized = true;
+                stabilizedReason = "playerState:" + _cabinGameManager.currentPlayerState;
+                _cabinGameManager.ChangePlayerState(CabinGameManager.PlayerState.Normal);
+            }
+
+            if (stabilized)
+            {
+                LogSuppressedCabinRuntimeSync(stabilizedReason);
+            }
+        }
+
+        private void StabilizeLocalCabinHouseState()
+        {
+            if (SceneManager.GetActiveScene().name != "CabinScene") return;
+
+            if (_cabinHouseManager == null)
+            {
+                _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
+            }
+
+            if (_cabinHouseManager == null) return;
+
+            var stabilized = false;
+            var reason = string.Empty;
+
+            if (SetCabinHouseBoolIfTrue("mikeBedroomJumpscare"))
+            {
+                stabilized = true;
+                reason = "mikeBedroomJumpscare";
+            }
+
+            if (SetCabinHouseBoolIfTrue("insideMikeBedroomTrigger"))
+            {
+                stabilized = true;
+                reason = "insideMikeBedroomTrigger";
+            }
+
+            if (SetCabinHouseBoolIfTrue("mikePostJumpscareActive"))
+            {
+                stabilized = true;
+                reason = "mikePostJumpscareActive";
+            }
+
+            if (stabilized)
+            {
+                LogSuppressedCabinRuntimeSync(reason);
+            }
+        }
+
+        private bool SetCabinHouseBoolIfTrue(string fieldName)
+        {
+            if (_cabinHouseManager == null || string.IsNullOrEmpty(fieldName)) return false;
+
+            if (!_cabinHouseFieldCache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(typeof(CabinHouseManager), fieldName);
+                _cabinHouseFieldCache[fieldName] = field;
+            }
+
+            if (field == null || field.FieldType != typeof(bool)) return false;
+
+            try
+            {
+                if (!(bool)field.GetValue(_cabinHouseManager)) return false;
+                field.SetValue(_cabinHouseManager, false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (_settings.VerboseLogging.Value)
+                {
+                    _logger.LogWarning("Cabin house stabilizer failed field=" + fieldName + " error=" + ex.Message);
+                }
+                return false;
+            }
+        }
+
+        private void ApplyCabinSequenceVisuals()
+        {
+            if (SceneManager.GetActiveScene().name != "CabinScene") return;
+
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            if (_cabinGameManager == null) return;
+
+            var seq = _cabinGameManager.CurrentSequence;
+            if (seq != SequenceType.PlayingOuija && seq != SequenceType.GoingToPlayOuija)
+            {
+                SetPrivateBool(_cabinGameManager, "isPlayingOuija", false);
+                return;
+            }
+
+            SetPrivateBool(_cabinGameManager, "mikeHasPlacedBasementTable", true);
+            SetPrivateBool(_cabinGameManager, "isPlayingOuija", seq == SequenceType.PlayingOuija);
+
+            var cabinPlayer = PlayerController.GetInstance() as CabinPlayerController;
+            if (cabinPlayer == null)
+            {
+                cabinPlayer = UnityEngine.Object.FindObjectOfType<CabinPlayerController>();
+            }
+
+            if (cabinPlayer == null) return;
+
+            if (seq == SequenceType.PlayingOuija)
+            {
+                SetPrivateComponentGameObjectActive(cabinPlayer, "ouijaBoardGame", true);
+                SetPrivateGameObjectActive(cabinPlayer, "basementTableLight", true);
+                SetPrivateColliderEnabled(cabinPlayer, "basementTableCollider", false);
+                SetPrivateComponentGameObjectActive(cabinPlayer, "triggerSubGetOuija", false);
+                SetPrivateEnum(cabinPlayer, "currentHoldingBoardGameType", "Ouija");
+            }
+        }
+
+        private static void SetPrivateBool(object target, string fieldName, bool value)
+        {
+            var field = target != null ? FindInstanceField(target.GetType(), fieldName) : null;
+            if (field == null || field.FieldType != typeof(bool)) return;
+            try
+            {
+                field.SetValue(target, value);
+            }
+            catch
+            {
+                // Best-effort scene visual sync; unsupported fields should not break co-op.
+            }
+        }
+
+        private static void SetPrivateEnum(object target, string fieldName, string valueName)
+        {
+            var field = target != null ? FindInstanceField(target.GetType(), fieldName) : null;
+            if (field == null || !field.FieldType.IsEnum) return;
+            try
+            {
+                field.SetValue(target, Enum.Parse(field.FieldType, valueName, ignoreCase: true));
+            }
+            catch
+            {
+                // Best-effort scene visual sync; unsupported fields should not break co-op.
+            }
+        }
+
+        private static void SetPrivateComponentGameObjectActive(object target, string fieldName, bool active)
+        {
+            var field = target != null ? FindInstanceField(target.GetType(), fieldName) : null;
+            if (field == null) return;
+            try
+            {
+                var component = field.GetValue(target) as Component;
+                if (component != null && component.gameObject != null)
+                {
+                    component.gameObject.SetActive(active);
+                }
+            }
+            catch
+            {
+                // Best-effort scene visual sync; unsupported fields should not break co-op.
+            }
+        }
+
+        private static void SetPrivateGameObjectActive(object target, string fieldName, bool active)
+        {
+            var field = target != null ? FindInstanceField(target.GetType(), fieldName) : null;
+            if (field == null || field.FieldType != typeof(GameObject)) return;
+            try
+            {
+                var gameObject = field.GetValue(target) as GameObject;
+                if (gameObject != null)
+                {
+                    gameObject.SetActive(active);
+                }
+            }
+            catch
+            {
+                // Best-effort scene visual sync; unsupported fields should not break co-op.
+            }
+        }
+
+        private static void SetPrivateColliderEnabled(object target, string fieldName, bool enabled)
+        {
+            var field = target != null ? FindInstanceField(target.GetType(), fieldName) : null;
+            if (field == null) return;
+            try
+            {
+                var collider = field.GetValue(target) as Collider;
+                if (collider != null)
+                {
+                    collider.enabled = enabled;
+                }
+            }
+            catch
+            {
+                // Best-effort scene visual sync; unsupported fields should not break co-op.
+            }
+        }
+
+        private static bool IsUnsafeClientCabinPlayerState(CabinGameManager.PlayerState state)
+        {
+            return state != CabinGameManager.PlayerState.Normal &&
+                   state != CabinGameManager.PlayerState.Driving;
+        }
+
         private void SyncMikeVariantIfChanged()
         {
             if (_cabinGameManager == null) return;
@@ -2867,6 +3609,8 @@ namespace WoodburySpectatorSync.Coop
             _aiDisabled = false;
             _pendingScene = null;
             _pendingSceneIndex = -1;
+            _deferredScene = null;
+            _deferredSceneIndex = -1;
             _pendingStartSeq = -1;
             _loading = null;
             _isLoading = false;
@@ -2885,6 +3629,8 @@ namespace WoodburySpectatorSync.Coop
             _loadingStartTime = 0f;
             _loadingLastProgress = 0f;
             _loadingLastProgressTime = 0f;
+            _nextSceneLoadProgressLogTime = 0f;
+            _sceneLoadTimeoutLogged = false;
             _loadingSceneName = null;
             _loadingSceneIndex = -1;
             _localFpc = null;
@@ -2914,7 +3660,6 @@ namespace WoodburySpectatorSync.Coop
             _lastAppliedHostTransformSeq = 0;
             _forcedMikeTarget = null;
             _forcedMikeReason = string.Empty;
-            _mikeControllersDisabled = false;
             _hasMikeState = false;
             _lastMikeSequence = SequenceType.NotInAnySequence;
             _lastMikeState = CabinGameManager.CurrentMike.Prefishing;
@@ -2933,6 +3678,7 @@ namespace WoodburySpectatorSync.Coop
             _pendingDoorStates.Clear();
             _pendingHoldableStates.Clear();
             _pendingAiStates.Clear();
+            _smoothedAiStates.Clear();
             _pendingCabinHouseFlags.Clear();
             _pendingCabinGameFlags.Clear();
             _pendingPizzeriaFlags.Clear();
@@ -2962,6 +3708,7 @@ namespace WoodburySpectatorSync.Coop
             _nextAiDebugLogTime = 0f;
             _aiLastPositions.Clear();
             _aiLastTimes.Clear();
+            _smoothedAiStates.Clear();
             _aiAnimatorCache.Clear();
             _aiAnimatorParams.Clear();
             _disabledTriggerBehaviours.Clear();
@@ -3339,8 +4086,6 @@ namespace WoodburySpectatorSync.Coop
 
         private void DisableLocalMikeControllers()
         {
-            if (_mikeControllersDisabled) return;
-
             DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeCabinCookController>());
             DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeCabin>());
             DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeFishing>());
@@ -3350,14 +4095,27 @@ namespace WoodburySpectatorSync.Coop
             DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeEndGame>());
             DisableMikeBehaviour(UnityEngine.Object.FindObjectOfType<MikeInCar>());
 
-            _mikeControllersDisabled = true;
         }
 
         private static void DisableMikeBehaviour(MonoBehaviour behaviour)
         {
             if (behaviour == null) return;
-            if (!behaviour.enabled) return;
-            behaviour.enabled = false;
+            if (behaviour.enabled)
+            {
+                behaviour.enabled = false;
+            }
+
+            var pathAgent = behaviour.GetComponent<NavmeshPathAgent>();
+            if (pathAgent != null && pathAgent.enabled)
+            {
+                pathAgent.enabled = false;
+            }
+
+            var navAgent = behaviour.GetComponent<NavMeshAgent>();
+            if (navAgent != null && navAgent.enabled)
+            {
+                navAgent.enabled = false;
+            }
         }
 
         private static bool IsLocalPlayerAgent(NavMeshAgent agent)

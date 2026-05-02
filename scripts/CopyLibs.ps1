@@ -30,6 +30,7 @@ $optional = @(
     "UnityEngine.AnimationModule.dll",
     "UnityEngine.AIModule.dll",
     "UnityEngine.UIModule.dll",
+    "UnityEngine.TextRenderingModule.dll",
     "UnityEngine.SceneManagementModule.dll",
     "UnityEngine.UnityWebRequestModule.dll",
     "UnityEngine.AssetBundleModule.dll",

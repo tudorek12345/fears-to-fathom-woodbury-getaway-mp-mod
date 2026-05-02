@@ -224,6 +224,9 @@ namespace WoodburySpectatorSync.Coop
                     Status = "Connecting";
                     _client = new TcpClient();
                     _client.NoDelay = true;
+                    _logger.LogInfo("Co-op connecting to host " +
+                        _settings.SpectatorHostIP.Value + ":" + _settings.HostPort.Value +
+                        " timeout=" + ConnectTimeoutMs + "ms");
                     ConnectWithTimeout(_client, _settings.SpectatorHostIP.Value, _settings.HostPort.Value, ConnectTimeoutMs);
                     _stream = _client.GetStream();
                     _connected = true;
@@ -235,7 +238,8 @@ namespace WoodburySpectatorSync.Coop
                         ConnectedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                     };
                     Status = "Connected";
-                    _logger.LogInfo("Co-op connected to host");
+                    _logger.LogInfo("Co-op connected to host session=" + _activeHostSession.SessionId +
+                        " endpoint=" + _activeHostSession.Host + ":" + _activeHostSession.Port);
 
                     StartUdp();
 
@@ -249,7 +253,10 @@ namespace WoodburySpectatorSync.Coop
                 catch (Exception ex)
                 {
                     Status = "Retrying";
-                    _logger.LogWarning("Co-op connect failed: " + ex.Message);
+                    _logger.LogWarning("Co-op connect failed host=" +
+                        _settings.SpectatorHostIP.Value + ":" + _settings.HostPort.Value +
+                        " error=" + ex.GetType().Name + ": " + ex.Message +
+                        " retryInMs=" + RetryDelayMs);
                 }
                 finally
                 {

@@ -82,12 +82,14 @@ namespace WoodburySpectatorSync.Coop
         private const string RoadTripTruckFlagPrefix = RoadTripFlagPrefix + "Truck.";
         private const float MaxInteractDistanceMeters = 3.5f;
         private const float InteractLosPaddingMeters = 0.2f;
+        private const long CabinMikeAnimPhaseSendIntervalMs = 250;
 
         private long _nextPlayerSendMs;
         private long _nextWorldSendMs;
         private long _nextStorySendMs;
         private long _nextFullSyncMs;
         private long _nextInputSendMs;
+        private long _nextCabinMikeAnimPhaseSendMs;
         private bool _lastClientConnected;
         private string _lastSceneName = string.Empty;
         private bool _clientSceneReady;
@@ -123,6 +125,10 @@ namespace WoodburySpectatorSync.Coop
         private string _lastStoryEventKey = string.Empty;
         private int _lastStoryEventValue;
         private long _lastStoryEventMs;
+        private Transform _lastCabinMikeSyncTarget;
+        private string _lastCabinMikeSyncReason = string.Empty;
+        private float _nextCabinMikeSyncLogTime;
+        private string _lastCabinMikeSyncDebug = "-";
 
         private readonly string[] _storyKeys = new[]
         {
@@ -178,10 +184,28 @@ namespace WoodburySpectatorSync.Coop
 
         private readonly string[] _cabinGameFieldNames = new[]
         {
+            "currentCabinSceneType",
             "CurrentSequence",
-            "currentPlayerState",
-            "inConversation",
-            "currentMike"
+            "currentMike",
+            "hasHadJengaConvo",
+            "hasHadTurnOffLightsConvo",
+            "mikeHasPlacedBasementTable",
+            "isBasementLightTurnedOff",
+            "isPlayingOuija",
+            "fishingDone",
+            "playerHasFish",
+            "mikeHasFish",
+            "mikeHasSatOnSofaWithFishPlate",
+            "playerInAttic",
+            "cabinHikerWalkDone",
+            "hikerIsVisibleToPlayer",
+            "hasShownHikerRealizationSub",
+            "hasTalkedWithHiker",
+            "stopShowingPostHikerSleepSub",
+            "mikeSaidTurnOffLight",
+            "playerSittingOnBed",
+            "hasPlayedEerieHitForHiker",
+            "forcedTurnedOnBasementLights"
         };
 
         private readonly string[] _pizzeriaFieldNames = new[]
@@ -313,6 +337,7 @@ namespace WoodburySpectatorSync.Coop
         public string LastStoryEventKey => _lastStoryEventKey;
         public int LastStoryEventValue => _lastStoryEventValue;
         public long LastStoryEventMs => _lastStoryEventMs;
+        public string LastCabinMikeSyncDebug => _lastCabinMikeSyncDebug;
 
         public void Shutdown()
         {
@@ -1071,9 +1096,12 @@ namespace WoodburySpectatorSync.Coop
             }
 
             cache[key] = value;
-            _lastStoryEventKey = key;
-            _lastStoryEventValue = value;
-            _lastStoryEventMs = nowMs;
+            if (!IsHighFrequencyStoryFlag(key))
+            {
+                _lastStoryEventKey = key;
+                _lastStoryEventValue = value;
+                _lastStoryEventMs = nowMs;
+            }
             _server.Enqueue(new StoryFlagMessage(key, value));
         }
 
@@ -1188,12 +1216,11 @@ namespace WoodburySpectatorSync.Coop
                 _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
             }
 
-            var candidates = new List<Transform>();
-            CollectCabinMikeTransforms(candidates);
-
-            for (var i = 0; i < candidates.Count; i++)
+            var target = ResolveCabinMikeSyncTarget(out var reason);
+            if (target != null)
             {
-                TryEnqueueAiState(candidates[i], movementThreshold: 0.02f, rotationThreshold: 0.5f);
+                MaybeLogCabinMikeSyncTarget(target, reason);
+                TryEnqueueAiState(target, movementThreshold: 0.02f, rotationThreshold: 0.5f, allowCabinMike: true);
             }
         }
 
@@ -1222,43 +1249,32 @@ namespace WoodburySpectatorSync.Coop
                 nextStateHash = next.fullPathHash != 0 ? next.fullPathHash : next.shortNameHash;
             }
 
-            EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimStateHashKey, stateHash, nowMs);
-            EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimLoopKey, loop, nowMs);
-            EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimPhaseKey, phase10, nowMs);
             EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimTransitionKey, transition, nowMs);
             EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimNextStateKey, nextStateHash, nowMs);
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimStateHashKey, stateHash, nowMs);
+            if (nowMs >= _nextCabinMikeAnimPhaseSendMs)
+            {
+                _nextCabinMikeAnimPhaseSendMs = nowMs + CabinMikeAnimPhaseSendIntervalMs;
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimLoopKey, loop, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinMikeAnimPhaseKey, phase10, nowMs);
+            }
         }
 
         private bool TryGetCabinMikeAnimator(out Animator animator)
         {
             animator = null;
 
-            var candidates = new List<Transform>();
-            CollectCabinMikeTransforms(candidates);
-
-            Animator fallback = null;
-            for (var i = 0; i < candidates.Count; i++)
+            var target = ResolveCabinMikeSyncTarget();
+            if (target != null)
             {
-                var candidate = candidates[i];
-                if (candidate == null) continue;
-
-                var candidateAnimator = candidate.GetComponentInChildren<Animator>(true);
-                if (candidateAnimator == null) continue;
-
-                if (candidate.gameObject.activeInHierarchy && HasRenderable(candidate))
+                animator = target.GetComponentInChildren<Animator>(true);
+                if (animator != null)
                 {
-                    animator = candidateAnimator;
                     return true;
-                }
-
-                if (fallback == null)
-                {
-                    fallback = candidateAnimator;
                 }
             }
 
-            animator = fallback;
-            return animator != null;
+            return false;
         }
 
         private void CollectCabinMikeTransforms(List<Transform> candidates)
@@ -1286,6 +1302,158 @@ namespace WoodburySpectatorSync.Coop
             TryAddMikeTransform(candidates, UnityEngine.Object.FindObjectOfType<MikeEndGame>());
         }
 
+        private Transform ResolveCabinMikeSyncTarget()
+        {
+            return ResolveCabinMikeSyncTarget(out _);
+        }
+
+        private Transform ResolveCabinMikeSyncTarget(out string reason)
+        {
+            reason = string.Empty;
+            if (_cabinGameManager == null)
+            {
+                reason = "active:no-manager";
+                return GetActiveCabinMikeTarget();
+            }
+
+            var seq = _cabinGameManager.CurrentSequence;
+            if (IsCabinCookMikeSequence(seq))
+            {
+                var controller = _cabinMikeControllerField != null
+                    ? _cabinMikeControllerField.GetValue(_cabinGameManager) as Component
+                    : null;
+                if (controller != null && IsActiveRenderable(controller.transform))
+                {
+                    reason = "seq:" + seq;
+                    return controller.transform;
+                }
+
+                var activeCookTarget = GetActiveCabinCookMikeTarget();
+                if (activeCookTarget != null)
+                {
+                    reason = "seq:" + seq + ":activefallback";
+                    return activeCookTarget;
+                }
+
+                if (controller != null && HasRenderable(controller.transform))
+                {
+                    reason = "seq:" + seq + ":inactive-controller";
+                    return controller.transform;
+                }
+
+                if (_cabinGameManager.mikeCabin != null && IsActiveRenderable(_cabinGameManager.mikeCabin.transform))
+                {
+                    reason = "seq:" + seq + ":cabinfallback";
+                    return _cabinGameManager.mikeCabin.transform;
+                }
+            }
+
+            if (seq == SequenceType.Fishing && _cabinGameManager.mikeFishing != null)
+            {
+                reason = "seq:" + seq;
+                return _cabinGameManager.mikeFishing.transform;
+            }
+
+            switch (_cabinGameManager.currentMike)
+            {
+                case CabinGameManager.CurrentMike.Prefishing:
+                case CabinGameManager.CurrentMike.PostFishing:
+                    reason = "currentMike:" + _cabinGameManager.currentMike;
+                    if (_cabinGameManager.mikeCabin != null) return _cabinGameManager.mikeCabin.transform;
+                    break;
+                case CabinGameManager.CurrentMike.Fishing:
+                    reason = "currentMike:" + _cabinGameManager.currentMike;
+                    if (_cabinGameManager.mikeFishing != null) return _cabinGameManager.mikeFishing.transform;
+                    break;
+                case CabinGameManager.CurrentMike.PostEating:
+                    reason = "currentMike:" + _cabinGameManager.currentMike;
+                    if (_cabinGameManager.mikePostEating != null) return _cabinGameManager.mikePostEating.transform;
+                    break;
+            }
+
+            reason = "active";
+            return GetActiveCabinMikeTarget();
+        }
+
+        private static bool IsCabinCookMikeSequence(SequenceType seq)
+        {
+            return seq == SequenceType.Cooking ||
+                   seq == SequenceType.PickingBoardGame ||
+                   seq == SequenceType.PlayingJenga ||
+                   seq == SequenceType.GoingToPlayOuija ||
+                   seq == SequenceType.PlayingOuija ||
+                   seq == SequenceType.Eating;
+        }
+
+        private void MaybeLogCabinMikeSyncTarget(Transform target, string reason)
+        {
+            if (target == null || _cabinGameManager == null) return;
+
+            var path = NetPath.GetPath(target);
+            _lastCabinMikeSyncDebug =
+                _cabinGameManager.CurrentSequence + "/" +
+                _cabinGameManager.currentMike + " -> " +
+                target.name + " (" + reason + ")";
+
+            var changed = !ReferenceEquals(_lastCabinMikeSyncTarget, target) ||
+                          !string.Equals(_lastCabinMikeSyncReason, reason, StringComparison.Ordinal);
+            var now = Time.realtimeSinceStartup;
+            if (!changed && now < _nextCabinMikeSyncLogTime)
+            {
+                return;
+            }
+
+            _lastCabinMikeSyncTarget = target;
+            _lastCabinMikeSyncReason = reason ?? string.Empty;
+            _nextCabinMikeSyncLogTime = now + 5f;
+            _logger.LogInfo("Mike sync target: seq=" + _cabinGameManager.CurrentSequence +
+                            " currentMike=" + _cabinGameManager.currentMike +
+                            " target=" + target.name +
+                            " path=" + (string.IsNullOrEmpty(path) ? "-" : path) +
+                            " reason=" + reason +
+                            " active=" + target.gameObject.activeInHierarchy +
+                            " renderable=" + HasRenderable(target));
+        }
+
+        private Transform GetActiveCabinMikeTarget()
+        {
+            var candidates = new List<Transform>();
+            CollectCabinMikeTransforms(candidates);
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy) continue;
+                if (HasRenderable(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        private Transform GetActiveCabinCookMikeTarget()
+        {
+            if (_cabinGameManager == null) return null;
+
+            var candidates = new List<Transform>();
+            TryAddMikeTransform(candidates, _cabinMikeControllerField != null ? _cabinMikeControllerField.GetValue(_cabinGameManager) as Component : null);
+            if (_cabinGameManager.mikePostEating != null) candidates.Add(_cabinGameManager.mikePostEating.transform);
+            if (_cabinGameManager.mikeCabin != null) candidates.Add(_cabinGameManager.mikeCabin.transform);
+            if (_cabinGameManager.mikeObject != null) candidates.Add(_cabinGameManager.mikeObject.transform);
+
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                if (IsActiveRenderable(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
         private static void TryAddMikeTransform(List<Transform> list, Component component)
         {
             if (list == null || component == null || component.transform == null) return;
@@ -1299,7 +1467,18 @@ namespace WoodburySpectatorSync.Coop
             return target.GetComponentInChildren<Renderer>(true) != null;
         }
 
-        private void TryEnqueueAiState(Transform transform, float movementThreshold = 0.05f, float rotationThreshold = 1f)
+        private static bool IsActiveRenderable(Transform target)
+        {
+            if (target == null) return false;
+            if (!target.gameObject.activeInHierarchy) return false;
+            return HasRenderable(target);
+        }
+
+        private void TryEnqueueAiState(
+            Transform transform,
+            float movementThreshold = 0.05f,
+            float rotationThreshold = 1f,
+            bool allowCabinMike = false)
         {
             if (transform == null) return;
 
@@ -1310,7 +1489,9 @@ namespace WoodburySpectatorSync.Coop
                 Rotation = transform.rotation,
                 Active = transform.gameObject.activeInHierarchy
             };
-            if (string.IsNullOrEmpty(state.Path)) return;
+            if (string.IsNullOrEmpty(state.Path) || IsCoopProxyPath(state.Path)) return;
+            if (!allowCabinMike && IsCabinMikePath(state.Path)) return;
+            if (allowCabinMike && !state.Active) return;
 
             if (_aiStates.TryGetValue(state.Path, out var last) &&
                 last.Active == state.Active &&
@@ -1322,6 +1503,27 @@ namespace WoodburySpectatorSync.Coop
 
             _aiStates[state.Path] = state;
             _server.Enqueue(new AiTransformMessage(state));
+        }
+
+        private static bool IsHighFrequencyStoryFlag(string key)
+        {
+            return !string.IsNullOrEmpty(key) &&
+                   key.StartsWith(CabinMikeAnimPrefix, StringComparison.Ordinal);
+        }
+
+        private static bool IsCoopProxyPath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   (path.IndexOf("CoopRemotePlayer", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    path.IndexOf("CoopHostAvatar", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    path.IndexOf("CoopClientAvatar", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private static bool IsCabinMikePath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   path.StartsWith("CabinScene/", StringComparison.OrdinalIgnoreCase) &&
+                   path.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void SendFullState(bool force)
@@ -1470,7 +1672,7 @@ namespace WoodburySpectatorSync.Coop
             var playerController = PlayerController.GetInstance();
             if (playerController == null && !HasConfiguredRemotePlayerPath()) return;
 
-            var fps = _playerFirstPersonField != null
+            var fps = playerController != null && _playerFirstPersonField != null
                 ? _playerFirstPersonField.GetValue(playerController) as FirstPersonController
                 : null;
             if (fps == null && !HasConfiguredRemotePlayerPath()) return;

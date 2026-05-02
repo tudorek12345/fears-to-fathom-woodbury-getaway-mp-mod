@@ -212,7 +212,7 @@ Bundle tooling lives in `tools/AvatarBundle` and expects Unity 2021.3.x. The fir
 powershell -ExecutionPolicy Bypass -File .\scripts\Build-AvatarBundle.ps1 -UnityPath "C:\Program Files\Unity\Hub\Editor\2021.3.33f1\Editor\Unity.exe" -InstallToGameDir "C:\Games\Fears to Fathom - Woodbury Getaway"
 ```
 
-Current bundle output is render-only/static on purpose. It strips Animator/AnimationClip assets so Unity 2021.3 can validate and the game can prove `AssetBundle.LoadFromFile` before locomotion clips are reintroduced.
+Current bundle output includes a basic `QuaterniusLocomotion` AnimatorController. Runtime code rejects older render-only bundles and falls back to the grounded procedural body instead of showing a static T-pose.
 
 ## Networking notes
 

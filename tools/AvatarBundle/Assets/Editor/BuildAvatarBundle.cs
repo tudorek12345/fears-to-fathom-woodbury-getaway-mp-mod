@@ -97,6 +97,22 @@ namespace WoodburyAvatarBundle
                     {
                         throw new InvalidOperationException("Avatar bundle validation failed: prefab has no renderers " + entry.PrefabName);
                     }
+
+                    var animators = prefab.GetComponentsInChildren<Animator>(true);
+                    var hasController = false;
+                    for (var i = 0; i < animators.Length; i++)
+                    {
+                        if (animators[i] != null && animators[i].runtimeAnimatorController != null)
+                        {
+                            hasController = true;
+                            break;
+                        }
+                    }
+
+                    if (!hasController)
+                    {
+                        throw new InvalidOperationException("Avatar bundle validation failed: prefab has no AnimatorController " + entry.PrefabName);
+                    }
                 }
 
                 Debug.Log("Woodbury avatar bundle validated: " + bundlePath);
@@ -141,6 +157,7 @@ namespace WoodburyAvatarBundle
             var missing = new List<string>();
 
             AssignBundleName(ManifestAssetPath, bundleName, missing);
+            AssignBundleName("Assets/AvatarBundle/Controllers/QuaterniusLocomotion.controller", bundleName, missing);
             foreach (var entry in Entries)
             {
                 AssignBundleName(PrefabRoot + "/" + entry.PrefabName + ".prefab", bundleName, missing);

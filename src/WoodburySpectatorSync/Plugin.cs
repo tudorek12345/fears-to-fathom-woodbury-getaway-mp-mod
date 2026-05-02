@@ -24,6 +24,7 @@ namespace WoodburySpectatorSync
         private CameraFollower _cameraFollower;
         private SceneSync _sceneSync;
         private Overlay _overlay;
+        private CoopBrandMark _brandMark;
         private RemoteDialogueOverlay _remoteDialogueOverlay;
         private SessionLog _sessionLog;
         private CoopServer _coopServer;
@@ -37,6 +38,13 @@ namespace WoodburySpectatorSync
         private string _lastStatusSnapshot = string.Empty;
         private float _nextStatusLogTime;
         private float _nextHeartbeatLogTime;
+        private string _cachedOverlayText;
+        private int _cachedOverlayLineCount;
+        private string _cachedOverlaySnapshot = string.Empty;
+        private float _nextOverlayBuildTime;
+
+        private const float SessionSnapshotLogIntervalSeconds = 15f;
+        private const float OverlayBuildIntervalSeconds = 0.25f;
 
         private string _currentProgressMarker = string.Empty;
         private int _progressNoteIndex;
@@ -49,8 +57,11 @@ namespace WoodburySpectatorSync
             ApplyRuntimeOverrides(_settings);
             Application.runInBackground = true;
             _overlay = new Overlay(_settings);
+            _brandMark = new CoopBrandMark();
             _remoteDialogueOverlay = new RemoteDialogueOverlay();
-            _sessionLog = new SessionLog(Logger, _settings.ModeSetting.Value.ToString());
+            _sessionLog = ShouldEnableSessionLog(_settings)
+                ? new SessionLog(Logger, _settings.ModeSetting.Value.ToString())
+                : null;
             _cameraFollower = new CameraFollower(_settings);
             _sceneSync = new SceneSync();
             _hostServer = new HostServer(Logger, _settings);
@@ -72,6 +83,20 @@ namespace WoodburySpectatorSync
             Logger.LogInfo("Woodbury Spectator Sync loaded (runInBackground enabled)");
             _sessionLog?.Write("Plugin loaded");
             _sessionLog?.Write("Config: " + (configFile != null ? configFile.ConfigFilePath : "default"));
+        }
+
+        private static bool ShouldEnableSessionLog(Settings settings)
+        {
+            var overrideValue = Environment.GetEnvironmentVariable("WSS_SESSION_LOG");
+            if (!string.IsNullOrWhiteSpace(overrideValue) &&
+                bool.TryParse(overrideValue, out var enabled))
+            {
+                return enabled;
+            }
+
+            return settings != null &&
+                   settings.VerboseLogging != null &&
+                   settings.VerboseLogging.Value;
         }
 
         private ConfigFile CreateConfigFile()
@@ -200,10 +225,9 @@ namespace WoodburySpectatorSync
                     : _settings.ModeSetting.Value == Mode.CoopHost
                         ? (_coopServer.IsRunning ? (_coopServer.IsClientConnected ? "Co-op hosting (client connected)" : "Co-op hosting (waiting)") : "Co-op host idle")
                         : _coopClient.Status);
-            var extra = BuildOverlayExtras();
-            var overlayText = _overlay.Draw(modeLabel, status, SceneManager.GetActiveScene().name, extra);
-            MaybeLogOverlay(overlayText);
-            MaybeLogStatus(modeLabel, status, SceneManager.GetActiveScene().name);
+            var sceneName = SceneManager.GetActiveScene().name;
+            var overlayText = DrawCachedOverlay(modeLabel, status, sceneName);
+            MaybeLogStatus(modeLabel, status, sceneName);
 
             if (_settings.ModeSetting.Value == Mode.CoopClient && _coopClientCoordinator != null)
             {
@@ -212,6 +236,32 @@ namespace WoodburySpectatorSync
                     _remoteDialogueOverlay.Draw(speaker, text);
                 }
             }
+
+            _brandMark?.Draw();
+        }
+
+        private string DrawCachedOverlay(string modeLabel, string status, string sceneName)
+        {
+            if (_overlay == null || !_overlay.IsVisible)
+            {
+                return null;
+            }
+
+            var now = Time.realtimeSinceStartup;
+            var snapshot = modeLabel + "|" + status + "|" + sceneName;
+            if (_cachedOverlayText == null ||
+                snapshot != _cachedOverlaySnapshot ||
+                now >= _nextOverlayBuildTime)
+            {
+                var extra = BuildOverlayExtras();
+                _cachedOverlayText = _overlay.BuildText(modeLabel, status, sceneName, extra, out _cachedOverlayLineCount);
+                _cachedOverlaySnapshot = snapshot;
+                _nextOverlayBuildTime = now + OverlayBuildIntervalSeconds;
+            }
+
+            var overlayText = _overlay.DrawText(_cachedOverlayText, _cachedOverlayLineCount);
+            MaybeLogOverlay(overlayText);
+            return overlayText;
         }
 
         private void HandleHotkeys()
@@ -361,20 +411,23 @@ namespace WoodburySpectatorSync
                 var sequenceLabel = GetSequenceLabel();
                 return new[]
                 {
-                    "SceneReady: " + (_coopHost.ClientSceneReady ? "yes" : "no") + ", awaiting=" + (_coopHost.AwaitingSceneReady ? "yes" : "no"),
-                    "ClientScene: " + (string.IsNullOrEmpty(_coopHost.ClientSceneName) ? "-" : _coopHost.ClientSceneName),
-                    "LastSceneReq: " + FormatAge(nowMs, _coopHost.LastSceneRequestMs) + ", ready: " + FormatAge(nowMs, _coopHost.LastSceneReadyMs),
-                    "LastClientPkt: " + FormatAge(nowMs, _coopHost.LastClientTransformMs),
-                    "HostTx: " + FormatAge(nowMs, _coopHost.LastHostTransformSendMs) +
-                    ", tcpTx: " + FormatAge(nowMs, _coopHost.LastHostTransformSendTcpMs) +
-                    ", udpTx: " + FormatAge(nowMs, _coopHost.LastHostTransformSendUdpMs) +
-                    ", count=" + _coopHost.HostTransformSendCount,
-                    "HostState: enq=" + _coopServer.HostStateEnqueued +
-                    ", sent=" + _coopServer.HostStateSent +
-                    ", last=" + FormatAge(nowMs, _coopServer.LastHostStateSentMs) +
-                    ", type=" + _coopServer.LastHostStateType,
-                    "Sequence: " + sequenceLabel,
-                    BuildDialogueStatus("Dialogue", _coopHost.DialogueConversationId, _coopHost.DialogueEntryId, _coopHost.DialogueChoiceIndex, _coopHost.DialogueLastEventMs, nowMs),
+                    "Peer: scene=" + (string.IsNullOrEmpty(_coopHost.ClientSceneName) ? "-" : _coopHost.ClientSceneName) +
+                    " ready=" + (_coopHost.ClientSceneReady ? "yes" : "no") +
+                    " awaiting=" + (_coopHost.AwaitingSceneReady ? "yes" : "no"),
+                    "SceneSync: req=" + FormatAge(nowMs, _coopHost.LastSceneRequestMs) +
+                    " ready=" + FormatAge(nowMs, _coopHost.LastSceneReadyMs),
+                    "Net: clientPkt=" + FormatAge(nowMs, _coopHost.LastClientTransformMs) +
+                    " hostTx=" + FormatAge(nowMs, _coopHost.LastHostTransformSendMs) +
+                    " tcp=" + FormatAge(nowMs, _coopHost.LastHostTransformSendTcpMs) +
+                    " udp=" + FormatAge(nowMs, _coopHost.LastHostTransformSendUdpMs),
+                    "World: enq=" + _coopServer.HostStateEnqueued +
+                    " sent=" + _coopServer.HostStateSent +
+                    " type=" + _coopServer.LastHostStateType +
+                    " age=" + FormatAge(nowMs, _coopServer.LastHostStateSentMs),
+                    "Seq: " + sequenceLabel,
+                    "Mike: " + _coopHost.LastCabinMikeSyncDebug,
+                    BuildAvatarStatus(),
+                    BuildDialogueStatus("Dlg", _coopHost.DialogueConversationId, _coopHost.DialogueEntryId, _coopHost.DialogueChoiceIndex, _coopHost.DialogueLastEventMs, nowMs),
                     BuildStoryStatus(_coopHost.LastStoryEventKey, _coopHost.LastStoryEventValue, _coopHost.LastStoryEventMs, nowMs),
                     BuildUdpLine(_coopServer.HasUdp, _coopServer.UdpLastReceiveMs, nowMs)
                 };
@@ -400,25 +453,50 @@ namespace WoodburySpectatorSync
                 var appliedNetMs = _coopClientCoordinator.LastAppliedHostNetMs;
                 return new[]
                 {
-                    "Ping: " + FormatPing(_coopClient.LastPingRttMs) + ", TCP lastRx: " + FormatAge(nowMs, _coopClient.LastTcpReceiveMs),
-                    BuildUdpLine(_coopClient.HasUdp, _coopClient.UdpLastReceiveMs, nowMs),
-                    "SceneSync: " + sceneState + ", pending=" + pendingScene,
-                    "Pending queues: doors=" + _coopClientCoordinator.PendingDoorCount + ", holdables=" + _coopClientCoordinator.PendingHoldableCount + ", ai=" + _coopClientCoordinator.PendingAiCount,
-                    "HostRxAge: " + FormatAge(nowMs, _coopClientCoordinator.LastHostTransformReceiveMs),
-                    "HostRx: count=" + _coopClientCoordinator.HostTransformReceiveCount + ", id=" + hostId,
-                    "HostNet: tcp=" + _coopClient.TcpTransformCount + " (" + FormatAge(nowMs, _coopClient.LastTcpTransformMs) + "), udp=" + _coopClient.UdpTransformCount + " (" + FormatAge(nowMs, _coopClient.LastUdpTransformMs) + "), last=" + _coopClient.LastTransformSource,
-                    "HostState: read=" + _coopClient.HostStateReadCount + ", enq=" + _coopClient.HostStateEnqueuedCount + ", applied=" + _coopClientCoordinator.HostStateAppliedCount,
-                    "HostLatch: seq=" + latestSeq + ", consumed=" + consumedSeq + ", lastNet=" + FormatAge(nowMs, latestNetMs),
-                    "HostApplied: count=" + appliedCount + ", seq=" + appliedSeq + ", net=" + FormatAge(nowMs, appliedNetMs),
-                    "HostUpdateAge: " + _coopClientCoordinator.LastHostUpdateAgeSeconds.ToString("0.0") + "s",
-                    "Sequence: " + sequenceLabel,
-                    BuildDialogueStatus("DialogueHost", _coopClientCoordinator.HostDialogueConversationId, _coopClientCoordinator.HostDialogueEntryId, _coopClientCoordinator.HostDialogueChoiceIndex, _coopClientCoordinator.HostDialogueEventMs, nowMs),
-                    "DialogueLocal: " + localDialogue,
+                    "Net: ping=" + FormatPing(_coopClient.LastPingRttMs) +
+                    " tcpRx=" + FormatAge(nowMs, _coopClient.LastTcpReceiveMs) +
+                    " udpRx=" + FormatAge(nowMs, _coopClient.UdpLastReceiveMs),
+                    "SceneSync: " + sceneState + " pending=" + pendingScene,
+                    "Queues: doors=" + _coopClientCoordinator.PendingDoorCount +
+                    " holdables=" + _coopClientCoordinator.PendingHoldableCount +
+                    " ai=" + _coopClientCoordinator.PendingAiCount,
+                    "HostRx: count=" + _coopClientCoordinator.HostTransformReceiveCount +
+                    " id=" + hostId +
+                    " age=" + FormatAge(nowMs, _coopClientCoordinator.LastHostTransformReceiveMs),
+                    "HostNet: tcp=" + _coopClient.TcpTransformCount +
+                    " udp=" + _coopClient.UdpTransformCount +
+                    " last=" + _coopClient.LastTransformSource,
+                    "Sync: state " + _coopClient.HostStateReadCount +
+                    "/" + _coopClient.HostStateEnqueuedCount +
+                    "/" + _coopClientCoordinator.HostStateAppliedCount +
+                    " latch " + latestSeq + ">" + consumedSeq +
+                    " net=" + FormatAge(nowMs, latestNetMs),
+                    "Applied: count=" + appliedCount +
+                    " seq=" + appliedSeq +
+                    " net=" + FormatAge(nowMs, appliedNetMs) +
+                    " age=" + _coopClientCoordinator.LastHostUpdateAgeSeconds.ToString("0.0") + "s",
+                    "Seq: " + sequenceLabel,
+                    "Mike: " + _coopClientCoordinator.LastMikeSyncDebug,
+                    BuildAvatarStatus(),
+                    BuildDialogueStatus("DlgHost", _coopClientCoordinator.HostDialogueConversationId, _coopClientCoordinator.HostDialogueEntryId, _coopClientCoordinator.HostDialogueChoiceIndex, _coopClientCoordinator.HostDialogueEventMs, nowMs),
+                    "DlgLocal: " + localDialogue,
                     BuildStoryStatus(_coopClientCoordinator.LastStoryEventKey, _coopClientCoordinator.LastStoryEventValue, _coopClientCoordinator.LastStoryEventMs, nowMs)
                 };
             }
 
             return null;
+        }
+
+        private string BuildAvatarStatus()
+        {
+            var source = _settings.CoopRemotePlayerAvatarSource != null
+                ? _settings.CoopRemotePlayerAvatarSource.Value.ToString()
+                : "Auto";
+            var id = _settings.CoopRemotePlayerAvatarId != null &&
+                     !string.IsNullOrWhiteSpace(_settings.CoopRemotePlayerAvatarId.Value)
+                ? _settings.CoopRemotePlayerAvatarId.Value.Trim()
+                : "-";
+            return "Avatar: " + source + " id=" + id;
         }
 
         private string BuildUdpLine(bool hasUdp, long lastReceiveMs, long nowMs)
@@ -500,7 +578,7 @@ namespace WoodburySpectatorSync
             if (now < _nextOverlayLogTime) return;
 
             _lastOverlaySnapshot = overlayText;
-            _nextOverlayLogTime = now + 5.0f;
+            _nextOverlayLogTime = now + SessionSnapshotLogIntervalSeconds;
             _sessionLog.Write("Overlay:");
             _sessionLog.Write(overlayText);
         }
@@ -514,7 +592,7 @@ namespace WoodburySpectatorSync
             if (snapshot == _lastStatusSnapshot && now < _nextStatusLogTime) return;
 
             _lastStatusSnapshot = snapshot;
-            _nextStatusLogTime = now + 5.0f;
+            _nextStatusLogTime = now + SessionSnapshotLogIntervalSeconds;
             _sessionLog.Write("State: mode=" + modeLabel + " status=" + status + " scene=" + sceneName);
         }
 
@@ -524,7 +602,7 @@ namespace WoodburySpectatorSync
 
             var now = Time.realtimeSinceStartup;
             if (now < _nextHeartbeatLogTime) return;
-            _nextHeartbeatLogTime = now + 5.0f;
+            _nextHeartbeatLogTime = now + SessionSnapshotLogIntervalSeconds;
 
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (_settings.ModeSetting.Value == Mode.CoopHost)

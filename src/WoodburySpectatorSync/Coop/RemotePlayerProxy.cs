@@ -47,6 +47,8 @@ namespace WoodburySpectatorSync.Coop
         {
             public GameObject SourceObject;
             public bool UseSyntheticCapsule;
+            public bool UseInvisiblePlaceholder;
+            public bool AllowSyntheticFallbackBody = true;
             public Vector3 InitialPosition;
             public Quaternion InitialRotation = Quaternion.identity;
             public string RigProfile;
@@ -88,6 +90,9 @@ namespace WoodburySpectatorSync.Coop
             new[] { "Crouch", "IsCrouching" },
             new[] { "Jump", "IsJumping" });
 
+        private const float CameraFallbackEyeHeight = 1.65f;
+        private const float SceneModelFallbackGroundYOffset = -0.06f;
+
         private readonly GameObject _root;
         private readonly CharacterController _characterController;
         private readonly bool _allowCharacterController;
@@ -112,7 +117,7 @@ namespace WoodburySpectatorSync.Coop
             bool allowCharacterController = false)
         {
             var source = ResolveSourceObject(settings, fallbackSource, logger, diagnosticsSink);
-            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule))
+            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule && !source.UseInvisiblePlaceholder))
             {
                 return null;
             }
@@ -145,13 +150,13 @@ namespace WoodburySpectatorSync.Coop
             ManualLogSource logger,
             Action<string> diagnosticsSink)
         {
-            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule))
+            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule && !source.UseInvisiblePlaceholder))
             {
                 throw new ArgumentNullException(nameof(source));
             }
 
             _allowCharacterController = allowCharacterController;
-            if (source.UseSyntheticCapsule)
+            if (source.UseSyntheticCapsule || source.UseInvisiblePlaceholder)
             {
                 _root = new GameObject("CoopRemotePlayer");
                 _root.transform.SetPositionAndRotation(source.InitialPosition, source.InitialRotation);
@@ -163,10 +168,12 @@ namespace WoodburySpectatorSync.Coop
 
                 var model = UnityEngine.Object.Instantiate(source.SourceObject);
                 model.name = "CoopRemotePlayerAvatar";
+                model.SetActive(true);
                 model.transform.SetParent(_root.transform, false);
                 model.transform.localPosition = new Vector3(0f, source.AvatarYOffset, 0f);
                 model.transform.localRotation = Quaternion.identity;
                 model.transform.localScale = Vector3.one * Mathf.Max(0.01f, source.AvatarScale);
+                AlignWrappedAvatarToGround(model, source.AvatarYOffset, logger, diagnosticsSink);
             }
             else
             {
@@ -208,8 +215,11 @@ namespace WoodburySpectatorSync.Coop
                 DisableColliders();
             }
 
+            var usedFallbackBody = source.AllowSyntheticFallbackBody && EnsureVisibleBody(tint, logger, diagnosticsSink);
+            EnsureAnimatorComponent(logger, diagnosticsSink, source.AllowSyntheticFallbackBody || CountRenderers(_root) > 0);
+
             _animator = _root.GetComponentInChildren<Animator>(true);
-            if (_animator != null)
+            if (_animator != null && _animator.runtimeAnimatorController != null)
             {
                 foreach (var param in _animator.parameters)
                 {
@@ -226,7 +236,6 @@ namespace WoodburySpectatorSync.Coop
 
             _animRig = ResolveRigMap(source.RigProfile);
 
-            var usedFallbackBody = EnsureVisibleBody(tint, logger, diagnosticsSink);
             LogAvatarDiagnostics(source, usedFallbackBody, logger, diagnosticsSink);
             if (_root != null)
             {
@@ -253,8 +262,10 @@ namespace WoodburySpectatorSync.Coop
                 _characterController.enabled = false;
             }
 
-            _root.transform.SetPositionAndRotation(state.Position, state.Rotation);
-            DriveAnimatorFromTransform(state.Position, state.Rotation);
+            var bodyPosition = ResolveBodyRootPosition(state);
+            var bodyRotation = ResolveUprightBodyRotation(state);
+            _root.transform.SetPositionAndRotation(bodyPosition, bodyRotation);
+            DriveAnimatorFromTransform(bodyPosition, bodyRotation);
 
             if (_cameraTransform != null)
             {
@@ -465,7 +476,50 @@ namespace WoodburySpectatorSync.Coop
                 return CreateCapsuleSource(settings, fallbackSource, "configured source=Capsule");
             }
 
-            if (avatarSource == RemotePlayerAvatarSource.Auto || avatarSource == RemotePlayerAvatarSource.GameModel)
+            if (avatarSource == RemotePlayerAvatarSource.Auto ||
+                avatarSource == RemotePlayerAvatarSource.AssetBundle)
+            {
+                if (AvatarAssetProvider.TryResolve(settings, logger, diagnosticsSink, out var avatarSelection))
+                {
+                    if (!IsUsableBundleAvatar(avatarSelection.Prefab, out var rejectReason))
+                    {
+                        LogWarning(logger, diagnosticsSink,
+                            "Remote player avatar fallback: AssetBundle avatar rejected id=" +
+                            avatarSelection.AvatarId + " reason=" + rejectReason);
+                    }
+                    else
+                    {
+                        return new SourceDescriptor
+                        {
+                            SourceObject = avatarSelection.Prefab,
+                            InitialPosition = fallbackSource != null ? fallbackSource.transform.position : Vector3.zero,
+                            InitialRotation = fallbackSource != null ? fallbackSource.transform.rotation : Quaternion.identity,
+                            RigProfile = ResolveConfiguredRig(settings, avatarSelection.RigProfile),
+                            UseAvatarWrapper = true,
+                            AvatarScale = avatarSelection.Scale,
+                            AvatarYOffset = avatarSelection.YOffset,
+                            SourceKind = "AssetBundle",
+                            SourceName = avatarSelection.AvatarId
+                        };
+                    }
+                }
+
+                if (TryResolveSceneGameModelFallback(settings, fallbackSource, logger, diagnosticsSink, out var sceneHuman))
+                {
+                    if (avatarSource == RemotePlayerAvatarSource.AssetBundle)
+                    {
+                        sceneHuman.FallbackReason = "AssetBundle avatar unavailable";
+                    }
+                    return sceneHuman;
+                }
+
+                if (avatarSource == RemotePlayerAvatarSource.AssetBundle)
+                {
+                    return CreateHiddenSource(settings, fallbackSource, "AssetBundle avatar unavailable");
+                }
+            }
+
+            if (avatarSource == RemotePlayerAvatarSource.GameModel)
             {
                 if (TryResolveGameModelAvatar(settings, fallbackSource, logger, diagnosticsSink, out var gameModel))
                 {
@@ -474,35 +528,35 @@ namespace WoodburySpectatorSync.Coop
 
                 if (avatarSource == RemotePlayerAvatarSource.GameModel)
                 {
-                    return CreateCapsuleSource(settings, fallbackSource, "no safe in-scene game model found");
+                    return CreateHiddenSource(settings, fallbackSource, "no safe in-scene game model found");
                 }
             }
 
-            var avatarId = GetConfiguredAvatarId(settings);
-            var shouldTryBundle = avatarSource == RemotePlayerAvatarSource.AssetBundle ||
-                                  (avatarSource == RemotePlayerAvatarSource.Auto && !IsSceneAutoAvatarId(avatarId));
-            if (shouldTryBundle)
+            return CreateHiddenSource(settings, fallbackSource, "AssetBundle avatar unavailable");
+        }
+
+        private static bool IsUsableBundleAvatar(GameObject prefab, out string reason)
+        {
+            reason = string.Empty;
+            if (prefab == null)
             {
-                if (AvatarAssetProvider.TryResolve(settings, logger, diagnosticsSink, out var avatarSelection))
-                {
-                    return new SourceDescriptor
-                    {
-                        SourceObject = avatarSelection.Prefab,
-                        InitialPosition = fallbackSource != null ? fallbackSource.transform.position : Vector3.zero,
-                        InitialRotation = fallbackSource != null ? fallbackSource.transform.rotation : Quaternion.identity,
-                        RigProfile = ResolveConfiguredRig(settings, avatarSelection.RigProfile),
-                        UseAvatarWrapper = true,
-                        AvatarScale = avatarSelection.Scale,
-                        AvatarYOffset = avatarSelection.YOffset,
-                        SourceKind = "AssetBundle",
-                        SourceName = avatarSelection.AvatarId
-                    };
-                }
+                reason = "prefab is null";
+                return false;
             }
 
-            return CreateCapsuleSource(settings, fallbackSource, avatarSource == RemotePlayerAvatarSource.AssetBundle
-                ? "AssetBundle avatar unavailable"
-                : "no game model or AssetBundle avatar available");
+            if (CountRenderers(prefab) <= 0)
+            {
+                reason = "no renderers";
+                return false;
+            }
+
+            if (!HasUsableAnimator(prefab, out var animatorReason))
+            {
+                reason = animatorReason;
+                return false;
+            }
+
+            return true;
         }
 
         private static RemotePlayerAvatarSource ResolveAvatarSource(Settings settings)
@@ -517,13 +571,7 @@ namespace WoodburySpectatorSync.Coop
             var avatarId = settings != null && settings.CoopRemotePlayerAvatarId != null
                 ? settings.CoopRemotePlayerAvatarId.Value
                 : string.Empty;
-            return string.IsNullOrWhiteSpace(avatarId) ? "woodbury_scene_auto" : avatarId.Trim();
-        }
-
-        private static bool IsSceneAutoAvatarId(string avatarId)
-        {
-            return string.IsNullOrWhiteSpace(avatarId) ||
-                   string.Equals(avatarId, "woodbury_scene_auto", StringComparison.OrdinalIgnoreCase);
+            return string.IsNullOrWhiteSpace(avatarId) ? AvatarAssetProvider.DefaultAvatarId : avatarId.Trim();
         }
 
         private static bool TryResolveGameModelAvatar(
@@ -548,6 +596,8 @@ namespace WoodburySpectatorSync.Coop
                 InitialPosition = fallbackSource != null ? fallbackSource.transform.position : candidate.transform.position,
                 InitialRotation = fallbackSource != null ? fallbackSource.transform.rotation : candidate.transform.rotation,
                 RigProfile = ResolveConfiguredRig(settings, "Auto"),
+                UseAvatarWrapper = true,
+                AvatarYOffset = ResolveSceneModelFallbackYOffset(settings),
                 SourceKind = "GameModel",
                 SourceName = sourceName
             };
@@ -559,6 +609,53 @@ namespace WoodburySpectatorSync.Coop
             return true;
         }
 
+        private static bool TryResolveSceneGameModelFallback(
+            Settings settings,
+            FirstPersonController fallbackSource,
+            ManualLogSource logger,
+            Action<string> diagnosticsSink,
+            out SourceDescriptor source)
+        {
+            source = null;
+            GameObject candidate;
+            string sourceName;
+
+            if (!TryFindNonMikeSceneHuman(out candidate, out sourceName) &&
+                !TryFindGameModelAvatar("woodbury_scene_auto", out candidate, out sourceName))
+            {
+                LogWarning(logger, diagnosticsSink, "Remote player avatar fallback: no safe in-scene human or AI model found scene=" +
+                    SceneManager.GetActiveScene().name);
+                return false;
+            }
+
+            source = new SourceDescriptor
+            {
+                SourceObject = candidate,
+                InitialPosition = fallbackSource != null ? fallbackSource.transform.position : candidate.transform.position,
+                InitialRotation = fallbackSource != null ? fallbackSource.transform.rotation : candidate.transform.rotation,
+                RigProfile = ResolveConfiguredRig(settings, "Auto"),
+                UseAvatarWrapper = true,
+                AvatarYOffset = ResolveSceneModelFallbackYOffset(settings),
+                SourceKind = "GameModelFallback",
+                SourceName = sourceName
+            };
+
+            LogInfo(logger, diagnosticsSink, "Remote player avatar source: GameModelFallback object=" +
+                GetTransformPath(candidate.transform) +
+                " renderers=" + CountRenderers(candidate) +
+                " bounds=" + FormatBounds(candidate) +
+                " cloned=scripts-disabled colliders-disabled");
+            return true;
+        }
+
+        private static float ResolveSceneModelFallbackYOffset(Settings settings)
+        {
+            var configuredOffset = settings != null && settings.CoopRemotePlayerAvatarYOffset != null
+                ? settings.CoopRemotePlayerAvatarYOffset.Value
+                : 0f;
+            return SceneModelFallbackGroundYOffset + configuredOffset;
+        }
+
         private static bool TryFindGameModelAvatar(string avatarId, out GameObject candidate, out string sourceName)
         {
             candidate = null;
@@ -567,6 +664,8 @@ namespace WoodburySpectatorSync.Coop
             var normalizedId = string.IsNullOrWhiteSpace(avatarId) ? "woodbury_scene_auto" : avatarId.Trim().ToLowerInvariant();
             switch (normalizedId)
             {
+                case "woodbury_cabin_host":
+                    return TryFindNamedAvatar(new[] { "Host" }, out candidate, out sourceName);
                 case "woodbury_pizzeria_backpacker":
                     return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
                            TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName);
@@ -619,13 +718,32 @@ namespace WoodburySpectatorSync.Coop
                    TryFindComponentAvatar<MikeCabin>(out candidate, out sourceName);
         }
 
+        private static bool TryFindNonMikeSceneHuman(out GameObject candidate, out string sourceName)
+        {
+            if (TryFindNamedAvatar(new[] { "Host", "BackpackerV2", "Backpacker", "Hiker", "Nora" }, out candidate, out sourceName) &&
+                !IsMikePath(GetTransformPath(candidate.transform)))
+            {
+                return true;
+            }
+
+            candidate = null;
+            sourceName = string.Empty;
+            return false;
+        }
+
+        private static bool IsMikePath(string path)
+        {
+            return !string.IsNullOrEmpty(path) &&
+                   path.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
         private static bool TryFindComponentAvatar<T>(out GameObject candidate, out string sourceName)
             where T : Component
         {
             candidate = null;
             sourceName = string.Empty;
 
-            var components = UnityEngine.Object.FindObjectsOfType<T>();
+            var components = Resources.FindObjectsOfTypeAll<T>();
             for (var i = 0; i < components.Length; i++)
             {
                 var component = components[i];
@@ -646,7 +764,7 @@ namespace WoodburySpectatorSync.Coop
             sourceName = string.Empty;
             if (names == null || names.Length == 0) return false;
 
-            var transforms = UnityEngine.Object.FindObjectsOfType<Transform>();
+            var transforms = Resources.FindObjectsOfTypeAll<Transform>();
             for (var i = 0; i < transforms.Length; i++)
             {
                 var transform = transforms[i];
@@ -676,7 +794,6 @@ namespace WoodburySpectatorSync.Coop
         private static bool IsSafeAvatarCandidate(GameObject candidate)
         {
             if (candidate == null) return false;
-            if (!candidate.activeInHierarchy) return false;
 
             var scene = candidate.scene;
             var activeScene = SceneManager.GetActiveScene();
@@ -690,13 +807,42 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            if (path.IndexOf("Trigger", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("Collider", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("LookAt", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                path.IndexOf("Camera", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return false;
+            }
+
             if (candidate.GetComponentInParent<FirstPersonController>() != null ||
                 candidate.GetComponentInParent<PlayerController>() != null)
             {
                 return false;
             }
 
-            return CountVisibleRenderers(candidate) > 0;
+            if (CountRenderers(candidate) <= 0)
+            {
+                return false;
+            }
+
+            if (!HasUsableAnimator(candidate, out _))
+            {
+                return false;
+            }
+
+            if (!TryGetRendererBounds(candidate, out var bounds))
+            {
+                return false;
+            }
+
+            var size = bounds.size;
+            var horizontalMax = Mathf.Max(size.x, size.z);
+            return size.y >= 1.1f &&
+                   size.y <= 2.5f &&
+                   horizontalMax >= 0.2f &&
+                   horizontalMax <= 2.2f &&
+                   size.z <= 1.6f;
         }
 
         private static SourceDescriptor CreateCapsuleSource(Settings settings, FirstPersonController fallbackSource, string reason)
@@ -708,7 +854,22 @@ namespace WoodburySpectatorSync.Coop
                 InitialRotation = fallbackSource != null ? fallbackSource.transform.rotation : Quaternion.identity,
                 RigProfile = ResolveConfiguredRig(settings, "Auto"),
                 SourceKind = "Capsule",
-                SourceName = "compact_fallback",
+                SourceName = "procedural_humanoid",
+                FallbackReason = reason ?? string.Empty
+            };
+        }
+
+        private static SourceDescriptor CreateHiddenSource(Settings settings, FirstPersonController fallbackSource, string reason)
+        {
+            return new SourceDescriptor
+            {
+                UseInvisiblePlaceholder = true,
+                AllowSyntheticFallbackBody = false,
+                InitialPosition = fallbackSource != null ? fallbackSource.transform.position : Vector3.zero,
+                InitialRotation = fallbackSource != null ? fallbackSource.transform.rotation : Quaternion.identity,
+                RigProfile = ResolveConfiguredRig(settings, "Auto"),
+                SourceKind = "Hidden",
+                SourceName = "no_visible_avatar",
                 FallbackReason = reason ?? string.Empty
             };
         }
@@ -731,26 +892,74 @@ namespace WoodburySpectatorSync.Coop
         {
             if (CountVisibleRenderers(_root) > 0) return false;
 
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.transform.SetParent(_root.transform, false);
-            body.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-            body.transform.localScale = new Vector3(0.35f, 0.9f, 0.35f);
+            var animator = _root.GetComponent<Animator>();
+            if (animator == null)
+            {
+                animator = _root.AddComponent<Animator>();
+            }
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
-            var collider = body.GetComponent<Collider>();
+            CreatePrimitivePart(PrimitiveType.Capsule, "Torso", new Vector3(0f, 0.98f, 0f), new Vector3(0.28f, 0.34f, 0.18f), Quaternion.identity, tint);
+            CreatePrimitivePart(PrimitiveType.Sphere, "Head", new Vector3(0f, 1.58f, 0f), new Vector3(0.24f, 0.24f, 0.24f), Quaternion.identity, new Color(0.78f, 0.58f, 0.45f, 1f));
+            CreatePrimitivePart(PrimitiveType.Capsule, "LeftArm", new Vector3(-0.34f, 0.9f, 0f), new Vector3(0.08f, 0.32f, 0.08f), Quaternion.identity, new Color(0.78f, 0.58f, 0.45f, 1f));
+            CreatePrimitivePart(PrimitiveType.Capsule, "RightArm", new Vector3(0.34f, 0.9f, 0f), new Vector3(0.08f, 0.32f, 0.08f), Quaternion.identity, new Color(0.78f, 0.58f, 0.45f, 1f));
+            CreatePrimitivePart(PrimitiveType.Capsule, "LeftLeg", new Vector3(-0.12f, 0.34f, 0f), new Vector3(0.09f, 0.34f, 0.09f), Quaternion.identity, new Color(0.16f, 0.18f, 0.22f, 1f));
+            CreatePrimitivePart(PrimitiveType.Capsule, "RightLeg", new Vector3(0.12f, 0.34f, 0f), new Vector3(0.09f, 0.34f, 0.09f), Quaternion.identity, new Color(0.16f, 0.18f, 0.22f, 1f));
+
+            DisableColliders();
+            LogWarning(logger, diagnosticsSink, "Remote player avatar fallback body created: procedural humanoid height=1.7 animators=1 colliders=disabled");
+            return true;
+        }
+
+        private void EnsureAnimatorComponent(ManualLogSource logger, Action<string> diagnosticsSink, bool logIfAdded)
+        {
+            if (_root == null) return;
+
+            var animator = _root.GetComponentInChildren<Animator>(true);
+            if (animator == null)
+            {
+                animator = _root.AddComponent<Animator>();
+                if (logIfAdded)
+                {
+                    LogWarning(logger, diagnosticsSink, "Remote player avatar Animator added at runtime for render-only prefab.");
+                }
+            }
+
+            animator.enabled = true;
+            animator.applyRootMotion = false;
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+        }
+
+        private GameObject CreatePrimitivePart(
+            PrimitiveType type,
+            string name,
+            Vector3 localPosition,
+            Vector3 localScale,
+            Quaternion localRotation,
+            Color color)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.name = name;
+            part.transform.SetParent(_root.transform, false);
+            part.transform.localPosition = localPosition;
+            part.transform.localRotation = localRotation;
+            part.transform.localScale = localScale;
+
+            var collider = part.GetComponent<Collider>();
             if (collider != null)
             {
                 collider.enabled = false;
                 UnityEngine.Object.Destroy(collider);
             }
 
-            var renderer = body.GetComponent<Renderer>();
+            var renderer = part.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material.color = tint;
+                renderer.material.color = color;
             }
 
-            LogWarning(logger, diagnosticsSink, "Remote player avatar fallback body created: compact capsule height=1.8 colliders=disabled");
-            return true;
+            return part;
         }
 
         private void HardenCloneForRemoteAvatar()
@@ -861,6 +1070,196 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return count;
+        }
+
+        private static bool TryGetRendererBounds(GameObject target, out Bounds bounds)
+        {
+            bounds = new Bounds(target != null ? target.transform.position : Vector3.zero, Vector3.zero);
+            if (target == null) return false;
+
+            var renderers = target.GetComponentsInChildren<Renderer>(true);
+            var hasBounds = false;
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null) continue;
+                if (!hasBounds)
+                {
+                    bounds = renderer.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            return hasBounds;
+        }
+
+        private static bool HasUsableAnimator(GameObject target, out string reason)
+        {
+            reason = "no Animator";
+            if (target == null) return false;
+
+            var animators = target.GetComponentsInChildren<Animator>(true);
+            if (animators == null || animators.Length == 0)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < animators.Length; i++)
+            {
+                var animator = animators[i];
+                if (animator == null) continue;
+                if (animator.runtimeAnimatorController != null)
+                {
+                    reason = string.Empty;
+                    return true;
+                }
+            }
+
+            reason = "Animator has no controller";
+            return false;
+        }
+
+        private static Vector3 ResolveBodyRootPosition(PlayerTransformState state)
+        {
+            var position = state.Position;
+            var cameraPosition = state.CameraPosition;
+            var cameraHasPosition = cameraPosition != Vector3.zero;
+
+            if (TryProjectToWalkableGround(position, out var groundedFromBody))
+            {
+                var verticalOffset = Mathf.Abs(position.y - groundedFromBody.y);
+                if (verticalOffset <= 3.25f)
+                {
+                    return groundedFromBody;
+                }
+            }
+
+            if (cameraHasPosition)
+            {
+                var cameraBodyEstimate = new Vector3(position.x, cameraPosition.y - CameraFallbackEyeHeight, position.z);
+                if (TryProjectToWalkableGround(cameraBodyEstimate, out var groundedFromCamera))
+                {
+                    return groundedFromCamera;
+                }
+            }
+
+            if (cameraPosition == Vector3.zero)
+            {
+                return position;
+            }
+
+            var horizontalDelta = new Vector2(position.x - cameraPosition.x, position.z - cameraPosition.z).magnitude;
+            var verticalDelta = Mathf.Abs(position.y - cameraPosition.y);
+            if (horizontalDelta > 0.45f || verticalDelta > 0.45f)
+            {
+                return position;
+            }
+
+            var origin = new Vector3(position.x, cameraPosition.y + 0.1f, position.z);
+            RaycastHit hit;
+            if (Physics.Raycast(origin, Vector3.down, out hit, 3.0f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                var eyeHeight = cameraPosition.y - hit.point.y;
+                if (eyeHeight >= 1.15f && eyeHeight <= 2.25f)
+                {
+                    return new Vector3(position.x, hit.point.y, position.z);
+                }
+            }
+
+            return new Vector3(position.x, cameraPosition.y - CameraFallbackEyeHeight, position.z);
+        }
+
+        private static Quaternion ResolveUprightBodyRotation(PlayerTransformState state)
+        {
+            var forward = state.Rotation * Vector3.forward;
+            forward.y = 0f;
+
+            if (forward.sqrMagnitude < 0.001f)
+            {
+                forward = state.CameraRotation * Vector3.forward;
+                forward.y = 0f;
+            }
+
+            return forward.sqrMagnitude >= 0.001f
+                ? Quaternion.LookRotation(forward.normalized, Vector3.up)
+                : Quaternion.identity;
+        }
+
+        private static bool TryProjectToWalkableGround(Vector3 position, out Vector3 grounded)
+        {
+            grounded = position;
+
+            NavMeshHit navHit;
+            if (NavMesh.SamplePosition(position, out navHit, 3.0f, NavMesh.AllAreas))
+            {
+                grounded = new Vector3(position.x, navHit.position.y, position.z);
+                return true;
+            }
+
+            RaycastHit hit;
+            var rayOrigin = position + Vector3.up * 1.25f;
+            if (Physics.Raycast(rayOrigin, Vector3.down, out hit, 4.0f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            {
+                grounded = new Vector3(position.x, hit.point.y, position.z);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void AlignWrappedAvatarToGround(GameObject model, float yOffset, ManualLogSource logger, Action<string> diagnosticsSink)
+        {
+            if (model == null || model.transform.parent == null) return;
+
+            var parent = model.transform.parent;
+            var renderers = model.GetComponentsInChildren<Renderer>(true);
+            var minLocalY = float.PositiveInfinity;
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null) continue;
+                var bounds = renderer.bounds;
+                UpdateMinLocalY(parent, bounds, ref minLocalY);
+            }
+
+            if (float.IsPositiveInfinity(minLocalY)) return;
+
+            var adjustment = yOffset - minLocalY;
+            if (Mathf.Abs(adjustment) > 0.001f)
+            {
+                model.transform.localPosition += new Vector3(0f, adjustment, 0f);
+            }
+
+            LogInfo(logger, diagnosticsSink, "Remote player avatar grounded: bottom=" +
+                minLocalY.ToString("0.###") + " target=" + yOffset.ToString("0.###") +
+                " adjust=" + adjustment.ToString("0.###"));
+        }
+
+        private static void UpdateMinLocalY(Transform parent, Bounds bounds, ref float minLocalY)
+        {
+            var min = bounds.min;
+            var max = bounds.max;
+            UpdateMinLocalY(parent, new Vector3(min.x, min.y, min.z), ref minLocalY);
+            UpdateMinLocalY(parent, new Vector3(min.x, min.y, max.z), ref minLocalY);
+            UpdateMinLocalY(parent, new Vector3(min.x, max.y, min.z), ref minLocalY);
+            UpdateMinLocalY(parent, new Vector3(min.x, max.y, max.z), ref minLocalY);
+            UpdateMinLocalY(parent, new Vector3(max.x, min.y, min.z), ref minLocalY);
+            UpdateMinLocalY(parent, new Vector3(max.x, min.y, max.z), ref minLocalY);
+            UpdateMinLocalY(parent, new Vector3(max.x, max.y, min.z), ref minLocalY);
+            UpdateMinLocalY(parent, new Vector3(max.x, max.y, max.z), ref minLocalY);
+        }
+
+        private static void UpdateMinLocalY(Transform parent, Vector3 worldPoint, ref float minLocalY)
+        {
+            var localPoint = parent.InverseTransformPoint(worldPoint);
+            if (localPoint.y < minLocalY)
+            {
+                minLocalY = localPoint.y;
+            }
         }
 
         private static string FormatBounds(GameObject target)

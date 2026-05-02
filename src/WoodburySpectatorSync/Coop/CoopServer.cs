@@ -117,7 +117,9 @@ namespace WoodburySpectatorSync.Coop
             _acceptThread.Start();
             _sendThread.Start();
 
-            _logger.LogInfo("Co-op host server started");
+            _logger.LogInfo("Co-op host server started bind=" + bindIp +
+                " tcpPort=" + _settings.HostPort.Value +
+                " udp=" + (_udpChannel != null ? _settings.UdpPort.Value.ToString() : "disabled"));
         }
 
         public void Stop()
@@ -218,7 +220,9 @@ namespace WoodburySpectatorSync.Coop
                     _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-CoopReceive" };
                     _receiveThread.Start();
 
-                    _logger.LogInfo("Co-op client connected");
+                    _logger.LogInfo("Co-op client connected session=" +
+                        (_activeClientSession != null ? _activeClientSession.SessionId : 0) +
+                        " remote=" + (_activeClientSession != null ? _activeClientSession.RemoteEndpoint : string.Empty));
                 }
                 catch (SocketException)
                 {
@@ -364,8 +368,10 @@ namespace WoodburySpectatorSync.Coop
 
         private void DisconnectClient()
         {
+            ClientSessionInfo disconnectedSession;
             lock (_clientLock)
             {
+                disconnectedSession = _activeClientSession;
                 try { _stream?.Close(); } catch { }
                 try { _client?.Close(); } catch { }
                 _stream = null;
@@ -373,6 +379,13 @@ namespace WoodburySpectatorSync.Coop
                 _clientConnected = false;
                 _activeClientSession = null;
             }
+
+            if (disconnectedSession != null)
+            {
+                _logger.LogInfo("Co-op client disconnected session=" +
+                    disconnectedSession.SessionId + " remote=" + disconnectedSession.RemoteEndpoint);
+            }
+
             Interlocked.Exchange(ref _lastTcpReceiveMs, 0);
             Interlocked.Exchange(ref _lastTransformSentTcpMs, 0);
             Interlocked.Exchange(ref _lastTransformSentUdpMs, 0);
