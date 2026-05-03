@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Recurse \"c:\\\\Users\\\\tudor\\\\F2fMP\\\\fears-to-fathom-woodbury-getaway-mp-mod\\\\src\\\\\" -File | Select-Object FullName | head -50)",
+      "Bash(where ilspycmd *)",
+      "Bash(where dotnet-ilspycmd *)",
+      "Bash(dotnet tool *)",
+      "Bash(mkdir -p \"/tmp/wss-fielddump\")",
+      "Read(//tmp/**)",
+      "Bash(dotnet run *)",
+      "Bash(mkdir -p \"c:/Users/tudor/AppData/Local/Temp/wss-fielddump\")",
+      "Read(//c/Users/tudor/AppData/Local/Temp/wss-fielddump/**)",
+      "Bash(dotnet build *)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File .\\\\scripts\\\\Launch-CoopPair.ps1 -GameDir \"C:\\\\Users\\\\tudor\\\\OneDrive\\\\Plocha\\\\Fears.to.Fathom.Woodbury.Getaway\" -AutoStartHost -AutoConnectClient -ForceStopExisting)"
+    ]
+  }
+}

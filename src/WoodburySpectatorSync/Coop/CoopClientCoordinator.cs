@@ -76,6 +76,10 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, FieldInfo> _cabinShedFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinUnderstairsFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHostHidingFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinHikerFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinHikerControllerFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinHostFixingSinkFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinMikeAfterHidingFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaMikeFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _pizzeriaGameObjectFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -118,6 +122,11 @@ namespace WoodburySpectatorSync.Coop
         private const string CabinUnderstairsFlagPrefix = CabinGameFlagPrefix + "Understairs.";
         private const string CabinUnderstairsActivePrefix = CabinUnderstairsFlagPrefix + "Active.";
         private const string CabinHostHidingFlagPrefix = CabinGameFlagPrefix + "HostHiding.";
+        private const string CabinHikerFlagPrefix = CabinGameFlagPrefix + "CabinHiker.";
+        private const string CabinHikerControllerFlagPrefix = CabinGameFlagPrefix + "HikerController.";
+        private const string CabinHostFixingSinkFlagPrefix = CabinGameFlagPrefix + "HostFixingSink.";
+        private const string CabinMikeAfterHidingFlagPrefix = CabinGameFlagPrefix + "MikeAfterHiding.";
+        private const string CabinHikerActivePrefix = CabinGameFlagPrefix + "HikerActive.";
         private const string PizzeriaFlagPrefix = "PizzeriaGM.";
         private const string PizzeriaMikeFlagPrefix = PizzeriaFlagPrefix + "Mike.";
         private const string PizzeriaActiveGamePrefix = PizzeriaFlagPrefix + "Active.Game.";
@@ -194,7 +203,7 @@ namespace WoodburySpectatorSync.Coop
         private int _appliedMikeAnimTransition;
         private int _appliedMikeAnimNextStateHash;
         private float _nextDialogueUnlockTime;
-        private float _nextCabinRuntimeSyncLogTime;
+        private readonly Dictionary<string, float> _cabinRuntimeSyncLogTimes = new Dictionary<string, float>(StringComparer.Ordinal);
         private int _sceneReadyGeneration;
         private int _sceneReadySentGeneration = -1;
         private bool _sceneReadyDirty = true;
@@ -1385,6 +1394,91 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            if (key.StartsWith(CabinHikerControllerFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinHikerControllerFlag(key.Substring(CabinHikerControllerFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(CabinHikerFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinHikerFlag(key.Substring(CabinHikerFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(CabinHostFixingSinkFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinHostFixingSinkFlag(key.Substring(CabinHostFixingSinkFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(CabinMikeAfterHidingFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinMikeAfterHidingFlag(key.Substring(CabinMikeAfterHidingFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (key.StartsWith(CabinHikerActivePrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinHikerActiveFlag(key.Substring(CabinHikerActivePrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
             if (fieldName.StartsWith(CabinMikeAnimFieldPrefix, StringComparison.Ordinal))
             {
                 if (!TryApplyCabinMikeAnimationFlag(fieldName, value))
@@ -1570,6 +1664,179 @@ namespace WoodburySpectatorSync.Coop
             var applied = TryApplyObjectFieldFlag(host, fieldName, _cabinHostHidingFieldCache, value);
             MaybeLogCabinHidingMirror(_cabinGameManager.mikePostEating);
             return applied;
+        }
+
+        private bool TryApplyCabinHikerFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinGameManager()) return false;
+
+            var hiker = _cabinGameManager.cabinHiker;
+            if (hiker == null)
+            {
+                hiker = UnityEngine.Object.FindObjectOfType<CabinHiker>();
+            }
+
+            if (hiker == null) return false;
+
+            if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
+            {
+                hiker.gameObject.SetActive(value != 0);
+                return true;
+            }
+
+            return TryApplyObjectFieldFlag(hiker, fieldName, _cabinHikerFieldCache, value);
+        }
+
+        private bool TryApplyCabinHikerControllerFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinGameManager()) return false;
+
+            var hikerCtl = UnityEngine.Object.FindObjectOfType<HikerCabinController>();
+            if (hikerCtl == null) return false;
+
+            if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
+            {
+                hikerCtl.gameObject.SetActive(value != 0);
+                return true;
+            }
+
+            return TryApplyObjectFieldFlag(hikerCtl, fieldName, _cabinHikerControllerFieldCache, value);
+        }
+
+        private bool TryApplyCabinHostFixingSinkFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinGameManager()) return false;
+
+            var fixing = _cabinGameManager.hostFixingSink;
+            if (fixing == null)
+            {
+                fixing = UnityEngine.Object.FindObjectOfType<HostFixingSink>();
+            }
+
+            if (fixing == null) return false;
+
+            if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
+            {
+                fixing.gameObject.SetActive(value != 0);
+                return true;
+            }
+
+            return TryApplyObjectFieldFlag(fixing, fieldName, _cabinHostFixingSinkFieldCache, value);
+        }
+
+        private bool TryApplyCabinMikeAfterHidingFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinGameManager()) return false;
+
+            var afterHiding = _cabinGameManager.mikeAfterHiding;
+            if (afterHiding == null)
+            {
+                afterHiding = UnityEngine.Object.FindObjectOfType<MikeAfterHiding>();
+            }
+
+            if (afterHiding == null) return false;
+
+            if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
+            {
+                afterHiding.gameObject.SetActive(value != 0);
+                return true;
+            }
+
+            return TryApplyObjectFieldFlag(afterHiding, fieldName, _cabinMikeAfterHidingFieldCache, value);
+        }
+
+        private bool TryApplyCabinHikerActiveFlag(string fieldName, int value)
+        {
+            if (!TryEnsureCabinGameManager()) return false;
+            if (string.IsNullOrEmpty(fieldName)) return false;
+
+            if (string.Equals(fieldName, "hikerConvoTriggerOnDoor", StringComparison.Ordinal))
+            {
+                var hikerCtl = UnityEngine.Object.FindObjectOfType<HikerCabinController>();
+                if (hikerCtl == null) return false;
+                return TryApplyComponentGameObjectActive(hikerCtl, "hikerConvoTriggerOnDoor", _cabinHikerControllerFieldCache, value);
+            }
+
+            if (string.Equals(fieldName, "hikerConvoTrigger", StringComparison.Ordinal))
+            {
+                return TryApplyComponentGameObjectActive(_cabinGameManager, "hikerConvoTrigger", _cabinHikerFieldCache, value);
+            }
+
+            // sinisterAudioTrigger and closetLight are GameObject fields directly on CabinGameManager
+            return TryApplyGameObjectActiveOnTarget(_cabinGameManager, fieldName, _cabinHikerFieldCache, value);
+        }
+
+        private bool TryApplyGameObjectActiveOnTarget(
+            object target,
+            string fieldName,
+            Dictionary<string, FieldInfo> cache,
+            int value)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName)) return false;
+
+            if (!cache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                cache[fieldName] = field;
+            }
+
+            if (field == null || field.FieldType != typeof(GameObject))
+            {
+                return false;
+            }
+
+            try
+            {
+                var go = field.GetValue(target) as GameObject;
+                if (go == null) return false;
+                go.SetActive(value != 0);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ApplyHikerActiveFlag failed: " + fieldName + " (" + ex.Message + ")");
+                return false;
+            }
+        }
+
+        private bool TryApplyComponentGameObjectActive(
+            object target,
+            string fieldName,
+            Dictionary<string, FieldInfo> cache,
+            int value)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName)) return false;
+
+            if (!cache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                cache[fieldName] = field;
+            }
+
+            if (field == null) return false;
+
+            try
+            {
+                var raw = field.GetValue(target);
+                GameObject go = null;
+                if (raw is GameObject direct)
+                {
+                    go = direct;
+                }
+                else if (raw is Component component)
+                {
+                    go = component.gameObject;
+                }
+
+                if (go == null) return false;
+                go.SetActive(value != 0);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ApplyHikerActiveFlag (component) failed: " + fieldName + " (" + ex.Message + ")");
+                return false;
+            }
         }
 
         private bool TryEnsureCabinGameManager()
@@ -3502,10 +3769,15 @@ namespace WoodburySpectatorSync.Coop
 
         private void LogSuppressedCabinRuntimeSync(string reason)
         {
-            var now = Time.realtimeSinceStartup;
-            if (now < _nextCabinRuntimeSyncLogTime) return;
+            if (string.IsNullOrEmpty(reason)) return;
 
-            _nextCabinRuntimeSyncLogTime = now + 5f;
+            var now = Time.realtimeSinceStartup;
+            if (_cabinRuntimeSyncLogTimes.TryGetValue(reason, out var nextLogTime) && now < nextLogTime)
+            {
+                return;
+            }
+
+            _cabinRuntimeSyncLogTimes[reason] = now + 5f;
             var message = "Cabin client runtime state held local: " + reason;
             _logger.LogInfo(message);
             _sessionLogWrite?.Invoke(message);
@@ -3781,7 +4053,28 @@ namespace WoodburySpectatorSync.Coop
                 {
                     return true;
                 }
+
+                if (IsCabinHikerWindowActive())
+                {
+                    return true;
+                }
             }
+
+            return false;
+        }
+
+        private bool IsCabinHikerWindowActive()
+        {
+            if (_cabinGameManager == null) return false;
+
+            var hiker = _cabinGameManager.cabinHiker;
+            if (hiker != null && hiker.gameObject.activeSelf) return true;
+
+            var fixing = _cabinGameManager.hostFixingSink;
+            if (fixing != null && fixing.gameObject.activeSelf) return true;
+
+            var afterHiding = _cabinGameManager.mikeAfterHiding;
+            if (afterHiding != null && afterHiding.gameObject.activeSelf) return true;
 
             return false;
         }
