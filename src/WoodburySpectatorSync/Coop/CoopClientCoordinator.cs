@@ -4067,16 +4067,14 @@ namespace WoodburySpectatorSync.Coop
         {
             if (_cabinGameManager == null) return false;
 
-            var hiker = _cabinGameManager.cabinHiker;
-            if (hiker != null && hiker.gameObject.activeSelf) return true;
-
-            var fixing = _cabinGameManager.hostFixingSink;
-            if (fixing != null && fixing.gameObject.activeSelf) return true;
-
-            var afterHiding = _cabinGameManager.mikeAfterHiding;
-            if (afterHiding != null && afterHiding.gameObject.activeSelf) return true;
-
-            return false;
+            // Gate on CurrentSequence — the relevant sub-component GameObjects (cabinHiker,
+            // hostFixingSink, mikeAfterHiding) can be active in the scene hierarchy during
+            // normal play because their parents are scene-resident; relying on activeSelf
+            // would assert the scripted lock from scene load and clump the client onto the host.
+            var seq = _cabinGameManager.CurrentSequence;
+            return seq == SequenceType.HikerSequence ||
+                   seq == SequenceType.HostAtDoor ||
+                   seq == SequenceType.HostHittingDoor;
         }
 
         private void TeleportToHost()

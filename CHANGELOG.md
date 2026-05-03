@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-- Co-op Cabin: added host-authored hiker-window state sync for `CabinHiker`, `HikerCabinController`, `HostFixingSink`, and `MikeAfterHiding` (state enums plus go/moving/reachedPos/followingHost flags), and mirrored `sinisterAudioTrigger`, `closetLight`, and `hikerConvoTrigger` GameObject-active states. Hiker, fixing-sink, and after-hiding windows now drive the client's host-scripted lock so the client camera/avatar stays pinned to the host through the cinematic.
+- Co-op Cabin: added host-authored hiker-window state sync for `CabinHiker`, `HikerCabinController`, `HostFixingSink`, and `MikeAfterHiding` (state enums plus go/moving/reachedPos/followingHost flags), and mirrored `sinisterAudioTrigger`, `closetLight`, and `hikerConvoTrigger` GameObject-active states. The hiker scripted-lock window is gated on `CurrentSequence` being `HikerSequence`/`HostAtDoor`/`HostHittingDoor` — relying on `gameObject.activeSelf` clumped the client avatar onto the host because the parent containers stay active in the scene hierarchy during normal play.
 - Co-op diagnostics: throttled the host `Mike sync target` log on `Transform.GetInstanceID()` instead of `ReferenceEquals` so Unity "fake null"/scene-reload churn no longer bypasses the 5 s cooldown, and bucketed the client `Cabin client runtime state held local` log per-reason so a single re-emitted suppressed flag no longer crowds out other reasons.
 - Co-op Cabin: added host-authored post-eating/hiding state sync for MikePostEating, shed/understairs hiding flags, key active triggers, and toolshed crash breadcrumbs.
 - Co-op Cabin: Mike target selection now prefers `Mike Post Eating` during hiding even while the game still reports the broad `Eating` sequence, reducing target oscillation.
