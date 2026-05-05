@@ -66,7 +66,7 @@ namespace WoodburySpectatorSync.Config
             settings.CoopTeleportDistance = config.Bind("Coop", "TeleportDistance", 25f, "Auto-teleport client to host if farther than this (meters)");
             settings.CoopTeleportCooldownSeconds = config.Bind("Coop", "TeleportCooldownSeconds", 3f, "Minimum seconds between auto-teleports");
             settings.CoopTeleportStaleSeconds = config.Bind("Coop", "TeleportOnStaleSeconds", 6f, "Auto-teleport if host updates are stale for this long");
-            settings.CoopSnapToHostOnSceneLoad = config.Bind("Coop", "SnapToHostOnSceneLoad", true, "Snap client camera to host after scene load");
+            settings.CoopSnapToHostOnSceneLoad = config.Bind("Coop", "SnapToHostOnSceneLoad", false, "Snap freecam to host after scene load. In local-player co-op, scene-start placement uses a side offset instead of exact overlap.");
             settings.CoopUseLocalPlayer = config.Bind("Coop", "UseLocalPlayerController", true, "Use the local player controller instead of freecam in co-op client");
             settings.CoopRouteInteractions = config.Bind("Coop", "RouteInteractionsToHost", true, "Route client interaction clicks to the host (prevents local story triggers)");
             settings.CoopAutoStartHost = config.Bind("Coop", "AutoStartHost", false, "Auto-start co-op host server on launch");

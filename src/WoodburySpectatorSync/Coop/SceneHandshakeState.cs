@@ -4,13 +4,20 @@ namespace WoodburySpectatorSync.Coop
 {
     internal sealed class SceneHandshakeState
     {
+        public const int MaxAttempts = 8;
+
         public int Generation { get; private set; }
         public int ReadyGeneration { get; private set; } = -1;
         public bool SnapshotSentForReadyGeneration { get; private set; }
+        public int LastAcknowledgedSnapshotGeneration { get; private set; } = -1;
         public bool AwaitingReady { get; private set; }
         public string SceneName { get; private set; } = string.Empty;
         public long LastSceneRequestMs { get; private set; }
         public long LastSceneReadyMs { get; private set; }
+        public int LastSentAttemptCount { get; private set; }
+        public int LastSnapshotBeginGeneration { get; private set; } = -1;
+        public int LastSnapshotEndGeneration { get; private set; } = -1;
+        public int SceneChangeAttemptCount { get { return LastSentAttemptCount; } }
 
         public void Begin(int generation, string sceneName, bool awaitingReady, long nowMs)
         {
@@ -21,6 +28,10 @@ namespace WoodburySpectatorSync.Coop
             SceneName = sceneName ?? string.Empty;
             LastSceneRequestMs = nowMs;
             LastSceneReadyMs = 0;
+            LastSentAttemptCount = 0;
+            LastSnapshotBeginGeneration = -1;
+            LastSnapshotEndGeneration = -1;
+            LastAcknowledgedSnapshotGeneration = -1;
         }
 
         public void MarkSceneRequest(long nowMs)
@@ -30,6 +41,12 @@ namespace WoodburySpectatorSync.Coop
             {
                 AwaitingReady = true;
             }
+        }
+
+        public int IncrementAttempt()
+        {
+            LastSentAttemptCount++;
+            return LastSentAttemptCount;
         }
 
         public bool AcceptReady(string sceneName, long nowMs)
@@ -69,13 +86,46 @@ namespace WoodburySpectatorSync.Coop
             return true;
         }
 
+        public bool MarkSnapshotBegin(int generation)
+        {
+            if (generation != Generation) return false;
+            if (LastSnapshotBeginGeneration == generation) return false;
+            LastSnapshotBeginGeneration = generation;
+            return true;
+        }
+
+        public bool MarkSnapshotEnd(int generation)
+        {
+            if (generation != Generation) return false;
+            if (LastSnapshotEndGeneration == generation) return false;
+            LastSnapshotEndGeneration = generation;
+            return true;
+        }
+
+        public bool AcknowledgeSnapshot(int generation)
+        {
+            if (generation != Generation) return false;
+            if (LastAcknowledgedSnapshotGeneration == generation) return false;
+            LastAcknowledgedSnapshotGeneration = generation;
+            return true;
+        }
+
+        public bool IsSnapshotAcknowledged()
+        {
+            return LastAcknowledgedSnapshotGeneration == Generation;
+        }
+
         public void ResetReady()
         {
             ReadyGeneration = -1;
             SnapshotSentForReadyGeneration = false;
+            LastAcknowledgedSnapshotGeneration = -1;
             AwaitingReady = false;
             LastSceneRequestMs = 0;
             LastSceneReadyMs = 0;
+            LastSentAttemptCount = 0;
+            LastSnapshotBeginGeneration = -1;
+            LastSnapshotEndGeneration = -1;
         }
     }
 }

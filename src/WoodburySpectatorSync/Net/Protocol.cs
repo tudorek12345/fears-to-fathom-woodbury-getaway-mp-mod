@@ -25,7 +25,29 @@ namespace WoodburySpectatorSync.Net
         DialogueStart = 16,
         DialogueAdvance = 17,
         DialogueChoice = 18,
-        DialogueEnd = 19
+        DialogueEnd = 19,
+        Hello = 20,
+        HelloAck = 21,
+        SnapshotBegin = 22,
+        SnapshotEnd = 23,
+        SnapshotAck = 24
+    }
+
+    public enum ProtocolParseErrorCode
+    {
+        None = 0,
+        BadMagic = 1,
+        UnsupportedVersion = 2,
+        UnknownMessageType = 3,
+        MalformedPayload = 4,
+        PayloadTooLarge = 5
+    }
+
+    public enum SceneReadyStatus : byte
+    {
+        Unknown = 0,
+        ReadyFull = 1,
+        ReadyPartial = 2
     }
 
     public abstract class Message
@@ -46,14 +68,18 @@ namespace WoodburySpectatorSync.Net
 
     public sealed class SceneChangeMessage : Message
     {
+        public int SessionId;
+        public int Generation;
         public string SceneName;
         public int BuildIndex;
         public int StartSequence;
         public int FromMenu;
 
-        public SceneChangeMessage(string sceneName, int buildIndex = -1, int startSequence = -1, int fromMenu = -1)
+        public SceneChangeMessage(string sceneName, int buildIndex = -1, int startSequence = -1, int fromMenu = -1, int sessionId = 0, int generation = 0)
         {
             Type = MessageType.SceneChange;
+            SessionId = sessionId;
+            Generation = generation;
             SceneName = sceneName ?? string.Empty;
             BuildIndex = buildIndex;
             StartSequence = startSequence;
@@ -63,11 +89,19 @@ namespace WoodburySpectatorSync.Net
 
     public sealed class SceneReadyMessage : Message
     {
+        public int SessionId;
+        public int Generation;
+        public SceneReadyStatus ReadyStatus;
+        public string Reason;
         public string SceneName;
 
-        public SceneReadyMessage(string sceneName)
+        public SceneReadyMessage(string sceneName, int sessionId = 0, int generation = 0, SceneReadyStatus readyStatus = SceneReadyStatus.ReadyFull, string reason = "")
         {
             Type = MessageType.SceneReady;
+            SessionId = sessionId;
+            Generation = generation;
+            ReadyStatus = readyStatus;
+            Reason = reason ?? string.Empty;
             SceneName = sceneName ?? string.Empty;
         }
     }
@@ -272,6 +306,151 @@ namespace WoodburySpectatorSync.Net
         }
     }
 
+    public sealed class HelloMessage : Message
+    {
+        public ushort ProtocolVersion;
+        public string PluginVersion;
+        public long ClientNonce;
+
+        public HelloMessage(ushort protocolVersion, string pluginVersion, long clientNonce)
+        {
+            Type = MessageType.Hello;
+            ProtocolVersion = protocolVersion;
+            PluginVersion = pluginVersion ?? string.Empty;
+            ClientNonce = clientNonce;
+        }
+    }
+
+    public sealed class HelloAckMessage : Message
+    {
+        public ushort ProtocolVersion;
+        public string PluginVersion;
+        public int SessionId;
+        public bool Accepted;
+        public string Reason;
+
+        public bool Accept { get { return Accepted; } }
+
+        public HelloAckMessage(ushort protocolVersion, string pluginVersion, int sessionId, bool accepted, string reason)
+        {
+            Type = MessageType.HelloAck;
+            ProtocolVersion = protocolVersion;
+            PluginVersion = pluginVersion ?? string.Empty;
+            SessionId = sessionId;
+            Accepted = accepted;
+            Reason = reason ?? string.Empty;
+        }
+    }
+
+    public sealed class SnapshotBeginMessage : Message
+    {
+        public int SessionId;
+        public int Generation;
+        public string SceneName;
+        public int StoryCount;
+        public int DoorCount;
+        public int HoldableCount;
+        public int AiCount;
+        public int DialogueCount;
+        public int PlayerCount;
+        public int CustomCount;
+        public int ExpectedItemCount
+        {
+            get { return StoryCount + DoorCount + HoldableCount + AiCount + DialogueCount + PlayerCount + CustomCount; }
+        }
+
+        public SnapshotBeginMessage(int sessionId, int generation, string sceneName, int storyCount, int doorCount, int holdableCount, int aiCount, int dialogueCount, int playerCount, int customCount)
+        {
+            Type = MessageType.SnapshotBegin;
+            SessionId = sessionId;
+            Generation = generation;
+            SceneName = sceneName ?? string.Empty;
+            StoryCount = storyCount;
+            DoorCount = doorCount;
+            HoldableCount = holdableCount;
+            AiCount = aiCount;
+            DialogueCount = dialogueCount;
+            PlayerCount = playerCount;
+            CustomCount = customCount;
+        }
+    }
+
+    public sealed class SnapshotEndMessage : Message
+    {
+        public int SessionId;
+        public int Generation;
+        public string SceneName;
+        public int StoryCount;
+        public int DoorCount;
+        public int HoldableCount;
+        public int AiCount;
+        public int DialogueCount;
+        public int PlayerCount;
+        public int CustomCount;
+        public int SentItemCount
+        {
+            get { return StoryCount + DoorCount + HoldableCount + AiCount + DialogueCount + PlayerCount + CustomCount; }
+        }
+
+        public SnapshotEndMessage(int sessionId, int generation, string sceneName, int storyCount, int doorCount, int holdableCount, int aiCount, int dialogueCount, int playerCount, int customCount)
+        {
+            Type = MessageType.SnapshotEnd;
+            SessionId = sessionId;
+            Generation = generation;
+            SceneName = sceneName ?? string.Empty;
+            StoryCount = storyCount;
+            DoorCount = doorCount;
+            HoldableCount = holdableCount;
+            AiCount = aiCount;
+            DialogueCount = dialogueCount;
+            PlayerCount = playerCount;
+            CustomCount = customCount;
+        }
+    }
+
+    public sealed class SnapshotAckMessage : Message
+    {
+        public int SessionId;
+        public int Generation;
+        public string SceneName;
+        public int AppliedStoryCount;
+        public int AppliedDoorCount;
+        public int AppliedHoldableCount;
+        public int AppliedAiCount;
+        public int AppliedDialogueCount;
+        public int AppliedPlayerCount;
+        public int PendingObjectCount;
+        public int MissingObjectCount;
+        public bool Ok;
+        public string Reason;
+        public int AppliedItemCount
+        {
+            get
+            {
+                return AppliedStoryCount + AppliedDoorCount + AppliedHoldableCount +
+                       AppliedAiCount + AppliedDialogueCount + AppliedPlayerCount;
+            }
+        }
+
+        public SnapshotAckMessage(int sessionId, int generation, string sceneName, int appliedStoryCount, int appliedDoorCount, int appliedHoldableCount, int appliedAiCount, int appliedDialogueCount, int appliedPlayerCount, int pendingObjectCount, int missingObjectCount, bool ok, string reason)
+        {
+            Type = MessageType.SnapshotAck;
+            SessionId = sessionId;
+            Generation = generation;
+            SceneName = sceneName ?? string.Empty;
+            AppliedStoryCount = appliedStoryCount;
+            AppliedDoorCount = appliedDoorCount;
+            AppliedHoldableCount = appliedHoldableCount;
+            AppliedAiCount = appliedAiCount;
+            AppliedDialogueCount = appliedDialogueCount;
+            AppliedPlayerCount = appliedPlayerCount;
+            PendingObjectCount = pendingObjectCount;
+            MissingObjectCount = missingObjectCount;
+            Ok = ok;
+            Reason = reason ?? string.Empty;
+        }
+    }
+
     public struct CameraState
     {
         public long UnixTimeMs;
@@ -329,7 +508,8 @@ namespace WoodburySpectatorSync.Net
     public static class Protocol
     {
         public const uint Magic = 0x57535331; // "WSS1"
-        public const ushort Version = 1;
+        public const ushort Version = 2;
+        public const string PluginVersion = "0.3.0";
         public const int MaxPayloadBytes = 1024 * 1024;
 
         public static byte[] BuildFrame(byte[] payload)
@@ -361,12 +541,14 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
-        public static byte[] BuildSceneChange(string sceneName, int buildIndex = -1, int startSequence = -1, int fromMenu = -1)
+        public static byte[] BuildSceneChange(string sceneName, int buildIndex = -1, int startSequence = -1, int fromMenu = -1, int sessionId = 0, int generation = 0)
         {
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms, Encoding.UTF8))
             {
                 WriteHeader(writer, MessageType.SceneChange);
+                writer.Write(sessionId);
+                writer.Write(generation);
                 WriteString(writer, sceneName);
                 writer.Write(buildIndex);
                 writer.Write(startSequence);
@@ -375,13 +557,109 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
-        public static byte[] BuildSceneReady(string sceneName)
+        public static byte[] BuildSceneReady(string sceneName, int sessionId = 0, int generation = 0, SceneReadyStatus readyStatus = SceneReadyStatus.ReadyFull, string reason = "")
         {
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms, Encoding.UTF8))
             {
                 WriteHeader(writer, MessageType.SceneReady);
+                writer.Write(sessionId);
+                writer.Write(generation);
                 WriteString(writer, sceneName);
+                writer.Write((byte)readyStatus);
+                WriteString(writer, reason);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildHello(ushort protocolVersion, string pluginVersion, long clientNonce)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.Hello);
+                writer.Write(protocolVersion);
+                WriteString(writer, pluginVersion);
+                writer.Write(clientNonce);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildHelloAck(ushort protocolVersion, string pluginVersion, int sessionId, bool accepted, string reason)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.HelloAck);
+                writer.Write(protocolVersion);
+                WriteString(writer, pluginVersion);
+                writer.Write(sessionId);
+                writer.Write(accepted);
+                WriteString(writer, reason);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildSnapshotBegin(int sessionId, int generation, string sceneName, int storyCount, int doorCount, int holdableCount, int aiCount, int dialogueCount, int playerCount, int customCount)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.SnapshotBegin);
+                writer.Write(sessionId);
+                writer.Write(generation);
+                WriteString(writer, sceneName);
+                WriteSnapshotCounts(writer, storyCount, doorCount, holdableCount, aiCount, dialogueCount, playerCount, customCount);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildSnapshotEnd(int sessionId, int generation, string sceneName, int storyCount, int doorCount, int holdableCount, int aiCount, int dialogueCount, int playerCount, int customCount)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.SnapshotEnd);
+                writer.Write(sessionId);
+                writer.Write(generation);
+                WriteString(writer, sceneName);
+                WriteSnapshotCounts(writer, storyCount, doorCount, holdableCount, aiCount, dialogueCount, playerCount, customCount);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildSnapshotAck(
+            int sessionId,
+            int generation,
+            string sceneName,
+            int appliedStoryCount,
+            int appliedDoorCount,
+            int appliedHoldableCount,
+            int appliedAiCount,
+            int appliedDialogueCount,
+            int appliedPlayerCount,
+            int pendingObjectCount,
+            int missingObjectCount,
+            bool ok,
+            string reason)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.SnapshotAck);
+                writer.Write(sessionId);
+                writer.Write(generation);
+                WriteString(writer, sceneName);
+                writer.Write(appliedStoryCount);
+                writer.Write(appliedDoorCount);
+                writer.Write(appliedHoldableCount);
+                writer.Write(appliedAiCount);
+                writer.Write(appliedDialogueCount);
+                writer.Write(appliedPlayerCount);
+                writer.Write(pendingObjectCount);
+                writer.Write(missingObjectCount);
+                writer.Write(ok);
+                WriteString(writer, reason);
                 return ms.ToArray();
             }
         }
@@ -594,12 +872,27 @@ namespace WoodburySpectatorSync.Net
 
         public static bool TryParsePayload(byte[] payload, out Message message, out string error)
         {
+            ProtocolParseErrorCode errorCode;
+            return TryParsePayload(payload, out message, out errorCode, out error);
+        }
+
+        public static bool TryParsePayload(byte[] payload, out Message message, out ProtocolParseErrorCode errorCode, out string error)
+        {
             message = null;
+            errorCode = ProtocolParseErrorCode.None;
             error = null;
 
             if (payload == null || payload.Length < 8)
             {
-                error = "Payload too short";
+                errorCode = ProtocolParseErrorCode.MalformedPayload;
+                error = "MalformedPayload: payload too short";
+                return false;
+            }
+
+            if (payload.Length > MaxPayloadBytes)
+            {
+                errorCode = ProtocolParseErrorCode.PayloadTooLarge;
+                error = "PayloadTooLarge: " + payload.Length + " > " + MaxPayloadBytes;
                 return false;
             }
 
@@ -611,14 +904,16 @@ namespace WoodburySpectatorSync.Net
                     var magic = reader.ReadUInt32();
                     if (magic != Magic)
                     {
-                        error = "Bad magic";
+                        errorCode = ProtocolParseErrorCode.BadMagic;
+                        error = "BadMagic: 0x" + magic.ToString("X8");
                         return false;
                     }
 
                     var version = reader.ReadUInt16();
                     if (version != Version)
                     {
-                        error = "Unsupported version";
+                        errorCode = ProtocolParseErrorCode.UnsupportedVersion;
+                        error = "UnsupportedVersion: " + version + " expected " + Version;
                         return false;
                     }
 
@@ -637,6 +932,8 @@ namespace WoodburySpectatorSync.Net
                             return true;
                         case MessageType.SceneChange:
                         {
+                            var sessionId = reader.ReadInt32();
+                            var generation = reader.ReadInt32();
                             var sceneName = ReadString(reader);
                             var buildIndex = -1;
                             var startSequence = -1;
@@ -653,12 +950,27 @@ namespace WoodburySpectatorSync.Net
                             {
                                 fromMenu = reader.ReadInt32();
                             }
-                            message = new SceneChangeMessage(sceneName, buildIndex, startSequence, fromMenu);
+                            message = new SceneChangeMessage(sceneName, buildIndex, startSequence, fromMenu, sessionId, generation);
                             return true;
                         }
                         case MessageType.SceneReady:
-                            message = new SceneReadyMessage(ReadString(reader));
+                        {
+                            var sessionId = reader.ReadInt32();
+                            var generation = reader.ReadInt32();
+                            var sceneName = ReadString(reader);
+                            var readyStatus = SceneReadyStatus.ReadyFull;
+                            var reason = string.Empty;
+                            if (ms.Position < ms.Length)
+                            {
+                                readyStatus = (SceneReadyStatus)reader.ReadByte();
+                            }
+                            if (ms.Position < ms.Length)
+                            {
+                                reason = ReadString(reader);
+                            }
+                            message = new SceneReadyMessage(sceneName, sessionId, generation, readyStatus, reason);
                             return true;
+                        }
                         case MessageType.ProgressMarker:
                             message = new ProgressMarkerMessage(ReadString(reader));
                             return true;
@@ -768,15 +1080,96 @@ namespace WoodburySpectatorSync.Net
                         case MessageType.DialogueEnd:
                             message = new DialogueEndMessage(reader.ReadInt32());
                             return true;
+                        case MessageType.Hello:
+                        {
+                            var protocolVersion = reader.ReadUInt16();
+                            var pluginVersion = ReadString(reader);
+                            var clientNonce = reader.ReadInt64();
+                            message = new HelloMessage(protocolVersion, pluginVersion, clientNonce);
+                            return true;
+                        }
+                        case MessageType.HelloAck:
+                        {
+                            var protocolVersion = reader.ReadUInt16();
+                            var pluginVersion = ReadString(reader);
+                            var sessionId = reader.ReadInt32();
+                            var accept = reader.ReadBoolean();
+                            var reason = ReadString(reader);
+                            message = new HelloAckMessage(protocolVersion, pluginVersion, sessionId, accept, reason);
+                            return true;
+                        }
+                        case MessageType.SnapshotBegin:
+                        {
+                            var sessionId = reader.ReadInt32();
+                            var generation = reader.ReadInt32();
+                            var sceneName = ReadString(reader);
+                            ReadSnapshotCounts(reader, out var storyCount, out var doorCount, out var holdableCount, out var aiCount, out var dialogueCount, out var playerCount, out var customCount);
+                            message = new SnapshotBeginMessage(sessionId, generation, sceneName, storyCount, doorCount, holdableCount, aiCount, dialogueCount, playerCount, customCount);
+                            return true;
+                        }
+                        case MessageType.SnapshotEnd:
+                        {
+                            var sessionId = reader.ReadInt32();
+                            var generation = reader.ReadInt32();
+                            var sceneName = ReadString(reader);
+                            ReadSnapshotCounts(reader, out var storyCount, out var doorCount, out var holdableCount, out var aiCount, out var dialogueCount, out var playerCount, out var customCount);
+                            message = new SnapshotEndMessage(sessionId, generation, sceneName, storyCount, doorCount, holdableCount, aiCount, dialogueCount, playerCount, customCount);
+                            return true;
+                        }
+                        case MessageType.SnapshotAck:
+                        {
+                            var sessionId = reader.ReadInt32();
+                            var generation = reader.ReadInt32();
+                            var sceneName = ReadString(reader);
+                            var appliedStoryCount = reader.ReadInt32();
+                            var appliedDoorCount = reader.ReadInt32();
+                            var appliedHoldableCount = reader.ReadInt32();
+                            var appliedAiCount = reader.ReadInt32();
+                            var appliedDialogueCount = reader.ReadInt32();
+                            var appliedPlayerCount = reader.ReadInt32();
+                            var pendingObjectCount = reader.ReadInt32();
+                            var missingObjectCount = reader.ReadInt32();
+                            var ok = reader.ReadBoolean();
+                            var reason = ReadString(reader);
+                            message = new SnapshotAckMessage(
+                                sessionId,
+                                generation,
+                                sceneName,
+                                appliedStoryCount,
+                                appliedDoorCount,
+                                appliedHoldableCount,
+                                appliedAiCount,
+                                appliedDialogueCount,
+                                appliedPlayerCount,
+                                pendingObjectCount,
+                                missingObjectCount,
+                                ok,
+                                reason);
+                            return true;
+                        }
                         default:
-                            error = "Unknown message type";
+                            errorCode = ProtocolParseErrorCode.UnknownMessageType;
+                            error = "UnknownMessageType: " + ((ushort)type);
                             return false;
                     }
                 }
             }
+            catch (EndOfStreamException ex)
+            {
+                errorCode = ProtocolParseErrorCode.MalformedPayload;
+                error = "MalformedPayload: " + ex.Message;
+                return false;
+            }
+            catch (InvalidDataException ex)
+            {
+                errorCode = ProtocolParseErrorCode.MalformedPayload;
+                error = "MalformedPayload: " + ex.Message;
+                return false;
+            }
             catch (Exception ex)
             {
-                error = ex.Message;
+                errorCode = ProtocolParseErrorCode.MalformedPayload;
+                error = "MalformedPayload: " + ex.Message;
                 return false;
             }
         }
@@ -794,6 +1187,36 @@ namespace WoodburySpectatorSync.Net
             var bytes = Encoding.UTF8.GetBytes(value);
             writer.Write(bytes.Length);
             writer.Write(bytes);
+        }
+
+        private static void WriteSnapshotCounts(BinaryWriter writer, int storyCount, int doorCount, int holdableCount, int aiCount, int dialogueCount, int playerCount, int customCount)
+        {
+            writer.Write(storyCount);
+            writer.Write(doorCount);
+            writer.Write(holdableCount);
+            writer.Write(aiCount);
+            writer.Write(dialogueCount);
+            writer.Write(playerCount);
+            writer.Write(customCount);
+        }
+
+        private static void ReadSnapshotCounts(
+            BinaryReader reader,
+            out int storyCount,
+            out int doorCount,
+            out int holdableCount,
+            out int aiCount,
+            out int dialogueCount,
+            out int playerCount,
+            out int customCount)
+        {
+            storyCount = reader.ReadInt32();
+            doorCount = reader.ReadInt32();
+            holdableCount = reader.ReadInt32();
+            aiCount = reader.ReadInt32();
+            dialogueCount = reader.ReadInt32();
+            playerCount = reader.ReadInt32();
+            customCount = reader.ReadInt32();
         }
 
         private static string ReadString(BinaryReader reader)

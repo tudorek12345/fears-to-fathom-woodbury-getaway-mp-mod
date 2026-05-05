@@ -146,6 +146,27 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        public void SetActiveSessionId(int sessionId)
+        {
+            if (sessionId <= 0) return;
+            var session = _activeHostSession;
+            if (session == null)
+            {
+                _activeHostSession = new HostSessionInfo
+                {
+                    SessionId = sessionId,
+                    Host = _settings != null && _settings.SpectatorHostIP != null
+                        ? (_settings.SpectatorHostIP.Value ?? string.Empty)
+                        : string.Empty,
+                    Port = _settings != null && _settings.HostPort != null ? _settings.HostPort.Value : 0,
+                    ConnectedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                return;
+            }
+
+            session.SessionId = sessionId;
+        }
+
         public void Connect()
         {
             if (_running) return;
@@ -253,10 +274,15 @@ namespace WoodburySpectatorSync.Coop
                 catch (Exception ex)
                 {
                     Status = "Retrying";
-                    _logger.LogWarning("Co-op connect failed host=" +
-                        _settings.SpectatorHostIP.Value + ":" + _settings.HostPort.Value +
-                        " error=" + ex.GetType().Name + ": " + ex.Message +
-                        " retryInMs=" + RetryDelayMs);
+                    var hostLabel = _settings != null && _settings.SpectatorHostIP != null
+                        ? (_settings.SpectatorHostIP.Value ?? "?")
+                        : "?";
+                    var portLabel = _settings != null && _settings.HostPort != null
+                        ? _settings.HostPort.Value.ToString()
+                        : "?";
+                    var reason = FormatConnectFailureReason(ex);
+                    _logger.LogWarning("Co-op connect failed host=" + hostLabel + ":" + portLabel +
+                        " reason=" + reason + " retryInMs=" + RetryDelayMs);
                 }
                 finally
                 {
@@ -283,13 +309,30 @@ namespace WoodburySpectatorSync.Coop
 
                     var readResult = TcpFraming.TryReadFrame(stream, lengthBuffer, out var payload);
                     if (readResult == FrameReadResult.Disconnected) break;
+                    if (readResult == FrameReadResult.PayloadTooLarge)
+                    {
+                        _logger.LogWarning("Co-op protocol error code=PayloadTooLarge detail=tcp-frame");
+                        Status = "Protocol error";
+                        break;
+                    }
                     if (readResult == FrameReadResult.BadFrame)
                     {
                         Status = "Bad frame";
                         break;
                     }
 
-                    if (Protocol.TryParsePayload(payload, out var message, out var error))
+                    if (!Protocol.TryParsePayload(payload, out var message, out var errorCode, out var error))
+                    {
+                        _logger.LogWarning("Co-op protocol error code=" + errorCode + " detail=" + error);
+                        if (IsFatalProtocolError(errorCode))
+                        {
+                            _logger.LogWarning("Co-op client disconnecting on fatal protocol error code=" + errorCode);
+                            Status = "Protocol mismatch";
+                            _running = false;
+                            break;
+                        }
+                        continue;
+                    }
                     {
                         Interlocked.Exchange(ref _lastTcpReceiveMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                         if (IsHostStateType(message.Type))
@@ -335,10 +378,6 @@ namespace WoodburySpectatorSync.Coop
                             }
                             _incoming.Enqueue(message);
                         }
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Co-op protocol error: " + error);
                     }
                 }
             }
@@ -439,6 +478,51 @@ namespace WoodburySpectatorSync.Coop
             client.EndConnect(result);
         }
 
+        private static string FormatConnectFailureReason(Exception ex)
+        {
+            var root = ex != null ? ex.GetBaseException() : null;
+            var socket = root as SocketException ?? ex as SocketException;
+            if (socket != null)
+            {
+                switch (socket.SocketErrorCode)
+                {
+                    case SocketError.ConnectionRefused:
+                        return "connection-refused";
+                    case SocketError.TimedOut:
+                        return "timeout";
+                    case SocketError.HostUnreachable:
+                    case SocketError.NetworkUnreachable:
+                        return "host-unreachable";
+                    case SocketError.ConnectionReset:
+                    case SocketError.ConnectionAborted:
+                        return "connection-closed";
+                }
+            }
+
+            if (root is TimeoutException || ex is TimeoutException)
+            {
+                return "timeout";
+            }
+
+            if (root is NullReferenceException || ex is NullReferenceException)
+            {
+                return "unexpected-connect-state";
+            }
+
+            var message = root != null && !string.IsNullOrEmpty(root.Message)
+                ? root.Message
+                : (ex != null ? ex.Message : string.Empty);
+            return string.IsNullOrEmpty(message) ? "unknown" : message.Replace(' ', '-').ToLowerInvariant();
+        }
+
+        private static bool IsFatalProtocolError(ProtocolParseErrorCode errorCode)
+        {
+            return errorCode == ProtocolParseErrorCode.BadMagic ||
+                   errorCode == ProtocolParseErrorCode.UnsupportedVersion ||
+                   errorCode == ProtocolParseErrorCode.UnknownMessageType ||
+                   errorCode == ProtocolParseErrorCode.PayloadTooLarge;
+        }
+
         private static byte[] BuildPayload(Message message)
         {
             switch (message.Type)
@@ -455,7 +539,33 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.UdpInfo:
                     return Protocol.BuildUdpInfo(((UdpInfoMessage)message).Port);
                 case MessageType.SceneReady:
-                    return Protocol.BuildSceneReady(((SceneReadyMessage)message).SceneName);
+                {
+                    var msg = (SceneReadyMessage)message;
+                    return Protocol.BuildSceneReady(msg.SceneName, msg.SessionId, msg.Generation, msg.ReadyStatus, msg.Reason);
+                }
+                case MessageType.Hello:
+                {
+                    var msg = (HelloMessage)message;
+                    return Protocol.BuildHello(msg.ProtocolVersion, msg.PluginVersion, msg.ClientNonce);
+                }
+                case MessageType.SnapshotAck:
+                {
+                    var msg = (SnapshotAckMessage)message;
+                    return Protocol.BuildSnapshotAck(
+                        msg.SessionId,
+                        msg.Generation,
+                        msg.SceneName,
+                        msg.AppliedStoryCount,
+                        msg.AppliedDoorCount,
+                        msg.AppliedHoldableCount,
+                        msg.AppliedAiCount,
+                        msg.AppliedDialogueCount,
+                        msg.AppliedPlayerCount,
+                        msg.PendingObjectCount,
+                        msg.MissingObjectCount,
+                        msg.Ok,
+                        msg.Reason);
+                }
                 case MessageType.DialogueStart:
                 {
                     var msg = (DialogueStartMessage)message;
@@ -664,6 +774,9 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.DialogueChoice:
                 case MessageType.DialogueEnd:
                 case MessageType.PlayerInput:
+                case MessageType.HelloAck:
+                case MessageType.SnapshotBegin:
+                case MessageType.SnapshotEnd:
                     return true;
                 default:
                     return false;

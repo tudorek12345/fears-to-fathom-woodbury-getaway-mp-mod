@@ -325,20 +325,30 @@ namespace WoodburySpectatorSync.Coop
 
                     var readResult = TcpFraming.TryReadFrame(stream, lengthBuffer, out var payload);
                     if (readResult == FrameReadResult.Disconnected) break;
+                    if (readResult == FrameReadResult.PayloadTooLarge)
+                    {
+                        _logger.LogWarning("Co-op protocol error code=PayloadTooLarge detail=tcp-frame");
+                        break;
+                    }
                     if (readResult == FrameReadResult.BadFrame)
                     {
                         _logger.LogWarning("Co-op receive bad frame length");
                         break;
                     }
 
-                    if (Protocol.TryParsePayload(payload, out var message, out var error))
+                    if (Protocol.TryParsePayload(payload, out var message, out var errorCode, out var error))
                     {
                         Interlocked.Exchange(ref _lastTcpReceiveMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                         _incoming.Enqueue(message);
                     }
                     else
                     {
-                        _logger.LogWarning("Co-op protocol error: " + error);
+                        _logger.LogWarning("Co-op protocol error code=" + errorCode + " detail=" + error);
+                        if (IsFatalProtocolError(errorCode))
+                        {
+                            _logger.LogWarning("Co-op host disconnecting client on fatal protocol error code=" + errorCode);
+                            break;
+                        }
                     }
                 }
             }
@@ -436,6 +446,7 @@ namespace WoodburySpectatorSync.Coop
             switch (type)
             {
                 case MessageType.SceneChange:
+                case MessageType.SceneReady:
                 case MessageType.DoorState:
                 case MessageType.HoldableState:
                 case MessageType.StoryFlag:
@@ -446,6 +457,9 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.DialogueChoice:
                 case MessageType.DialogueEnd:
                 case MessageType.PlayerInput:
+                case MessageType.HelloAck:
+                case MessageType.SnapshotBegin:
+                case MessageType.SnapshotEnd:
                     return true;
                 default:
                     return false;
@@ -459,7 +473,7 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.SceneChange:
                 {
                     var msg = (SceneChangeMessage)message;
-                    return Protocol.BuildSceneChange(msg.SceneName, msg.BuildIndex, msg.StartSequence, msg.FromMenu);
+                    return Protocol.BuildSceneChange(msg.SceneName, msg.BuildIndex, msg.StartSequence, msg.FromMenu, msg.SessionId, msg.Generation);
                 }
                 case MessageType.PlayerTransform:
                     return Protocol.BuildPlayerTransform(((PlayerTransformMessage)message).State);
@@ -482,7 +496,45 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.UdpInfo:
                     return Protocol.BuildUdpInfo(((UdpInfoMessage)message).Port);
                 case MessageType.SceneReady:
-                    return Protocol.BuildSceneReady(((SceneReadyMessage)message).SceneName);
+                {
+                    var msg = (SceneReadyMessage)message;
+                    return Protocol.BuildSceneReady(msg.SceneName, msg.SessionId, msg.Generation, msg.ReadyStatus, msg.Reason);
+                }
+                case MessageType.HelloAck:
+                {
+                    var msg = (HelloAckMessage)message;
+                    return Protocol.BuildHelloAck(msg.ProtocolVersion, msg.PluginVersion, msg.SessionId, msg.Accepted, msg.Reason);
+                }
+                case MessageType.SnapshotBegin:
+                {
+                    var msg = (SnapshotBeginMessage)message;
+                    return Protocol.BuildSnapshotBegin(
+                        msg.SessionId,
+                        msg.Generation,
+                        msg.SceneName,
+                        msg.StoryCount,
+                        msg.DoorCount,
+                        msg.HoldableCount,
+                        msg.AiCount,
+                        msg.DialogueCount,
+                        msg.PlayerCount,
+                        msg.CustomCount);
+                }
+                case MessageType.SnapshotEnd:
+                {
+                    var msg = (SnapshotEndMessage)message;
+                    return Protocol.BuildSnapshotEnd(
+                        msg.SessionId,
+                        msg.Generation,
+                        msg.SceneName,
+                        msg.StoryCount,
+                        msg.DoorCount,
+                        msg.HoldableCount,
+                        msg.AiCount,
+                        msg.DialogueCount,
+                        msg.PlayerCount,
+                        msg.CustomCount);
+                }
                 case MessageType.DialogueLine:
                 {
                     var msg = (DialogueLineMessage)message;
@@ -552,6 +604,14 @@ namespace WoodburySpectatorSync.Coop
             return message.IndexOf("WSACancelBlockingCall", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    message.IndexOf("forcibly closed", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    message.IndexOf("transport connection", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsFatalProtocolError(ProtocolParseErrorCode errorCode)
+        {
+            return errorCode == ProtocolParseErrorCode.BadMagic ||
+                   errorCode == ProtocolParseErrorCode.UnsupportedVersion ||
+                   errorCode == ProtocolParseErrorCode.UnknownMessageType ||
+                   errorCode == ProtocolParseErrorCode.PayloadTooLarge;
         }
     }
 }

@@ -56,6 +56,11 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, int> _pendingCabinGameFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _pendingPizzeriaFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _pendingRoadTripFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, DoorState> _snapshotDoorStates = new Dictionary<string, DoorState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, HoldableState> _snapshotHoldableStates = new Dictionary<string, HoldableState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, AiTransformState> _snapshotAiStates = new Dictionary<string, AiTransformState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, StoryFlagMessage> _snapshotStoryFlags = new Dictionary<string, StoryFlagMessage>(StringComparer.Ordinal);
+        private readonly List<Message> _snapshotDialogueMessages = new List<Message>();
         private float _loadingStartTime;
         private float _loadingLastProgress;
         private float _loadingLastProgressTime;
@@ -138,6 +143,7 @@ namespace WoodburySpectatorSync.Coop
         private const float LoadingTimeoutWarnSeconds = 45f;
         private const float LoadingStallSeconds = 6f;
         private const float LoadingProgressLogIntervalSeconds = 5f;
+        private const float ManagerReadyTimeoutSeconds = 15f;
         private const int MaxMessagesPerFrame = 200;
         private const int MaxTransformsPerFrame = 60;
         private const float PendingRetryLogIntervalSeconds = 5f;
@@ -146,6 +152,7 @@ namespace WoodburySpectatorSync.Coop
         private const float AiStaleSnapSeconds = 1.0f;
         private const float AiGeneralSmoothing = 13f;
         private const float AiMikeSmoothing = 18f;
+        private const float LocalPlayerHostSideOffsetMeters = 1.35f;
         private bool _forcedCabinSpawn;
         private bool _cabinPrefsPrepared;
         private bool _dialogueUiDisabled;
@@ -208,6 +215,15 @@ namespace WoodburySpectatorSync.Coop
         private int _sceneReadySentGeneration = -1;
         private bool _sceneReadyDirty = true;
         private bool _wasConnected;
+        private SessionLifecycle _lifecycle;
+        private int _activeHostSessionId;
+        private int _activeSceneGeneration;
+        private long _hostStateAppliedAtSnapshotBegin;
+        private long _hostTransformsDroppedPreLive;
+        private int _lastSnapshotPendingObjectCount;
+        private int _lastSnapshotMissingObjectCount;
+        private float _nextManagerWaitLogTime;
+        private float _managerWaitStartTime;
         private string _lastStartPrefScene = string.Empty;
         private int _lastStartPrefSeq = int.MinValue;
         private int _lastStartPrefFromMenu = int.MinValue;
@@ -337,6 +353,7 @@ namespace WoodburySpectatorSync.Coop
             _settings = settings;
             _client = client;
             _sessionLogWrite = sessionLogWrite;
+            _lifecycle = new SessionLifecycle("client", logger, sessionLogWrite);
             _interactor = new CoopClientInteractor(client);
             _hostAvatar = new RemoteAvatar("CoopHostAvatar", new Color(1f, 0.2f, 0.2f, 0.8f));
 
@@ -364,6 +381,11 @@ namespace WoodburySpectatorSync.Coop
         }
 
         public bool IsSceneLoading => _isLoading;
+        public string SessionStateLabel => _lifecycle != null ? _lifecycle.State.ToString() : "Disconnected";
+        public int SessionGeneration => _activeSceneGeneration;
+        public int SessionId => _lifecycle != null ? _lifecycle.CurrentSessionId : 0;
+        public int SnapshotPendingObjectCount => _lastSnapshotPendingObjectCount;
+        public int SnapshotMissingObjectCount => _lastSnapshotMissingObjectCount;
         public string PendingSceneName
         {
             get
@@ -377,6 +399,7 @@ namespace WoodburySpectatorSync.Coop
         public int PendingDoorCount => _pendingDoorStates.Count;
         public int PendingHoldableCount => _pendingHoldableStates.Count;
         public int PendingAiCount => _pendingAiStates.Count;
+        public int PendingObjectCount => CountPendingObjects();
         public float LastHostUpdateAgeSeconds => GetHostAppliedAgeSeconds();
         public long LastHostTransformReceiveMs => _lastHostTransformReceiveMs;
         public int HostTransformReceiveCount => _hostTransformReceiveCount;
@@ -414,16 +437,52 @@ namespace WoodburySpectatorSync.Coop
 
         public void Update()
         {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
             if (_client.IsConnected && !_wasConnected)
             {
                 _wasConnected = true;
                 MarkSceneReadyDirty("connect");
                 _sceneReadySentGeneration = -1;
+                _activeHostSessionId = 0;
+                _activeSceneGeneration = 0;
+                _hostTransformsDroppedPreLive = 0;
+                _lifecycle.SetSessionId(_client.ActiveSessionId);
+                _lifecycle.TryTransition(
+                    SessionState.Connecting,
+                    "tcp-connect-start",
+                    SceneManager.GetActiveScene().name,
+                    _activeSceneGeneration,
+                    _client.ActiveSessionId,
+                    nowMs);
+                _lifecycle.TryTransition(
+                    SessionState.Hello,
+                    "tcp-connected",
+                    SceneManager.GetActiveScene().name,
+                    _activeSceneGeneration,
+                    _client.ActiveSessionId,
+                    nowMs);
+                try
+                {
+                    var rng = new System.Random();
+                    long nonce = ((long)rng.Next() << 32) | (uint)rng.Next();
+                    _client.Enqueue(new HelloMessage(Protocol.Version, Protocol.PluginVersion, nonce));
+                    _logger.LogInfo("Co-op session client: Hello sent version=" + Protocol.Version +
+                        " plugin=" + Protocol.PluginVersion +
+                        " nonce=" + nonce);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Co-op session client: failed to send Hello: " + ex.Message);
+                }
             }
             else if (!_client.IsConnected && _wasConnected)
             {
                 _wasConnected = false;
                 ResetDisconnectedOverlayState();
+                _lifecycle.ForceDisconnect("tcp-dropped", nowMs);
+                _activeHostSessionId = 0;
+                _activeSceneGeneration = 0;
             }
 
             if (!_client.IsConnected)
@@ -483,7 +542,7 @@ namespace WoodburySpectatorSync.Coop
 
             if (_settings.CoopSnapToHostOnSceneLoad.Value && !_isLoading && !_initialCameraSet && GetActiveCamera() != null && _hasPendingHostCam)
             {
-                TeleportToHost();
+                SnapOrPlaceClientAtHostStart("scene-load");
                 _initialCameraSet = true;
                 _hasPendingHostCam = false;
             }
@@ -641,11 +700,41 @@ namespace WoodburySpectatorSync.Coop
             var transformCount = 0;
             var hasTransform = false;
             PlayerTransformState latestTransform = default;
+            var nowSeconds = Time.realtimeSinceStartup;
 
             while (_client.TryDequeue(out var message))
             {
+                if (message is HelloAckMessage helloAck)
+                {
+                    HandleHelloAck(helloAck);
+                    continue;
+                }
+                if (message is SnapshotBeginMessage snapshotBegin)
+                {
+                    HandleSnapshotBegin(snapshotBegin);
+                    continue;
+                }
+                if (message is SnapshotEndMessage snapshotEnd)
+                {
+                    HandleSnapshotEnd(snapshotEnd);
+                    continue;
+                }
                 if (message is PlayerTransformMessage player)
                 {
+                    if (!_lifecycle.IsLive)
+                    {
+                        _hostTransformsDroppedPreLive++;
+                        _lifecycle.NotePreLive(
+                            "TCP",
+                            "drop",
+                            MessageType.PlayerTransform,
+                            "not-scene-ready",
+                            SceneManager.GetActiveScene().name,
+                            _activeSceneGeneration,
+                            _activeHostSessionId,
+                            nowSeconds);
+                        continue;
+                    }
                     latestTransform = player.State;
                     hasTransform = true;
                     transformCount++;
@@ -653,6 +742,34 @@ namespace WoodburySpectatorSync.Coop
                     {
                         break;
                     }
+                    continue;
+                }
+
+                if (_lifecycle.State == SessionState.SnapshotApplying && TryBufferSnapshotMessage(message))
+                {
+                    _lifecycle.NotePreLive(
+                        "TCP",
+                        "held",
+                        message.Type,
+                        null,
+                        SceneManager.GetActiveScene().name,
+                        _activeSceneGeneration,
+                        _activeHostSessionId,
+                        nowSeconds);
+                    continue;
+                }
+
+                if (!_lifecycle.IsLive && IsLiveHostStateMessage(message.Type))
+                {
+                    _lifecycle.NotePreLive(
+                        "TCP",
+                        "drop",
+                        message.Type,
+                        "not-scene-ready",
+                        SceneManager.GetActiveScene().name,
+                        _activeSceneGeneration,
+                        _activeHostSessionId,
+                        nowSeconds);
                     continue;
                 }
 
@@ -679,10 +796,37 @@ namespace WoodburySpectatorSync.Coop
                 }
                 else if (message is SceneChangeMessage scene)
                 {
-                    RequestSceneLoad(scene.SceneName, scene.BuildIndex, scene.StartSequence, scene.FromMenu);
-                    if (!_isLoading && scene.SceneName == SceneManager.GetActiveScene().name)
+                    if (scene.SessionId != 0 && _activeHostSessionId != 0 && scene.SessionId != _activeHostSessionId)
                     {
-                        SendSceneReady(scene.SceneName, force: true);
+                        _logger.LogWarning("Co-op session client: SceneChange stale session=" + scene.SessionId +
+                            " active=" + _activeHostSessionId + " ignoring");
+                        continue;
+                    }
+                    if (scene.SessionId != 0)
+                    {
+                        _activeHostSessionId = scene.SessionId;
+                    }
+                    if (scene.Generation != 0)
+                    {
+                        _activeSceneGeneration = scene.Generation;
+                    }
+                    var nowMsForScene = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    if (_lifecycle.State == SessionState.Connected || _lifecycle.State == SessionState.Live ||
+                        _lifecycle.State == SessionState.SceneReady || _lifecycle.State == SessionState.SnapshotApplying)
+                    {
+                        _lifecycle.TryTransition(
+                            SessionState.SceneSyncing,
+                            "scene-change",
+                            scene.SceneName,
+                            scene.Generation,
+                            _activeHostSessionId,
+                            nowMsForScene);
+                    }
+                    RequestSceneLoad(scene.SceneName, scene.BuildIndex, scene.StartSequence, scene.FromMenu);
+                    if (!_isLoading && scene.SceneName == SceneManager.GetActiveScene().name &&
+                        IsRequiredManagerReady(scene.SceneName, out _))
+                    {
+                        SendSceneReady(scene.SceneName, force: true, SceneReadyStatus.ReadyFull, GetSceneReadySuccessReason(scene.SceneName));
                     }
                     IncrementHostStateApplied();
                 }
@@ -748,8 +892,191 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private void HandleHelloAck(HelloAckMessage ack)
+        {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (_lifecycle.State != SessionState.Hello)
+            {
+                _logger.LogWarning("Co-op session client: stray HelloAck in state " + _lifecycle.State + " ignoring");
+                return;
+            }
+
+            if (!ack.Accept)
+            {
+                var reason = string.IsNullOrEmpty(ack.Reason) ? "rejected" : ack.Reason;
+                _logger.LogError("Co-op session client: HelloAck rejected reason=" + reason);
+                _lifecycle.ForceDisconnect("hello-rejected:" + reason, nowMs);
+                _client.Disconnect();
+                return;
+            }
+
+            if (ack.ProtocolVersion != Protocol.Version)
+            {
+                var reason = "version-mismatch host=" + ack.ProtocolVersion + " client=" + Protocol.Version + " detail=" + ack.Reason;
+                _logger.LogError("Co-op session client: HelloAck rejected reason=" + reason);
+                _lifecycle.ForceDisconnect("hello-rejected:" + reason, nowMs);
+                _client.Disconnect();
+                return;
+            }
+
+            if (!string.Equals(ack.PluginVersion, Protocol.PluginVersion, StringComparison.Ordinal))
+            {
+                var reason = "plugin-version-mismatch host=" + ack.PluginVersion + " client=" + Protocol.PluginVersion + " detail=" + ack.Reason;
+                _logger.LogError("Co-op session client: HelloAck rejected reason=" + reason);
+                _lifecycle.ForceDisconnect("hello-rejected:" + reason, nowMs);
+                _client.Disconnect();
+                return;
+            }
+
+            _activeHostSessionId = ack.SessionId;
+            _client.SetActiveSessionId(ack.SessionId);
+            _lifecycle.SetSessionId(ack.SessionId);
+            _lifecycle.TryTransition(
+                SessionState.Connected,
+                "hello-ack-accepted",
+                SceneManager.GetActiveScene().name,
+                _activeSceneGeneration,
+                ack.SessionId,
+                nowMs);
+            _logger.LogInfo("Co-op session client: HelloAck accepted sessionId=" + ack.SessionId);
+        }
+
+        private void HandleSnapshotBegin(SnapshotBeginMessage begin)
+        {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (begin.SessionId != 0 && _activeHostSessionId != 0 && begin.SessionId != _activeHostSessionId)
+            {
+                _logger.LogWarning("Co-op session client: SnapshotBegin stale session=" + begin.SessionId +
+                    " active=" + _activeHostSessionId + " ignoring");
+                return;
+            }
+            _activeSceneGeneration = begin.Generation;
+            _hostStateAppliedAtSnapshotBegin = Interlocked.Read(ref _hostStateAppliedCount);
+            ClearSnapshotBuffers();
+            // Force the SceneSyncing -> SceneReady transition if we missed it (the host has accepted us as ready).
+            if (_lifecycle.State == SessionState.SceneSyncing)
+            {
+                _lifecycle.TryTransition(
+                    SessionState.SceneReady,
+                    "host-accepted-ready",
+                    begin.SceneName,
+                    begin.Generation,
+                    begin.SessionId,
+                    nowMs);
+            }
+            if (_lifecycle.State == SessionState.SceneReady)
+            {
+                _lifecycle.TryTransition(
+                    SessionState.SnapshotApplying,
+                    "snapshot-begin",
+                    begin.SceneName,
+                    begin.Generation,
+                    begin.SessionId,
+                    nowMs);
+            }
+            _logger.LogInfo("Co-op session client: SnapshotBegin gen=" + begin.Generation +
+                " expected=" + begin.ExpectedItemCount + " scene=" + begin.SceneName);
+        }
+
+        private void HandleSnapshotEnd(SnapshotEndMessage end)
+        {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (end.SessionId != 0 && _activeHostSessionId != 0 && end.SessionId != _activeHostSessionId)
+            {
+                _logger.LogWarning("Co-op session client: SnapshotEnd stale session=" + end.SessionId +
+                    " active=" + _activeHostSessionId + " ignoring");
+                return;
+            }
+
+            if (end.Generation != 0 && _activeSceneGeneration != 0 && end.Generation != _activeSceneGeneration)
+            {
+                _logger.LogWarning("Co-op session client: SnapshotEnd stale generation=" + end.Generation +
+                    " active=" + _activeSceneGeneration + " ignoring");
+                return;
+            }
+
+            // Best-effort: drain any pending state we can apply now.
+            var counts = SnapshotApplyCounts.Empty();
+            try
+            {
+                counts = ApplySnapshotBuffers();
+                ApplyPendingStates();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Co-op session client: SnapshotEnd ApplyPendingStates threw: " + ex.Message);
+            }
+
+            _lastSnapshotPendingObjectCount = CountPendingObjects();
+            _lastSnapshotMissingObjectCount = _lastSnapshotPendingObjectCount;
+
+            var ok = _lastSnapshotMissingObjectCount == 0;
+            var ackReason = ok ? "ok" :
+                "pending=" + _lastSnapshotPendingObjectCount + " missing=" + _lastSnapshotMissingObjectCount;
+            try
+            {
+                _client.Enqueue(new SnapshotAckMessage(
+                    _activeHostSessionId,
+                    end.Generation,
+                    end.SceneName,
+                    counts.Story,
+                    counts.Door,
+                    counts.Holdable,
+                    counts.Ai,
+                    counts.Dialogue,
+                    counts.Player,
+                    _lastSnapshotPendingObjectCount,
+                    _lastSnapshotMissingObjectCount,
+                    ok,
+                    ackReason));
+                _logger.LogInfo("Co-op session client: SnapshotAck sent gen=" + end.Generation +
+                    " story=" + counts.Story +
+                    " doors=" + counts.Door +
+                    " holdables=" + counts.Holdable +
+                    " ai=" + counts.Ai +
+                    " dialogue=" + counts.Dialogue +
+                    " players=" + counts.Player +
+                    " pending=" + _lastSnapshotPendingObjectCount +
+                    " missing=" + _lastSnapshotMissingObjectCount +
+                    " sent=" + end.SentItemCount + " reason=" + ackReason);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Co-op session client: SnapshotAck send failed: " + ex.Message);
+            }
+
+            if (_lifecycle.State == SessionState.SnapshotApplying)
+            {
+                _lifecycle.TryTransition(
+                    SessionState.Live,
+                    "snapshot-end-applied",
+                    end.SceneName,
+                    end.Generation,
+                    _activeHostSessionId,
+                    nowMs);
+            }
+        }
+
         private void ForceApplyLatchedTransform()
         {
+            if (!_lifecycle.IsLive)
+            {
+                if (_client.LatestHostTransformSeq > _lastAppliedHostTransformSeq)
+                {
+                    _client.MarkLatestHostTransformConsumed();
+                    _hostTransformsDroppedPreLive++;
+                    _lifecycle.NotePreLive(
+                        "UDP",
+                        "drop",
+                        MessageType.PlayerTransform,
+                        null,
+                        SceneManager.GetActiveScene().name,
+                        _activeSceneGeneration,
+                        _activeHostSessionId,
+                        Time.realtimeSinceStartup);
+                }
+                return;
+            }
             var latestSeq = _client.LatestHostTransformSeq;
             if (latestSeq <= 0)
             {
@@ -991,10 +1318,91 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
             if (!_sceneReadyDirty) return;
-            SendSceneReady(SceneManager.GetActiveScene().name, force: false);
+
+            // Lifecycle gate: don't send SceneReady before the host has accepted us (Hello/HelloAck complete).
+            // Allowed states are SceneSyncing (host has issued SceneChange) and beyond. While Hello/Connected we wait.
+            if (_lifecycle.State < SessionState.SceneSyncing && _lifecycle.State != SessionState.Disconnected)
+            {
+                return;
+            }
+
+            // Manager-discoverable gate: for scenes with a known manager component, wait until it exists in the
+            // hierarchy before declaring ready. This fixes the "ready at 14% load" race where async-load reports
+            // done but gameplay objects haven't spawned yet.
+            var sceneName = SceneManager.GetActiveScene().name;
+            string requiredManagerName;
+            if (!IsRequiredManagerReady(sceneName, out requiredManagerName))
+            {
+                var now = Time.realtimeSinceStartup;
+                if (_managerWaitStartTime == 0f)
+                {
+                    _managerWaitStartTime = now;
+                    _nextManagerWaitLogTime = now;
+                }
+                var waited = now - _managerWaitStartTime;
+                if (now >= _nextManagerWaitLogTime)
+                {
+                    _nextManagerWaitLogTime = now + 1f;
+                    _logger.LogInfo("Co-op session client: scene loaded but manager not ready scene=" +
+                        sceneName +
+                        " manager=" + requiredManagerName +
+                        " waited=" + waited.ToString("0.0") + "s" +
+                        " gen=" + _activeSceneGeneration +
+                        " sid=" + _activeHostSessionId);
+                }
+
+                if (waited >= ManagerReadyTimeoutSeconds)
+                {
+                    _logger.LogWarning("Co-op session client: manager readiness timeout scene=" +
+                        sceneName +
+                        " manager=" + requiredManagerName +
+                        " waited=" + waited.ToString("0.0") + "s" +
+                        " gen=" + _activeSceneGeneration +
+                        " sid=" + _activeHostSessionId);
+                    _managerWaitStartTime = 0f;
+                    _nextManagerWaitLogTime = 0f;
+                    SendSceneReady(sceneName, force: true, SceneReadyStatus.ReadyPartial, "manager-timeout");
+                }
+                return;
+            }
+            _managerWaitStartTime = 0f;
+            _nextManagerWaitLogTime = 0f;
+            SendSceneReady(sceneName, force: false, SceneReadyStatus.ReadyFull, GetSceneReadySuccessReason(sceneName));
         }
 
-        private void SendSceneReady(string sceneName, bool force)
+        private bool IsRequiredManagerReady(string sceneName, out string requiredManagerName)
+        {
+            requiredManagerName = string.Empty;
+            if (string.IsNullOrEmpty(sceneName)) return true;
+            if (string.Equals(sceneName, "CabinScene", StringComparison.Ordinal) ||
+                string.Equals(sceneName, "CabinDarkScene", StringComparison.Ordinal))
+            {
+                requiredManagerName = "CabinGameManager";
+                return UnityEngine.Object.FindObjectOfType<CabinGameManager>() != null;
+            }
+            if (string.Equals(sceneName, "Pizzeria", StringComparison.Ordinal) ||
+                string.Equals(sceneName, "PizzeriaScene", StringComparison.Ordinal))
+            {
+                requiredManagerName = "PizzeriaGameManager";
+                return UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>() != null;
+            }
+            if (string.Equals(sceneName, "RoadTrip", StringComparison.Ordinal) ||
+                string.Equals(sceneName, "RoadTripScene", StringComparison.Ordinal))
+            {
+                requiredManagerName = "RoadTripGameManager";
+                return UnityEngine.Object.FindObjectOfType<RoadTripGameManager>() != null;
+            }
+            return true;
+        }
+
+        private string GetSceneReadySuccessReason(string sceneName)
+        {
+            return IsRequiredManagerReady(sceneName, out var requiredManagerName) && string.IsNullOrEmpty(requiredManagerName)
+                ? "no-manager-required"
+                : "manager-found";
+        }
+
+        private void SendSceneReady(string sceneName, bool force, SceneReadyStatus readyStatus, string reason)
         {
             if (string.IsNullOrEmpty(sceneName)) return;
             if (!force &&
@@ -1004,11 +1412,22 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
 
-            _client.Enqueue(new SceneReadyMessage(sceneName));
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _client.Enqueue(new SceneReadyMessage(sceneName, _activeHostSessionId, _activeSceneGeneration, readyStatus, reason));
             _lastSceneReadySent = sceneName;
             _lastSceneReadySentTime = Time.realtimeSinceStartup;
             _sceneReadySentGeneration = _sceneReadyGeneration;
             _sceneReadyDirty = false;
+            if (_lifecycle.State == SessionState.SceneSyncing)
+            {
+                _lifecycle.TryTransition(
+                    SessionState.SceneReady,
+                    reason,
+                    sceneName,
+                    _activeSceneGeneration,
+                    _activeHostSessionId,
+                    nowMs);
+            }
         }
 
         private void MarkSceneReadyDirty(string reason)
@@ -1088,6 +1507,9 @@ namespace WoodburySpectatorSync.Coop
             _pendingCabinGameFlags.Clear();
             _pendingPizzeriaFlags.Clear();
             _pendingRoadTripFlags.Clear();
+            ClearSnapshotBuffers();
+            _lastSnapshotPendingObjectCount = 0;
+            _lastSnapshotMissingObjectCount = 0;
             _pendingDoorFirstSeen.Clear();
             _pendingHoldableFirstSeen.Clear();
             _pendingAiFirstSeen.Clear();
@@ -1568,9 +1990,15 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
             {
                 mike.gameObject.SetActive(value != 0);
-                if (value != 0)
+                if (value != 0 && ShouldPreferPostEatingMike(mike))
                 {
                     ForceMikePostEatingTarget(mike, "postEating:active");
+                }
+                else if (ReferenceEquals(_forcedMikeTarget, mike.transform))
+                {
+                    _forcedMikeTarget = null;
+                    _forcedMikeReason = string.Empty;
+                    UpdateMikeVariantFromState();
                 }
                 MaybeLogCabinHidingMirror(mike);
                 return true;
@@ -2004,13 +2432,25 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
+            if (_cabinGameManager != null)
+            {
+                var seq = _cabinGameManager.CurrentSequence;
+                if (seq == SequenceType.RizzSequence ||
+                    seq == SequenceType.HikerSequence ||
+                    seq == SequenceType.HostAtDoor ||
+                    seq == SequenceType.HostHittingDoor)
+                {
+                    return true;
+                }
+            }
+
             if (mike.startedSeeking ||
                 mike.playerFound ||
                 mike.goingToToolShed ||
                 mike.catJumpscareDone ||
                 mike.mikeInBackyard ||
-                !mike.waitOutsideCloset ||
-                !mike.hidingSeq1)
+                mike.waitOutsideCloset ||
+                mike.hidingSeq1)
             {
                 return true;
             }
@@ -3813,6 +4253,192 @@ namespace WoodburySpectatorSync.Coop
             public float LastRenderTime;
         }
 
+        private sealed class SnapshotApplyCounts
+        {
+            public int Story;
+            public int Door;
+            public int Holdable;
+            public int Ai;
+            public int Dialogue;
+            public int Player;
+
+            public static SnapshotApplyCounts Empty()
+            {
+                return new SnapshotApplyCounts();
+            }
+        }
+
+        private bool TryBufferSnapshotMessage(Message message)
+        {
+            if (message is DoorStateMessage door)
+            {
+                _snapshotDoorStates[door.State.Path ?? string.Empty] = door.State;
+                return true;
+            }
+
+            if (message is HoldableStateMessage holdable)
+            {
+                _snapshotHoldableStates[holdable.State.Path ?? string.Empty] = holdable.State;
+                return true;
+            }
+
+            if (message is AiTransformMessage ai)
+            {
+                _snapshotAiStates[ai.State.Path ?? string.Empty] = ai.State;
+                return true;
+            }
+
+            if (message is StoryFlagMessage flag)
+            {
+                _snapshotStoryFlags[flag.Key ?? string.Empty] = flag;
+                return true;
+            }
+
+            if (message is DialogueLineMessage ||
+                message is DialogueStartMessage ||
+                message is DialogueAdvanceMessage ||
+                message is DialogueChoiceMessage ||
+                message is DialogueEndMessage)
+            {
+                _snapshotDialogueMessages.Add(message);
+                return true;
+            }
+
+            if (message is PlayerInputMessage)
+            {
+                _snapshotDialogueMessages.Add(message);
+                return true;
+            }
+
+            return false;
+        }
+
+        private SnapshotApplyCounts ApplySnapshotBuffers()
+        {
+            var counts = new SnapshotApplyCounts();
+
+            foreach (var flag in _snapshotStoryFlags.Values)
+            {
+                ApplyStoryFlag(flag);
+                IncrementHostStateApplied();
+                counts.Story++;
+            }
+
+            foreach (var state in _snapshotDoorStates.Values)
+            {
+                ApplyDoorState(state);
+                IncrementHostStateApplied();
+                if (!_pendingDoorStates.ContainsKey(state.Path ?? string.Empty))
+                {
+                    counts.Door++;
+                }
+            }
+
+            foreach (var state in _snapshotHoldableStates.Values)
+            {
+                ApplyHoldableState(state);
+                IncrementHostStateApplied();
+                if (!_pendingHoldableStates.ContainsKey(state.Path ?? string.Empty))
+                {
+                    counts.Holdable++;
+                }
+            }
+
+            foreach (var state in _snapshotAiStates.Values)
+            {
+                ApplyAiState(state);
+                IncrementHostStateApplied();
+                if (!_pendingAiStates.ContainsKey(state.Path ?? string.Empty))
+                {
+                    counts.Ai++;
+                }
+            }
+
+            foreach (var message in _snapshotDialogueMessages)
+            {
+                if (message is DialogueLineMessage dialogue)
+                {
+                    HandleRemoteDialogue(dialogue);
+                    IncrementHostStateApplied();
+                    counts.Dialogue++;
+                }
+                else if (message is DialogueStartMessage dialogueStart)
+                {
+                    UpdateHostDialogueState(dialogueStart.ConversationId, dialogueStart.EntryId, -1);
+                    IncrementHostStateApplied();
+                    counts.Dialogue++;
+                }
+                else if (message is DialogueAdvanceMessage dialogueAdvance)
+                {
+                    UpdateHostDialogueState(dialogueAdvance.ConversationId, dialogueAdvance.EntryId, -1);
+                    IncrementHostStateApplied();
+                    counts.Dialogue++;
+                }
+                else if (message is DialogueChoiceMessage dialogueChoice)
+                {
+                    UpdateHostDialogueState(dialogueChoice.ConversationId, dialogueChoice.EntryId, dialogueChoice.ChoiceIndex);
+                    IncrementHostStateApplied();
+                    counts.Dialogue++;
+                }
+                else if (message is DialogueEndMessage dialogueEnd)
+                {
+                    UpdateHostDialogueState(dialogueEnd.ConversationId, -1, -1, ended: true);
+                    IncrementHostStateApplied();
+                    counts.Dialogue++;
+                }
+                else if (message is PlayerInputMessage playerInput)
+                {
+                    _lastHostPlayerId = playerInput.State.PlayerId;
+                    _hostProxy?.ApplyInput(playerInput.State);
+                    IncrementHostStateApplied();
+                    counts.Player++;
+                }
+            }
+
+            ClearSnapshotBuffers();
+            return counts;
+        }
+
+        private void ClearSnapshotBuffers()
+        {
+            _snapshotDoorStates.Clear();
+            _snapshotHoldableStates.Clear();
+            _snapshotAiStates.Clear();
+            _snapshotStoryFlags.Clear();
+            _snapshotDialogueMessages.Clear();
+        }
+
+        private int CountPendingObjects()
+        {
+            return _pendingDoorStates.Count +
+                   _pendingHoldableStates.Count +
+                   _pendingAiStates.Count +
+                   _pendingCabinHouseFlags.Count +
+                   _pendingCabinGameFlags.Count +
+                   _pendingPizzeriaFlags.Count +
+                   _pendingRoadTripFlags.Count;
+        }
+
+        private static bool IsLiveHostStateMessage(MessageType type)
+        {
+            switch (type)
+            {
+                case MessageType.DoorState:
+                case MessageType.HoldableState:
+                case MessageType.StoryFlag:
+                case MessageType.AiTransform:
+                case MessageType.DialogueLine:
+                case MessageType.DialogueStart:
+                case MessageType.DialogueAdvance:
+                case MessageType.DialogueChoice:
+                case MessageType.DialogueEnd:
+                case MessageType.PlayerInput:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
         private void ApplyPendingStates()
         {
             if (_isLoading) return;
@@ -3989,6 +4615,12 @@ namespace WoodburySpectatorSync.Coop
             if (!_hasPendingHostCam) return;
             if (_settings.CoopTeleportDistance.Value <= 0f) return;
             if (_isLoading) return;
+            if (_settings.CoopUseLocalPlayer.Value)
+            {
+                // In local-player co-op the host transform belongs to the remote proxy only.
+                // Repeatedly teleporting the real client player to it clumps both players together.
+                return;
+            }
 
             var now = Time.realtimeSinceStartup;
             if (ShouldUseHostScriptedLock())
@@ -4096,6 +4728,50 @@ namespace WoodburySpectatorSync.Coop
             {
                 _camera.transform.SetPositionAndRotation(_pendingHostCamPos, _pendingHostCamRot);
             }
+        }
+
+        private void SnapOrPlaceClientAtHostStart(string reason)
+        {
+            if (_settings.CoopUseLocalPlayer.Value)
+            {
+                PlaceLocalPlayerBesideHost(reason);
+                return;
+            }
+
+            TeleportToHost();
+        }
+
+        private void PlaceLocalPlayerBesideHost(string reason)
+        {
+            if (!_hasPendingHostCam) return;
+            EnsureLocalPlayerRefs();
+            if (_localFpc == null) return;
+
+            var right = _pendingHostPlayerRot * Vector3.right;
+            right.y = 0f;
+            if (right.sqrMagnitude < 0.001f)
+            {
+                right = Vector3.right;
+            }
+            right.Normalize();
+
+            var targetPosition = _pendingHostPlayerPos + right * LocalPlayerHostSideOffsetMeters;
+            targetPosition.y = _pendingHostPlayerPos.y;
+            var targetRotation = Quaternion.Euler(0f, _pendingHostPlayerRot.eulerAngles.y, 0f);
+
+            var controller = _localFpc.characterController;
+            if (controller != null) controller.enabled = false;
+            _localFpc.transform.SetPositionAndRotation(targetPosition, targetRotation);
+            if (_localFpc.playerCamera != null)
+            {
+                _localFpc.playerCamera.transform.rotation = _pendingHostCamRot;
+            }
+            if (controller != null) controller.enabled = true;
+
+            var message = "Co-op client local player placed beside host reason=" + (reason ?? "-") +
+                " offset=" + LocalPlayerHostSideOffsetMeters.ToString("0.00") + "m";
+            _logger.LogInfo(message);
+            _sessionLogWrite?.Invoke(message);
         }
 
         private Camera GetActiveCamera()
@@ -4622,14 +5298,14 @@ namespace WoodburySpectatorSync.Coop
             if (!string.IsNullOrEmpty(sequenceName) && TryInvokeCabinSequence(gameManager, sequenceName))
             {
                 _forcedCabinSpawn = true;
-                TeleportToHost();
+                SnapOrPlaceClientAtHostStart("force-cabin-start");
                 return;
             }
 
             _logger.LogWarning("Forcing cabin spawn to skip intro (client)");
             gameManager.TestingModeStartInsideBeforeFridgeStocking();
             _forcedCabinSpawn = true;
-            TeleportToHost();
+            SnapOrPlaceClientAtHostStart("force-cabin-start");
         }
 
         private void PrepareCabinStartPrefs(string sceneName, int startSeq, int fromMenu)

@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.2.33")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.3.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -411,6 +411,11 @@ namespace WoodburySpectatorSync
                 var sequenceLabel = GetSequenceLabel();
                 return new[]
                 {
+                    "Session: " + _coopHost.SessionStateLabel +
+                    " sid=" + _coopHost.SessionId +
+                    " gen=" + _coopHost.SessionGeneration +
+                    " snapAck=" + _coopHost.LastSnapshotAckGeneration +
+                    " retry=" + _coopHost.SceneChangeRetryCount,
                     "Peer: scene=" + (string.IsNullOrEmpty(_coopHost.ClientSceneName) ? "-" : _coopHost.ClientSceneName) +
                     " ready=" + (_coopHost.ClientSceneReady ? "yes" : "no") +
                     " awaiting=" + (_coopHost.AwaitingSceneReady ? "yes" : "no"),
@@ -453,6 +458,11 @@ namespace WoodburySpectatorSync
                 var appliedNetMs = _coopClientCoordinator.LastAppliedHostNetMs;
                 return new[]
                 {
+                    "Session: " + _coopClientCoordinator.SessionStateLabel +
+                    " sid=" + _coopClientCoordinator.SessionId +
+                    " gen=" + _coopClientCoordinator.SessionGeneration +
+                    " pending=" + _coopClientCoordinator.SnapshotPendingObjectCount +
+                    " missing=" + _coopClientCoordinator.SnapshotMissingObjectCount,
                     "Net: ping=" + FormatPing(_coopClient.LastPingRttMs) +
                     " tcpRx=" + FormatAge(nowMs, _coopClient.LastTcpReceiveMs) +
                     " udpRx=" + FormatAge(nowMs, _coopClient.UdpLastReceiveMs),

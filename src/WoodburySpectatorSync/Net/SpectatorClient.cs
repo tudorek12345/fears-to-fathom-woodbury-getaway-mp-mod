@@ -109,13 +109,19 @@ namespace WoodburySpectatorSync.Net
                 {
                     var readResult = TcpFraming.TryReadFrame(_stream, lengthBuffer, out var payload);
                     if (readResult == FrameReadResult.Disconnected) break;
+                    if (readResult == FrameReadResult.PayloadTooLarge)
+                    {
+                        Status = "Protocol error";
+                        _logger.LogWarning("Protocol error code=PayloadTooLarge detail=tcp-frame");
+                        break;
+                    }
                     if (readResult == FrameReadResult.BadFrame)
                     {
                         Status = "Bad frame";
                         break;
                     }
 
-                    if (Protocol.TryParsePayload(payload, out var message, out var error))
+                    if (Protocol.TryParsePayload(payload, out var message, out var errorCode, out var error))
                     {
                         if (message is PingMessage)
                         {
@@ -133,7 +139,7 @@ namespace WoodburySpectatorSync.Net
                     }
                     else
                     {
-                        _logger.LogWarning("Protocol error: " + error);
+                        _logger.LogWarning("Protocol error code=" + errorCode + " detail=" + error);
                     }
                 }
             }

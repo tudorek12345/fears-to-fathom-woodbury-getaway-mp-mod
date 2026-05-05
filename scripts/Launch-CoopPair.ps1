@@ -229,7 +229,7 @@ OverlayEnabled = true
 [Coop]
 RouteInteractionsToHost = true
 UseLocalPlayerController = true
-SnapToHostOnSceneLoad = true
+SnapToHostOnSceneLoad = false
 AutoStartHost = $($AutoStartHost.ToString().ToLowerInvariant())
 AutoConnectClient = $($AutoConnectClient.ToString().ToLowerInvariant())
 RemotePlayerPrefabPath = $RemotePlayerPrefabPath

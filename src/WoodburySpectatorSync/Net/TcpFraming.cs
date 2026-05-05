@@ -7,6 +7,7 @@ namespace WoodburySpectatorSync.Net
     {
         Success,
         Disconnected,
+        PayloadTooLarge,
         BadFrame
     }
 
@@ -18,7 +19,12 @@ namespace WoodburySpectatorSync.Net
             if (!ReadExact(stream, lengthBuffer, 4)) return FrameReadResult.Disconnected;
 
             var payloadLength = BitConverter.ToInt32(lengthBuffer, 0);
-            if (payloadLength <= 0 || payloadLength > Protocol.MaxPayloadBytes)
+            if (payloadLength > Protocol.MaxPayloadBytes)
+            {
+                return FrameReadResult.PayloadTooLarge;
+            }
+
+            if (payloadLength <= 0)
             {
                 return FrameReadResult.BadFrame;
             }

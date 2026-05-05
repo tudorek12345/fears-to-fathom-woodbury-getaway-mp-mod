@@ -117,7 +117,7 @@ namespace WoodburySpectatorSync.Net
                     var payload = new byte[data.Length - 4];
                     Buffer.BlockCopy(data, 4, payload, 0, payload.Length);
 
-                    if (Protocol.TryParsePayload(payload, out var message, out var error))
+                    if (Protocol.TryParsePayload(payload, out var message, out var errorCode, out var error))
                     {
                         if (ShouldAccept(seq, message.Type))
                         {
@@ -126,7 +126,7 @@ namespace WoodburySpectatorSync.Net
                     }
                     else
                     {
-                        _logger.LogWarning("UDP parse error: " + error);
+                        _logger.LogWarning("UDP parse error code=" + errorCode + " detail=" + error);
                     }
                 }
                 catch (ObjectDisposedException)
