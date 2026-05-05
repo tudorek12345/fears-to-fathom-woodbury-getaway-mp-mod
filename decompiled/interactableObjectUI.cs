@@ -37,7 +37,7 @@ public class interactableObjectUI : MonoBehaviour
 	private void Start()
 	{
 		dot = GetComponent<Image>();
-		dot.enabled = false;
+		((Behaviour)(object)dot).enabled = false;
 	}
 
 	private void Update()
@@ -48,18 +48,18 @@ public class interactableObjectUI : MonoBehaviour
 		{
 			if (hitInfo.collider.GetComponent<Iinteractable>() != null)
 			{
-				dot.enabled = true;
+				((Behaviour)(object)dot).enabled = true;
 				this.FoundInteractObject(hitInfo.collider.GetComponent<Iinteractable>());
 			}
 			else
 			{
-				dot.enabled = false;
+				((Behaviour)(object)dot).enabled = false;
 				this.FoundInteractObject(null);
 			}
 		}
 		else
 		{
-			dot.enabled = false;
+			((Behaviour)(object)dot).enabled = false;
 			this.FoundInteractObject(null);
 		}
 	}

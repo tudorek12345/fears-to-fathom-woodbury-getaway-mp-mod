@@ -30,7 +30,8 @@ namespace WoodburySpectatorSync.Net
         HelloAck = 21,
         SnapshotBegin = 22,
         SnapshotEnd = 23,
-        SnapshotAck = 24
+        SnapshotAck = 24,
+        NpcBrainState = 25
     }
 
     public enum ProtocolParseErrorCode
@@ -321,6 +322,17 @@ namespace WoodburySpectatorSync.Net
         }
     }
 
+    public sealed class NpcBrainStateMessage : Message
+    {
+        public NpcBrainState State;
+
+        public NpcBrainStateMessage(NpcBrainState state)
+        {
+            Type = MessageType.NpcBrainState;
+            State = state;
+        }
+    }
+
     public sealed class HelloAckMessage : Message
     {
         public ushort ProtocolVersion;
@@ -419,6 +431,7 @@ namespace WoodburySpectatorSync.Net
         public int AppliedAiCount;
         public int AppliedDialogueCount;
         public int AppliedPlayerCount;
+        public int AppliedCustomCount;
         public int PendingObjectCount;
         public int MissingObjectCount;
         public bool Ok;
@@ -428,11 +441,11 @@ namespace WoodburySpectatorSync.Net
             get
             {
                 return AppliedStoryCount + AppliedDoorCount + AppliedHoldableCount +
-                       AppliedAiCount + AppliedDialogueCount + AppliedPlayerCount;
+                       AppliedAiCount + AppliedDialogueCount + AppliedPlayerCount + AppliedCustomCount;
             }
         }
 
-        public SnapshotAckMessage(int sessionId, int generation, string sceneName, int appliedStoryCount, int appliedDoorCount, int appliedHoldableCount, int appliedAiCount, int appliedDialogueCount, int appliedPlayerCount, int pendingObjectCount, int missingObjectCount, bool ok, string reason)
+        public SnapshotAckMessage(int sessionId, int generation, string sceneName, int appliedStoryCount, int appliedDoorCount, int appliedHoldableCount, int appliedAiCount, int appliedDialogueCount, int appliedPlayerCount, int appliedCustomCount, int pendingObjectCount, int missingObjectCount, bool ok, string reason)
         {
             Type = MessageType.SnapshotAck;
             SessionId = sessionId;
@@ -444,6 +457,7 @@ namespace WoodburySpectatorSync.Net
             AppliedAiCount = appliedAiCount;
             AppliedDialogueCount = appliedDialogueCount;
             AppliedPlayerCount = appliedPlayerCount;
+            AppliedCustomCount = appliedCustomCount;
             PendingObjectCount = pendingObjectCount;
             MissingObjectCount = missingObjectCount;
             Ok = ok;
@@ -493,6 +507,41 @@ namespace WoodburySpectatorSync.Net
         public bool Active;
     }
 
+    public struct NpcBrainState
+    {
+        public int SessionId;
+        public int Generation;
+        public int NpcSeq;
+        public long UnixTimeMs;
+        public string SceneName;
+        public string NpcId;
+        public string NpcKind;
+        public bool Active;
+        public bool Visible;
+        public bool Critical;
+        public Vector3 Position;
+        public Quaternion Rotation;
+        public Vector3 Velocity;
+        public int StateHash;
+        public string StateName;
+        public string Phase;
+        public string Sequence;
+        public string TargetPath;
+        public Vector3 TargetPosition;
+        public bool HasNavAgent;
+        public bool NavAgentEnabled;
+        public Vector3 NavDestination;
+        public float RemainingDistance;
+        public bool IsMoving;
+        public bool HasAnimator;
+        public int AnimStateHash;
+        public int AnimNextStateHash;
+        public bool AnimTransition;
+        public float AnimNormalizedTime;
+        public float AnimSpeed;
+        public int ScriptedFlags;
+    }
+
     public struct PlayerInputState
     {
         public byte PlayerId;
@@ -508,8 +557,8 @@ namespace WoodburySpectatorSync.Net
     public static class Protocol
     {
         public const uint Magic = 0x57535331; // "WSS1"
-        public const ushort Version = 2;
-        public const string PluginVersion = "0.3.0";
+        public const ushort Version = 3;
+        public const string PluginVersion = "0.3.1";
         public const int MaxPayloadBytes = 1024 * 1024;
 
         public static byte[] BuildFrame(byte[] payload)

@@ -1,6 +1,9 @@
 using System;
 using System.Collections;
 using DG.Tweening;
+using DG.Tweening.Core;
+using DG.Tweening.Plugins.Options;
+using Obi;
 using PixelCrushers.DialogueSystem;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -629,19 +632,19 @@ public class CabinPlayerController : PlayerController
 			switch (cameraFOVPreset)
 			{
 			case CameraFOVPreset.Normal:
-				sittingCam.GetComponent<Camera>().DOFieldOfView(60f, 1f);
+				ShortcutExtensions.DOFieldOfView(sittingCam.GetComponent<Camera>(), 60f, 1f);
 				break;
 			case CameraFOVPreset.NormalInstant:
 				sittingCam.GetComponent<Camera>().fieldOfView = 60f;
 				break;
 			case CameraFOVPreset.PlayingBoardGame:
-				sittingCam.GetComponent<Camera>().DOFieldOfView(46f, 1f);
+				ShortcutExtensions.DOFieldOfView(sittingCam.GetComponent<Camera>(), 46f, 1f);
 				break;
 			case CameraFOVPreset.DraggingOutJenga:
-				sittingCam.GetComponent<Camera>().DOFieldOfView(40f, 0.5f);
+				ShortcutExtensions.DOFieldOfView(sittingCam.GetComponent<Camera>(), 40f, 0.5f);
 				break;
 			case CameraFOVPreset.InConversation:
-				sittingCam.GetComponent<Camera>().DOFieldOfView(40f, 1f);
+				ShortcutExtensions.DOFieldOfView(sittingCam.GetComponent<Camera>(), 40f, 1f);
 				break;
 			}
 		}
@@ -718,12 +721,16 @@ public class CabinPlayerController : PlayerController
 	public IEnumerator SetFishingRodItems()
 	{
 		yield return new WaitForEndOfFrame();
-		fishingRod?.rope.ResetParticles();
-		GameObject[] array = fishingItems;
-		foreach (GameObject obj in array)
+		FishingRod obj = fishingRod;
+		if ((object)obj != null)
 		{
-			obj.transform.parent = handPosition;
-			obj.SetActive(value: false);
+			((ObiActor)obj.rope).ResetParticles();
+		}
+		GameObject[] array = fishingItems;
+		foreach (GameObject obj2 in array)
+		{
+			obj2.transform.parent = handPosition;
+			obj2.SetActive(value: false);
 		}
 	}
 
@@ -1191,9 +1198,9 @@ public class CabinPlayerController : PlayerController
 			this.OnHugStart?.Invoke(1.5f);
 			DialogueManager.StopConversation();
 			cabinGameManager.ChangePlayerState(CabinGameManager.PlayerState.Hugging);
-			mainCamera.transform.DOMove(mikeHugPointCabinDarkScene.position, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOMove(mainCamera.transform, mikeHugPointCabinDarkScene.position, 1f, false), (Ease)4);
 			yield return new WaitForSeconds(1.5f);
-			mainCamera.transform.DOLocalMove(new Vector3(0f, 0f, 0f), 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOLocalMove(mainCamera.transform, new Vector3(0f, 0f, 0f), 1f, false), (Ease)4);
 			cabinGameManager.ChangePlayerState(CabinGameManager.PlayerState.Talking);
 			DialogueManager.StartConversation("Rizz Seq", base.transform, base.transform, 225);
 		}
@@ -1254,7 +1261,7 @@ public class CabinPlayerController : PlayerController
 	{
 		cabinGameManager.inputManager.OnGetUp += GetUpFromBed;
 		cabinUIManager.ShowControlsText(F2FLocalizedText.GetLocalizedText("ep5_controls", "GetUp"));
-		cabinUIManager.controlsText.gameObject.SetActive(value: true);
+		((Component)(object)cabinUIManager.controlsText).gameObject.SetActive(value: true);
 	}
 
 	public void AssignBasementGetUpCallbackToInputManager()
@@ -1393,9 +1400,9 @@ public class CabinPlayerController : PlayerController
 		{
 			cabinGameManager.currentPlayerState = CabinGameManager.PlayerState.LockBox;
 			firstPersonController.enabled = false;
-			mainCamera.transform.DOMove(lockBox.cameraMovePoint.position, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOMove(mainCamera.transform, lockBox.cameraMovePoint.position, 1f, false), (Ease)4);
 			preLockBoxCameraRotation = mainCamera.transform.localEulerAngles;
-			mainCamera.transform.DORotate(lockBox.cameraMovePoint.eulerAngles, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DORotate(mainCamera.transform, lockBox.cameraMovePoint.eulerAngles, 1f, (RotateMode)0), (Ease)4);
 			lockBox.boxCollider.enabled = false;
 			lockBox.PointLightSetIntensity(0.3f, 1f);
 			if (lockBox.openLight.gameObject.activeSelf)
@@ -1418,8 +1425,8 @@ public class CabinPlayerController : PlayerController
 			CursorModeUtility.HideCursor();
 			cabinUIManager.ClearControlsText();
 			cabinGameManager.inputManager.OnGetUp -= MoveBackFromLockBox;
-			mainCamera.transform.DOLocalMove(new Vector3(0f, 0f, 0f), 1f).SetEase(Ease.InOutSine);
-			mainCamera.transform.DOLocalRotate(preLockBoxCameraRotation, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOLocalMove(mainCamera.transform, new Vector3(0f, 0f, 0f), 1f, false), (Ease)4);
+			TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(mainCamera.transform, preLockBoxCameraRotation, 1f, (RotateMode)0), (Ease)4);
 			lockBox.PointLightSetIntensity(0.2f, 1f);
 			if (lockBox.openLight.gameObject.activeSelf)
 			{
@@ -1513,8 +1520,8 @@ public class CabinPlayerController : PlayerController
 		{
 			cabinUIManager.ClearControlsText();
 			cabinGameManager.inputManager.OnGetUp -= MoveBackFromFishingSitting;
-			mainCamera.transform.DOLocalMove(new Vector3(0f, 0f, 0f), 1f).SetEase(Ease.InOutSine);
-			mainCamera.transform.DOLocalRotate(preLockBoxCameraRotation, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOLocalMove(mainCamera.transform, new Vector3(0f, 0f, 0f), 1f, false), (Ease)4);
+			TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(mainCamera.transform, preLockBoxCameraRotation, 1f, (RotateMode)0), (Ease)4);
 			cabinGameManager.currentPlayerState = CabinGameManager.PlayerState.Normal;
 			firstPersonController.enabled = true;
 			cabinGameManager.fishingSitDownTrigger.SetActive(value: true);
@@ -1538,9 +1545,9 @@ public class CabinPlayerController : PlayerController
 		{
 			cabinGameManager.currentPlayerState = CabinGameManager.PlayerState.Sink;
 			firstPersonController.enabled = false;
-			mainCamera.transform.DOMove(sink.cameraMovePoint.position, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOMove(mainCamera.transform, sink.cameraMovePoint.position, 1f, false), (Ease)4);
 			presinkCameraRotation = mainCamera.transform.localEulerAngles;
-			mainCamera.transform.DORotate(sink.cameraMovePoint.eulerAngles, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DORotate(mainCamera.transform, sink.cameraMovePoint.eulerAngles, 1f, (RotateMode)0), (Ease)4);
 			sink.sinkClickable.gameObject.SetActive(value: false);
 			yield return new WaitForSeconds(1f);
 			(cabinGameManager.uiManager as CabinUIManager).dishWashingSlider.Slider(16f);
@@ -1565,8 +1572,8 @@ public class CabinPlayerController : PlayerController
 		{
 			CursorModeUtility.HideCursor();
 			cabinUIManager.ClearControlsText();
-			mainCamera.transform.DOLocalMove(new Vector3(0f, 0f, 0f), 1f).SetEase(Ease.InOutSine);
-			mainCamera.transform.DOLocalRotate(presinkCameraRotation, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOLocalMove(mainCamera.transform, new Vector3(0f, 0f, 0f), 1f, false), (Ease)4);
+			TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(mainCamera.transform, presinkCameraRotation, 1f, (RotateMode)0), (Ease)4);
 			yield return new WaitForSeconds(1f);
 			cabinGameManager.currentPlayerState = CabinGameManager.PlayerState.Normal;
 			firstPersonController.enabled = true;

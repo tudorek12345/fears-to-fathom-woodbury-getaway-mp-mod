@@ -1201,7 +1201,7 @@ namespace WoodburySpectatorSync.Coop
 
             if (mike != null)
             {
-                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "Active", mike.gameObject.activeSelf ? 1 : 0, nowMs);
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "Active", mike.gameObject.activeInHierarchy ? 1 : 0, nowMs);
                 EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "state", Convert.ToInt32(mike.state), nowMs);
                 EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "startedSeeking", mike.startedSeeking ? 1 : 0, nowMs);
                 EmitStoryFlagIfChanged(_cabinGameFlags, CabinPostEatingFlagPrefix + "mikeOnStairs", mike.mikeOnStairs ? 1 : 0, nowMs);
@@ -1974,15 +1974,20 @@ namespace WoodburySpectatorSync.Coop
         private bool ShouldPreferPostEatingMike(MikePostEating mike)
         {
             if (mike == null) return false;
-            if (_cabinGameManager != null &&
-                _cabinGameManager.currentMike == CabinGameManager.CurrentMike.PostEating)
-            {
-                return true;
-            }
 
             if (_cabinGameManager != null)
             {
                 var seq = _cabinGameManager.CurrentSequence;
+                if (IsEarlyCabinMikeSequence(seq))
+                {
+                    return false;
+                }
+
+                if (_cabinGameManager.currentMike == CabinGameManager.CurrentMike.PostEating)
+                {
+                    return true;
+                }
+
                 if (seq == SequenceType.RizzSequence ||
                     seq == SequenceType.HikerSequence ||
                     seq == SequenceType.HostAtDoor ||
@@ -1990,17 +1995,6 @@ namespace WoodburySpectatorSync.Coop
                 {
                     return true;
                 }
-            }
-
-            if (mike.startedSeeking ||
-                mike.playerFound ||
-                mike.goingToToolShed ||
-                mike.catJumpscareDone ||
-                mike.mikeInBackyard ||
-                mike.waitOutsideCloset ||
-                mike.hidingSeq1)
-            {
-                return true;
             }
 
             if (mike.gameObject.activeInHierarchy &&
@@ -2015,6 +2009,13 @@ namespace WoodburySpectatorSync.Coop
                    (house.mikeBedroomJumpscare ||
                     house.mikePostJumpscareActive ||
                     house.mikePostJumpscareConvoDone);
+        }
+
+        private static bool IsEarlyCabinMikeSequence(SequenceType seq)
+        {
+            return seq == SequenceType.DrivingToCabin ||
+                   seq == SequenceType.Fishing ||
+                   IsCabinCookMikeSequence(seq);
         }
 
         private static bool IsCabinCookMikeSequence(SequenceType seq)

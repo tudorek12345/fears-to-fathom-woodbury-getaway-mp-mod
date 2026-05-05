@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class GenericThrowable : Holdable, Iinteractable
@@ -31,11 +30,5 @@ public class GenericThrowable : Holdable, Iinteractable
 		base.transform.localPosition = holdPos;
 		base.transform.localRotation = Quaternion.Euler(holdRot);
 		base.transform.localScale = Vector3.one;
-	}
-
-	[SpecialName]
-	GameObject Iinteractable.get_gameObject()
-	{
-		return base.gameObject;
 	}
 }

@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class AtticDoor : MonoBehaviour, Iinteractable
@@ -130,11 +129,5 @@ public class AtticDoor : MonoBehaviour, Iinteractable
 			yield return null;
 		}
 		doorFade.SetColor("_Color", new Color(1f, 1f, 1f, 1f));
-	}
-
-	[SpecialName]
-	GameObject Iinteractable.get_gameObject()
-	{
-		return base.gameObject;
 	}
 }

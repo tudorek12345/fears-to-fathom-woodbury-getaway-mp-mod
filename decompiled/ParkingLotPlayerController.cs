@@ -1,5 +1,7 @@
 using System.Collections;
 using DG.Tweening;
+using DG.Tweening.Core;
+using DG.Tweening.Plugins.Options;
 using PixelCrushers.DialogueSystem;
 using UnityEngine;
 
@@ -98,10 +100,10 @@ public class ParkingLotPlayerController : PlayerController
 			StartCoroutine(RigUtility.UpdateHeadRig(mike.headRigPlayer, 0f, 1f));
 			DialogueManager.StopConversation();
 			parkingLotGameManager.currentPlayerState = ParkingLotGameManager.PlayerState.Hugging;
-			mainCamera.transform.DOMove(mikeHug.transform.position, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOMove(mainCamera.transform, mikeHug.transform.position, 1f, false), (Ease)4);
 			StartCoroutine(mike.HugPlayer(1.5f));
 			yield return new WaitForSeconds(1.5f);
-			mainCamera.transform.DOLocalMove(new Vector3(0f, 0f, 0f), 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOLocalMove(mainCamera.transform, new Vector3(0f, 0f, 0f), 1f, false), (Ease)4);
 			parkingLotGameManager.currentPlayerState = ParkingLotGameManager.PlayerState.Talking;
 			StartCoroutine(RigUtility.UpdateHeadRig(mike.headRigPlayer, 1f, 1f));
 			DialogueManager.StartConversation("Mike Parking Lot", base.transform, base.transform, 3);
@@ -116,10 +118,10 @@ public class ParkingLotPlayerController : PlayerController
 			StartCoroutine(RigUtility.UpdateHeadRig(mike.headRigPlayer, 0f, 1f));
 			DialogueManager.StopConversation();
 			parkingLotGameManager.currentPlayerState = ParkingLotGameManager.PlayerState.Hugging;
-			mainCamera.transform.DOMove(mikeHug.transform.position, 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOMove(mainCamera.transform, mikeHug.transform.position, 1f, false), (Ease)4);
 			StartCoroutine(mike.HugPlayer(2f));
 			yield return new WaitForSeconds(2f);
-			mainCamera.transform.DOLocalMove(new Vector3(0f, 0f, 0f), 1f).SetEase(Ease.InOutSine);
+			TweenSettingsExtensions.SetEase<TweenerCore<Vector3, Vector3, VectorOptions>>(ShortcutExtensions.DOLocalMove(mainCamera.transform, new Vector3(0f, 0f, 0f), 1f, false), (Ease)4);
 			parkingLotGameManager.currentPlayerState = ParkingLotGameManager.PlayerState.Talking;
 			StartCoroutine(RigUtility.UpdateHeadRig(mike.headRigPlayer, 1f, 1f));
 			DialogueManager.StartConversation("Mike Parking Lot", base.transform, base.transform, 8);

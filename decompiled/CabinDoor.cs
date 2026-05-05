@@ -1,7 +1,8 @@
 using System;
 using System.Collections;
-using System.Runtime.CompilerServices;
 using DG.Tweening;
+using DG.Tweening.Core;
+using DG.Tweening.Plugins.Options;
 using UnityEngine;
 
 [Serializable]
@@ -169,11 +170,11 @@ public class CabinDoor : MonoBehaviour, Iinteractable
 			if (!jammedAS.isPlaying)
 			{
 				jammedAS.Play();
-				base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f);
-				base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, -0.25f, base.transform.localEulerAngles.z), 0.2f).SetDelay(0.1f);
-				base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f).SetDelay(0.3f);
-				base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f).SetDelay(0.4f);
-				base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f).SetDelay(0.5f);
+				ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0);
+				TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, -0.25f, base.transform.localEulerAngles.z), 0.2f, (RotateMode)0), 0.1f);
+				TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0), 0.3f);
+				TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0), 0.4f);
+				TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0), 0.5f);
 			}
 			if (!cabinGameManager.cabinHouseManager.basementDoorDialogueDone && cabinGameManager.cabinHouseManager.isMikeTouring)
 			{
@@ -323,17 +324,18 @@ public class CabinDoor : MonoBehaviour, Iinteractable
 
 	private void OpenSlidingDoor(bool setInteractible = true, bool playSFX = true)
 	{
-		TweenCallback onComplete = (setInteractible ? new TweenCallback(SetInteractibleTrue) : null);
+		//IL_000d: Unknown result type (might be due to invalid IL or missing references)
+		TweenCallback onComplete = ((!setInteractible) ? ((TweenCallback)null) : new TweenCallback(SetInteractibleTrue));
 		switch (doorOpeningAxis)
 		{
 		case DoorOpeningAxis.Xaxis:
-			base.transform.DOLocalMoveX(originalDoorPosition.x + doorSlideValue, 0.5f).onComplete = onComplete;
+			((Tween)ShortcutExtensions.DOLocalMoveX(base.transform, originalDoorPosition.x + doorSlideValue, 0.5f, false)).onComplete = onComplete;
 			break;
 		case DoorOpeningAxis.Yaxis:
-			base.transform.DOLocalMoveY(originalDoorPosition.y + doorSlideValue, 0.5f).onComplete = onComplete;
+			((Tween)ShortcutExtensions.DOLocalMoveY(base.transform, originalDoorPosition.y + doorSlideValue, 0.5f, false)).onComplete = onComplete;
 			break;
 		case DoorOpeningAxis.Zaxis:
-			base.transform.DOLocalMoveZ(originalDoorPosition.z + doorSlideValue, 0.5f).onComplete = onComplete;
+			((Tween)ShortcutExtensions.DOLocalMoveZ(base.transform, originalDoorPosition.z + doorSlideValue, 0.5f, false)).onComplete = onComplete;
 			break;
 		}
 		if (playSFX)
@@ -344,21 +346,22 @@ public class CabinDoor : MonoBehaviour, Iinteractable
 
 	private void OpenRotatingDoor(bool setInteractible = true, bool playSFX = true)
 	{
-		TweenCallback onComplete = (setInteractible ? new TweenCallback(SetInteractibleTrue) : null);
-		Tween tween = null;
+		//IL_000d: Unknown result type (might be due to invalid IL or missing references)
+		TweenCallback onComplete = ((!setInteractible) ? ((TweenCallback)null) : new TweenCallback(SetInteractibleTrue));
+		Tween val = null;
 		switch (doorOpeningAxis)
 		{
 		case DoorOpeningAxis.Xaxis:
-			tween = base.transform.DOLocalRotate(originalDoorRotation + Vector3.right * doorRotationAngle, 0.5f).SetEase(Ease.OutSine);
+			val = (Tween)(object)TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, originalDoorRotation + Vector3.right * doorRotationAngle, 0.5f, (RotateMode)0), (Ease)3);
 			break;
 		case DoorOpeningAxis.Yaxis:
-			tween = base.transform.DOLocalRotate(originalDoorRotation + Vector3.up * doorRotationAngle, 0.5f).SetEase(Ease.OutSine);
+			val = (Tween)(object)TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, originalDoorRotation + Vector3.up * doorRotationAngle, 0.5f, (RotateMode)0), (Ease)3);
 			break;
 		case DoorOpeningAxis.Zaxis:
-			tween = base.transform.DOLocalRotate(originalDoorRotation + Vector3.forward * doorRotationAngle, 0.5f).SetEase(Ease.OutSine);
+			val = (Tween)(object)TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, originalDoorRotation + Vector3.forward * doorRotationAngle, 0.5f, (RotateMode)0), (Ease)3);
 			break;
 		}
-		tween.onComplete = onComplete;
+		val.onComplete = onComplete;
 		if (playSFX)
 		{
 			this.OnDoorPlaySound?.Invoke(doorAudioSource, doorType, DoorInteraction.Open, doorOpenCloseVolume);
@@ -367,41 +370,65 @@ public class CabinDoor : MonoBehaviour, Iinteractable
 
 	private void CloseSlidingDoor(bool byPlayer = true)
 	{
+		//IL_0045: Unknown result type (might be due to invalid IL or missing references)
+		//IL_004f: Expected O, but got Unknown
+		//IL_004f: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0059: Expected O, but got Unknown
+		//IL_00ad: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00b7: Expected O, but got Unknown
+		//IL_00b7: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00c1: Expected O, but got Unknown
+		//IL_0115: Unknown result type (might be due to invalid IL or missing references)
+		//IL_011f: Expected O, but got Unknown
+		//IL_011f: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0129: Expected O, but got Unknown
+		//IL_006d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0077: Expected O, but got Unknown
+		//IL_0077: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0081: Expected O, but got Unknown
+		//IL_00d5: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00df: Expected O, but got Unknown
+		//IL_00df: Unknown result type (might be due to invalid IL or missing references)
+		//IL_00e9: Expected O, but got Unknown
+		//IL_013a: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0144: Expected O, but got Unknown
+		//IL_0144: Unknown result type (might be due to invalid IL or missing references)
+		//IL_014e: Expected O, but got Unknown
 		switch (doorOpeningAxis)
 		{
 		case DoorOpeningAxis.Xaxis:
 		{
-			Tween tween = base.transform.DOLocalMoveX(originalDoorPosition.x, 0.5f);
-			Tween tween4 = tween;
-			tween4.onComplete = (TweenCallback)Delegate.Combine(tween4.onComplete, new TweenCallback(SetInteractibleTrue));
+			Tween val = (Tween)(object)ShortcutExtensions.DOLocalMoveX(base.transform, originalDoorPosition.x, 0.5f, false);
+			Tween obj3 = val;
+			obj3.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)obj3.onComplete, (Delegate?)new TweenCallback(SetInteractibleTrue));
 			if (byPlayer)
 			{
-				Tween tween5 = tween;
-				tween5.onComplete = (TweenCallback)Delegate.Combine(tween5.onComplete, new TweenCallback(SetAmbience));
+				Tween obj4 = val;
+				obj4.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)obj4.onComplete, (Delegate?)new TweenCallback(SetAmbience));
 			}
 			break;
 		}
 		case DoorOpeningAxis.Yaxis:
 		{
-			Tween tween = base.transform.DOLocalMoveY(originalDoorPosition.y, 0.5f);
-			Tween tween6 = tween;
-			tween6.onComplete = (TweenCallback)Delegate.Combine(tween6.onComplete, new TweenCallback(SetInteractibleTrue));
+			Tween val = (Tween)(object)ShortcutExtensions.DOLocalMoveY(base.transform, originalDoorPosition.y, 0.5f, false);
+			Tween obj5 = val;
+			obj5.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)obj5.onComplete, (Delegate?)new TweenCallback(SetInteractibleTrue));
 			if (byPlayer)
 			{
-				Tween tween7 = tween;
-				tween7.onComplete = (TweenCallback)Delegate.Combine(tween7.onComplete, new TweenCallback(SetAmbience));
+				Tween obj6 = val;
+				obj6.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)obj6.onComplete, (Delegate?)new TweenCallback(SetAmbience));
 			}
 			break;
 		}
 		case DoorOpeningAxis.Zaxis:
 		{
-			Tween tween = base.transform.DOLocalMoveZ(originalDoorPosition.z, 0.5f);
-			Tween tween2 = tween;
-			tween2.onComplete = (TweenCallback)Delegate.Combine(tween2.onComplete, new TweenCallback(SetInteractibleTrue));
+			Tween val = (Tween)(object)ShortcutExtensions.DOLocalMoveZ(base.transform, originalDoorPosition.z, 0.5f, false);
+			Tween obj = val;
+			obj.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)obj.onComplete, (Delegate?)new TweenCallback(SetInteractibleTrue));
 			if (byPlayer)
 			{
-				Tween tween3 = tween;
-				tween3.onComplete = (TweenCallback)Delegate.Combine(tween3.onComplete, new TweenCallback(SetAmbience));
+				Tween obj2 = val;
+				obj2.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)obj2.onComplete, (Delegate?)new TweenCallback(SetAmbience));
 			}
 			break;
 		}
@@ -410,13 +437,25 @@ public class CabinDoor : MonoBehaviour, Iinteractable
 
 	private void CloseRotatingDoor(bool byPlayer = true)
 	{
-		Tween tween = base.transform.DOLocalRotate(originalDoorRotation, 0.5f).SetEase(Ease.InSine);
-		tween.onComplete = (TweenCallback)Delegate.Combine(tween.onComplete, new TweenCallback(SetInteractibleTrue));
+		//IL_002c: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0036: Expected O, but got Unknown
+		//IL_0036: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0040: Expected O, but got Unknown
+		//IL_0073: Unknown result type (might be due to invalid IL or missing references)
+		//IL_007d: Expected O, but got Unknown
+		//IL_007d: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0087: Expected O, but got Unknown
+		//IL_0051: Unknown result type (might be due to invalid IL or missing references)
+		//IL_005b: Expected O, but got Unknown
+		//IL_005b: Unknown result type (might be due to invalid IL or missing references)
+		//IL_0065: Expected O, but got Unknown
+		Tween val = (Tween)(object)TweenSettingsExtensions.SetEase<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, originalDoorRotation, 0.5f, (RotateMode)0), (Ease)2);
+		val.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)val.onComplete, (Delegate?)new TweenCallback(SetInteractibleTrue));
 		if (byPlayer)
 		{
-			tween.onComplete = (TweenCallback)Delegate.Combine(tween.onComplete, new TweenCallback(SetAmbience));
+			val.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)val.onComplete, (Delegate?)new TweenCallback(SetAmbience));
 		}
-		tween.onComplete = (TweenCallback)Delegate.Combine(tween.onComplete, (TweenCallback)delegate
+		val.onComplete = (TweenCallback)Delegate.Combine((Delegate?)(object)val.onComplete, (Delegate?)(TweenCallback)delegate
 		{
 			this.OnDoorClosed?.Invoke();
 		});
@@ -440,11 +479,11 @@ public class CabinDoor : MonoBehaviour, Iinteractable
 	private void DoorJammed()
 	{
 		jammedAS.Play();
-		base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f);
-		base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, -0.25f, base.transform.localEulerAngles.z), 0.2f).SetDelay(0.1f);
-		base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f).SetDelay(0.3f);
-		base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f).SetDelay(0.4f);
-		base.transform.DOLocalRotate(new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f).SetDelay(0.5f);
+		ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0);
+		TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, -0.25f, base.transform.localEulerAngles.z), 0.2f, (RotateMode)0), 0.1f);
+		TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0), 0.3f);
+		TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0.25f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0), 0.4f);
+		TweenSettingsExtensions.SetDelay<TweenerCore<Quaternion, Vector3, QuaternionOptions>>(ShortcutExtensions.DOLocalRotate(base.transform, new Vector3(base.transform.localEulerAngles.x, 0f, base.transform.localEulerAngles.z), 0.1f, (RotateMode)0), 0.5f);
 		if (mikeIsInside)
 		{
 			SubTextManager.GetInstance().ShowSubText(F2FLocalizedText.GetLocalizedText("ep5_subs", "MikeInside"));
@@ -681,11 +720,5 @@ public class CabinDoor : MonoBehaviour, Iinteractable
 	public void SetInteractibleTrue()
 	{
 		SetInteractable(value: true);
-	}
-
-	[SpecialName]
-	GameObject Iinteractable.get_gameObject()
-	{
-		return base.gameObject;
 	}
 }

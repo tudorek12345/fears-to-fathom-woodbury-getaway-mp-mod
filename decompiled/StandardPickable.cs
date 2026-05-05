@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class StandardPickable : Holdable, Iinteractable, ICoffeeSequenceItem
@@ -87,11 +86,5 @@ public class StandardPickable : Holdable, Iinteractable, ICoffeeSequenceItem
 		base.transform.localPosition = holdingPosition;
 		base.transform.localRotation = Quaternion.Euler(holdingRotation);
 		base.transform.localScale = holdingScale;
-	}
-
-	[SpecialName]
-	GameObject Iinteractable.get_gameObject()
-	{
-		return base.gameObject;
 	}
 }

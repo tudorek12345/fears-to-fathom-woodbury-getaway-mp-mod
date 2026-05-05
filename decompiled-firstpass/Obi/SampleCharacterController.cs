@@ -1,0 +1,56 @@
+using UnityEngine;
+
+namespace Obi;
+
+[RequireComponent(typeof(ObiCharacter))]
+public class SampleCharacterController : MonoBehaviour
+{
+	private ObiCharacter m_Character;
+
+	private Transform m_Cam;
+
+	private Vector3 m_CamForward;
+
+	private Vector3 m_Move;
+
+	private bool m_Jump;
+
+	private void Start()
+	{
+		if (Camera.main != null)
+		{
+			m_Cam = Camera.main.transform;
+		}
+		else
+		{
+			Debug.LogWarning("Warning: no main camera found. Third person character needs a Camera tagged \"MainCamera\", for camera-relative controls.");
+		}
+		m_Character = GetComponent<ObiCharacter>();
+	}
+
+	private void FixedUpdate()
+	{
+		if (!m_Jump)
+		{
+			m_Jump = Input.GetButtonDown("Jump");
+		}
+		float axis = Input.GetAxis("Horizontal");
+		float axis2 = Input.GetAxis("Vertical");
+		bool key = Input.GetKey(KeyCode.C);
+		if (m_Cam != null)
+		{
+			m_CamForward = Vector3.Scale(m_Cam.forward, new Vector3(1f, 0f, 1f)).normalized;
+			m_Move = axis2 * m_CamForward + axis * m_Cam.right;
+		}
+		else
+		{
+			m_Move = axis2 * Vector3.forward + axis * Vector3.right;
+		}
+		if (Input.GetKey(KeyCode.LeftShift))
+		{
+			m_Move *= 0.5f;
+		}
+		m_Character.Move(m_Move, key, m_Jump);
+		m_Jump = false;
+	}
+}

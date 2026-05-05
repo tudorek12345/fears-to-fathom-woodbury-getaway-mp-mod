@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class TriggerActionOnInteract : MonoBehaviour, Iinteractable
@@ -14,11 +13,5 @@ public class TriggerActionOnInteract : MonoBehaviour, Iinteractable
 	void Iinteractable.Clicked(Action removedFromHand = null)
 	{
 		actionToTrigger?.Invoke();
-	}
-
-	[SpecialName]
-	GameObject Iinteractable.get_gameObject()
-	{
-		return base.gameObject;
 	}
 }

@@ -971,7 +971,7 @@ public class CabinGameManager : GameManager
 
 	private void MikeController_OnEndConvo()
 	{
-		uiManager.controlsText.gameObject.SetActive(value: true);
+		((Component)(object)uiManager.controlsText).gameObject.SetActive(value: true);
 		cabinUIManager.SetCrossHairCanvasActive(value: true);
 		cabinPlayerController.SetCanSitOnCouch(value: true);
 		cabinPlayerController.EndConvoWithMike();
@@ -997,7 +997,7 @@ public class CabinGameManager : GameManager
 
 	private void MikeController_OnStartConvo()
 	{
-		uiManager.controlsText.gameObject.SetActive(value: false);
+		((Component)(object)uiManager.controlsText).gameObject.SetActive(value: false);
 		cabinPlayerController.SetCanSitOnCouch(value: false);
 		if (uiManager.phoneUI.isPaused)
 		{
@@ -1278,7 +1278,7 @@ public class CabinGameManager : GameManager
 
 	private void HikerCabinController_OnEndConvo()
 	{
-		uiManager.controlsText.gameObject.SetActive(value: true);
+		((Component)(object)uiManager.controlsText).gameObject.SetActive(value: true);
 		cabinPlayerController.EndConvoWithMike();
 		playerTalking = false;
 		ChangePlayerState(PlayerState.Normal);
@@ -1286,7 +1286,7 @@ public class CabinGameManager : GameManager
 
 	private void HikerCabinController_OnStartConvo()
 	{
-		uiManager.controlsText.gameObject.SetActive(value: false);
+		((Component)(object)uiManager.controlsText).gameObject.SetActive(value: false);
 		playerTalking = true;
 		ChangePlayerState(PlayerState.Talking);
 		cabinPlayerController.StartConvoWithMike(hikerConvoLookatPoint);
@@ -1525,7 +1525,7 @@ public class CabinGameManager : GameManager
 	private void MikeRizzlerController_OnEndConvo()
 	{
 		sittableBed.SetInteractable(value: true);
-		uiManager.controlsText.gameObject.SetActive(value: true);
+		((Component)(object)uiManager.controlsText).gameObject.SetActive(value: true);
 		cabinPlayerController.EndConvoWithMike();
 		playerTalking = false;
 		if (playerSittingOnBed)
@@ -1545,7 +1545,7 @@ public class CabinGameManager : GameManager
 	{
 		sittableBed.SetInteractable(value: false);
 		mikeRizzlerController.SetInteractable(value: false);
-		uiManager.controlsText.gameObject.SetActive(value: false);
+		((Component)(object)uiManager.controlsText).gameObject.SetActive(value: false);
 		playerTalking = true;
 		if (uiManager.phoneUI.isPaused)
 		{

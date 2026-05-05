@@ -174,7 +174,9 @@ namespace WoodburySpectatorSync.Coop
                 case SessionState.Live:
                     return to == SessionState.Reconnecting || to == SessionState.SceneSyncing;
                 case SessionState.Reconnecting:
-                    return to == SessionState.Connecting;
+                    return to == SessionState.Connecting ||
+                           to == SessionState.SceneReady ||
+                           to == SessionState.SceneSyncing;
                 default:
                     return false;
             }
