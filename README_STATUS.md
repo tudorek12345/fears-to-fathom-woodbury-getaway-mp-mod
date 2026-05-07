@@ -20,7 +20,7 @@
 - Item ownership, hand attachment, and physics replication are incomplete.
 - AI sync is transform-only; behavior state is not replicated.
 - Pizzeria and RoadTrip sync coverage has been expanded but still needs a full end-to-end validation pass.
-- Latest Cabin/Ouija test reached `GoingToPlayOuija`, then host stopped receiving client packets for ~28 seconds before returning to waiting.
+- Mid-game Jenga / Ouija detailed state (block selection, planchette position, letter stream) is not yet synced — sequence flag only.
 
 ## Future features
 
@@ -35,7 +35,7 @@
 
 1. Launch host/client with `RemotePlayerAvatarSource=Auto` and verify Pizzeria shows a game-model avatar or compact capsule, not the tall fallback.
 2. Run RoadTrip -> Pizzeria -> Cabin and inspect session logs for avatar diagnostics plus Pizzeria/RoadTrip scene flag application.
-3. Re-run Cabin/Ouija with separate host/client session logs and inspect the client send loop when host `LastClientPkt` starts aging.
+3. Sync mid-game Jenga / Ouija detailed state (block selection events, planchette position, letter stream) on top of the existing sequence-flag coverage.
 4. Test each Quaternius avatar id with `RemotePlayerAvatarSource=AssetBundle`; animation can be reintroduced after runtime loading is confirmed in-game.
 5. Implement client-held item ownership (host confirms, client mirrors).
 

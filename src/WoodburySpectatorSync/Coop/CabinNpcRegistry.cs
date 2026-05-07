@@ -313,7 +313,13 @@ namespace WoodburySpectatorSync.Coop
 
             var targetPosition = state.Position;
             var targetRotation = state.Rotation;
-            if (!snapshot && _smoothedPositions.TryGetValue(state.NpcId, out var currentPosition))
+            var deferMotionToAi = ShouldDeferMotionToAi(state, snapshot);
+            if (deferMotionToAi)
+            {
+                _smoothedPositions[state.NpcId] = transform.position;
+                _smoothedRotations[state.NpcId] = transform.rotation;
+            }
+            else if (!snapshot && _smoothedPositions.TryGetValue(state.NpcId, out var currentPosition))
             {
                 var alpha = 1f - Mathf.Exp(-18f * Time.deltaTime);
                 if (Vector3.Distance(currentPosition, targetPosition) > 4f)
@@ -355,6 +361,17 @@ namespace WoodburySpectatorSync.Coop
             _lastAppliedMsById[state.NpcId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             LogInfoThrottledApply(state);
             return true;
+        }
+
+        private static bool ShouldDeferMotionToAi(NpcBrainState state, bool snapshot)
+        {
+            if (snapshot || !state.Active || !state.IsMoving) return false;
+            if (string.IsNullOrEmpty(state.NpcId)) return false;
+
+            // Mike has a separate high-frequency AiTransform stream. Applying the
+            // lower-rate brain heartbeat position here fights that smoother and
+            // shows up as small snaps while he walks.
+            return state.NpcId.StartsWith("Cabin/Mike/", StringComparison.Ordinal);
         }
 
         public void SuppressLocalBrain(CabinGameManager manager, string sceneName)

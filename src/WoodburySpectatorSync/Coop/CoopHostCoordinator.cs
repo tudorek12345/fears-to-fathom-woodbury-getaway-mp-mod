@@ -949,7 +949,7 @@ namespace WoodburySpectatorSync.Coop
                 ? _playerFirstPersonField.GetValue(playerController) as FirstPersonController
                 : null;
 
-            var camera = fps != null && fps.playerCamera != null ? fps.playerCamera : Camera.main;
+            var camera = CabinPlayerBodyPose.ResolveCamera(fps);
             if (camera == null)
             {
                 var cameras = UnityEngine.Object.FindObjectsOfType<Camera>();
@@ -972,9 +972,15 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
-            var baseTransform = fps != null
-                ? fps.transform
-                : (playerController != null ? playerController.transform : camera.transform);
+            if (!CabinPlayerBodyPose.TryResolve(fps, playerController, out var baseTransform, out _))
+            {
+                baseTransform = camera != null ? camera.transform : null;
+            }
+            if (baseTransform == null)
+            {
+                return false;
+            }
+
             var cameraTransform = camera != null ? camera.transform : baseTransform;
 
             state = new PlayerTransformState
@@ -997,7 +1003,7 @@ namespace WoodburySpectatorSync.Coop
                 ? _playerFirstPersonField.GetValue(playerController) as FirstPersonController
                 : null;
 
-            var camera = fps != null && fps.playerCamera != null ? fps.playerCamera : Camera.main;
+            var camera = CabinPlayerBodyPose.ResolveCamera(fps);
             if (camera == null)
             {
                 var cameras = UnityEngine.Object.FindObjectsOfType<Camera>();
@@ -1827,15 +1833,19 @@ namespace WoodburySpectatorSync.Coop
                 if (_cabinGameManager == null) return;
             }
 
-            var casserole = CabinCookingPropSync.GetCasseroleTransform(_cabinGameManager);
-            if (casserole != null)
+            var syncedTransforms = new List<Transform>();
+            CabinCookingPropSync.CollectSyncedTransforms(_cabinGameManager, syncedTransforms);
+            var hideCookingVisuals = CabinCookingPropSync.ShouldHideCookingVisuals(_cabinGameManager);
+            for (var i = 0; i < syncedTransforms.Count; i++)
             {
-                var hideCookingVisuals = CabinCookingPropSync.ShouldHideCookingVisuals(_cabinGameManager);
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                var isCasserole = transform.GetComponent<CasseroleDish>() != null;
                 TryEnqueueAiState(
-                    casserole,
+                    transform,
                     movementThreshold: 0.01f,
                     rotationThreshold: 0.25f,
-                    activeOverride: hideCookingVisuals ? false : (bool?)null);
+                    activeOverride: isCasserole && hideCookingVisuals ? false : (bool?)null);
             }
         }
 
@@ -2392,7 +2402,18 @@ namespace WoodburySpectatorSync.Coop
         private static bool IsHighFrequencyStoryFlag(string key)
         {
             return !string.IsNullOrEmpty(key) &&
-                   key.StartsWith(CabinMikeAnimPrefix, StringComparison.Ordinal);
+                   (key.StartsWith(CabinMikeAnimPrefix, StringComparison.Ordinal) ||
+                    IsCabinCookingHighFrequencyStoryFlag(key));
+        }
+
+        private static bool IsCabinCookingHighFrequencyStoryFlag(string key)
+        {
+            return key.IndexOf("Cooking.LivingRoomTV.VideoTimeMs", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.randomPositionMoveTimer", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.moveToYesPointTimer", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.roundTimer", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.mouseX", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.mouseY", StringComparison.Ordinal) >= 0;
         }
 
         private static bool IsCoopProxyPath(string path)

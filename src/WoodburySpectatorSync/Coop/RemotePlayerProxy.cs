@@ -92,6 +92,7 @@ namespace WoodburySpectatorSync.Coop
 
         private const float CameraFallbackEyeHeight = 1.65f;
         private const float SceneModelFallbackGroundYOffset = -0.06f;
+        private const float BodyGroundProjectionMaxOffset = 0.35f;
 
         private readonly GameObject _root;
         private readonly CharacterController _characterController;
@@ -1132,7 +1133,7 @@ namespace WoodburySpectatorSync.Coop
             if (TryProjectToWalkableGround(position, out var groundedFromBody))
             {
                 var verticalOffset = Mathf.Abs(position.y - groundedFromBody.y);
-                if (verticalOffset <= 3.25f)
+                if (verticalOffset <= BodyGroundProjectionMaxOffset)
                 {
                     return groundedFromBody;
                 }

@@ -155,7 +155,7 @@ namespace WoodburySpectatorSync.Coop
         private const float AiSnapDistanceMeters = 4.0f;
         private const float AiStaleSnapSeconds = 1.0f;
         private const float AiGeneralSmoothing = 13f;
-        private const float AiMikeSmoothing = 18f;
+        private const float AiMikeSmoothing = 30f;
         private const float LocalPlayerHostSideOffsetMeters = 1.35f;
         private bool _forcedCabinSpawn;
         private bool _cabinPrefsPrepared;
@@ -634,27 +634,26 @@ namespace WoodburySpectatorSync.Coop
 
         private void SendPlayerTransform()
         {
-            var camera = GetActiveCamera();
+            EnsureLocalPlayerRefs();
+            var camera = CabinPlayerBodyPose.ResolveCamera(_localFpc) ?? GetActiveCamera();
             if (camera == null) return;
 
-            Vector3 position;
-            Quaternion rotation;
-            if (_settings.CoopUseLocalPlayer.Value && _localFpc != null)
+            Transform bodyTransform;
+            if (_settings.CoopUseLocalPlayer.Value &&
+                CabinPlayerBodyPose.TryResolve(_localFpc, PlayerController.GetInstance(), out bodyTransform, out _))
             {
-                position = _localFpc.transform.position;
-                rotation = _localFpc.transform.rotation;
+                // Use active seated player proxy bodies when the game hides the first-person controller.
             }
             else
             {
-                position = camera.transform.position;
-                rotation = camera.transform.rotation;
+                bodyTransform = camera.transform;
             }
 
             var state = new PlayerTransformState
             {
                 PlayerId = 1,
-                Position = position,
-                Rotation = rotation,
+                Position = bodyTransform.position,
+                Rotation = bodyTransform.rotation,
                 CameraPosition = camera.transform.position,
                 CameraRotation = camera.transform.rotation
             };
@@ -4292,7 +4291,18 @@ namespace WoodburySpectatorSync.Coop
         private static bool IsHighFrequencyStoryFlag(string key)
         {
             return !string.IsNullOrEmpty(key) &&
-                   key.StartsWith(CabinGameFlagPrefix + CabinMikeAnimFieldPrefix, StringComparison.Ordinal);
+                   (key.StartsWith(CabinGameFlagPrefix + CabinMikeAnimFieldPrefix, StringComparison.Ordinal) ||
+                    IsCabinCookingHighFrequencyStoryFlag(key));
+        }
+
+        private static bool IsCabinCookingHighFrequencyStoryFlag(string key)
+        {
+            return key.IndexOf("Cooking.LivingRoomTV.VideoTimeMs", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.randomPositionMoveTimer", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.moveToYesPointTimer", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.roundTimer", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.mouseX", StringComparison.Ordinal) >= 0 ||
+                   key.IndexOf("Cooking.Ouija.mouseY", StringComparison.Ordinal) >= 0;
         }
 
         private static bool IsClientLocalCabinRuntimeField(string fieldName)

@@ -1,6 +1,12 @@
 ﻿# Changelog
 
 ## Unreleased
+- Co-op Cabin: remote player transform sending now follows active Cabin seated proxy bodies, so players remain visible to the other peer while seated on the couch, at the Ouija table, at board-game seats, or in bed instead of disappearing with the disabled first-person controller.
+- Co-op avatars: remote player grounding now preserves intentionally raised seated proxy positions instead of forcing couch-sitting bodies down to floor level.
+- Co-op Cabin: synced living-room TV clip identity and playback time from the host, and added host-authored Ouija controller internals plus planchette/table transform correction so client Ouija visuals no longer run local random/timer decisions.
+- Co-op Cabin: stopped syncing host-local Ouija player/camera proxy fields to clients; Ouija sync now stays on world board/controller state to avoid locking the client during the mini-game.
+- Co-op Cabin: forced living-room TV clip playback from host-authored TV state, mirrored Ouija table transform/rig state, and stopped low-rate NPC brain corrections from fighting Mike's high-frequency movement smoothing.
+- Co-op Cabin: mirrored Mike cook/eating visual props, plate masks, eating rig weights, and living-room TV state to clients during the Eating flow; increased Mike client interpolation response to reduce visible drag.
 - Co-op Cabin: suppressed board-game/Jenga/Ouija cooking visuals on clients so late-start test states no longer leak the casserole tray, fish ingredients, eating plates, or Mike cooking hand props before the Eating sequence.
 - Co-op Cabin: added host-authored casserole/oven cooking prop sync using existing story flags plus transform correction, hid false future-NPC missing diagnostics, throttled NPC heartbeat logs, and extended bounded Cabin scene-ready retries for slower client loads.
 - Co-op Cabin NPC brain: added host-authoritative `NpcBrainState` sync for Cabin Mike variants, hiker/window, host hiding/fixing/endgame, Nora, and cat, with registry-based actor IDs, client-side local brain suppression, snapshot buffering, stale NPC sequence drops, NPC overlay status, and throttled NPC diagnostics.
