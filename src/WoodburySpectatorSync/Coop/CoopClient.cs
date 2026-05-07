@@ -561,6 +561,7 @@ namespace WoodburySpectatorSync.Coop
                         msg.AppliedAiCount,
                         msg.AppliedDialogueCount,
                         msg.AppliedPlayerCount,
+                        msg.AppliedCustomCount,
                         msg.PendingObjectCount,
                         msg.MissingObjectCount,
                         msg.Ok,
@@ -768,6 +769,7 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.HoldableState:
                 case MessageType.StoryFlag:
                 case MessageType.AiTransform:
+                case MessageType.NpcBrainState:
                 case MessageType.DialogueLine:
                 case MessageType.DialogueStart:
                 case MessageType.DialogueAdvance:

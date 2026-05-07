@@ -49,9 +49,11 @@ namespace WoodburySpectatorSync.Coop
         private float _nextInputSendTime;
         private FirstPersonController _localFpc;
         private RemotePlayerProxy _hostProxy;
+        private readonly CabinNpcRegistry _cabinNpcRegistry;
         private readonly Dictionary<string, DoorState> _pendingDoorStates = new Dictionary<string, DoorState>();
         private readonly Dictionary<string, HoldableState> _pendingHoldableStates = new Dictionary<string, HoldableState>();
         private readonly Dictionary<string, AiTransformState> _pendingAiStates = new Dictionary<string, AiTransformState>();
+        private readonly Dictionary<string, NpcBrainState> _pendingNpcStates = new Dictionary<string, NpcBrainState>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _pendingCabinHouseFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _pendingCabinGameFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _pendingPizzeriaFlags = new Dictionary<string, int>();
@@ -59,6 +61,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, DoorState> _snapshotDoorStates = new Dictionary<string, DoorState>(StringComparer.Ordinal);
         private readonly Dictionary<string, HoldableState> _snapshotHoldableStates = new Dictionary<string, HoldableState>(StringComparer.Ordinal);
         private readonly Dictionary<string, AiTransformState> _snapshotAiStates = new Dictionary<string, AiTransformState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, NpcBrainState> _snapshotNpcStates = new Dictionary<string, NpcBrainState>(StringComparer.Ordinal);
         private readonly Dictionary<string, StoryFlagMessage> _snapshotStoryFlags = new Dictionary<string, StoryFlagMessage>(StringComparer.Ordinal);
         private readonly List<Message> _snapshotDialogueMessages = new List<Message>();
         private float _loadingStartTime;
@@ -110,6 +113,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, float> _pendingDoorFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pendingHoldableFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pendingAiFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
+        private readonly Dictionary<string, float> _pendingNpcFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pendingCabinHouseFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pendingCabinGameFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
         private readonly Dictionary<string, float> _pendingPizzeriaFirstSeen = new Dictionary<string, float>(StringComparer.Ordinal);
@@ -183,6 +187,7 @@ namespace WoodburySpectatorSync.Coop
         private string _lastMikeSyncDebug = "-";
         private string _lastCabinHidingDebug = "-";
         private float _nextCabinHidingLogTime;
+        private long _nextCabinCookingPropApplyLogMs;
         private float _lastScriptedHostSnapTime;
         private bool _hostSceneScriptedLock;
         private int _hostCabinPlayerState = -1;
@@ -354,6 +359,7 @@ namespace WoodburySpectatorSync.Coop
             _client = client;
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("client", logger, sessionLogWrite);
+            _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "client");
             _interactor = new CoopClientInteractor(client);
             _hostAvatar = new RemoteAvatar("CoopHostAvatar", new Color(1f, 0.2f, 0.2f, 0.8f));
 
@@ -399,6 +405,7 @@ namespace WoodburySpectatorSync.Coop
         public int PendingDoorCount => _pendingDoorStates.Count;
         public int PendingHoldableCount => _pendingHoldableStates.Count;
         public int PendingAiCount => _pendingAiStates.Count;
+        public int PendingNpcCount => _pendingNpcStates.Count;
         public int PendingObjectCount => CountPendingObjects();
         public float LastHostUpdateAgeSeconds => GetHostAppliedAgeSeconds();
         public long LastHostTransformReceiveMs => _lastHostTransformReceiveMs;
@@ -418,6 +425,7 @@ namespace WoodburySpectatorSync.Coop
         public long LastStoryEventMs => _lastStoryEventMs;
         public byte LastHostPlayerId => _lastHostPlayerId;
         public string LastMikeSyncDebug => _lastMikeSyncDebug;
+        public string NpcOverlaySummary => _cabinNpcRegistry != null ? _cabinNpcRegistry.BuildOverlaySummary(hostSide: false) : "NPC: -";
 
         public bool TryGetRemoteDialogue(out string speaker, out string text, out byte kind)
         {
@@ -525,6 +533,7 @@ namespace WoodburySpectatorSync.Coop
             SyncMikeVariantIfChanged();
             ApplyCabinSequenceVisuals();
             DisableLocalGameplay();
+            SuppressLocalNpcBrain();
             _controller?.Update();
             if (_settings.CoopRouteInteractions.Value || !_settings.CoopUseLocalPlayer.Value)
             {
@@ -598,6 +607,7 @@ namespace WoodburySpectatorSync.Coop
             DisableDialogueUIComponents();
             DisableStoryTriggers();
             DisableLocalAi();
+            SuppressLocalNpcBrain();
 
             if (!_settings.CoopUseLocalPlayer.Value)
             {
@@ -792,6 +802,11 @@ namespace WoodburySpectatorSync.Coop
                 else if (message is AiTransformMessage ai)
                 {
                     ApplyAiState(ai.State);
+                    IncrementHostStateApplied();
+                }
+                else if (message is NpcBrainStateMessage npc)
+                {
+                    ApplyNpcBrainState(npc.State, snapshot: false);
                     IncrementHostStateApplied();
                 }
                 else if (message is SceneChangeMessage scene)
@@ -1025,6 +1040,7 @@ namespace WoodburySpectatorSync.Coop
                     counts.Ai,
                     counts.Dialogue,
                     counts.Player,
+                    counts.Custom,
                     _lastSnapshotPendingObjectCount,
                     _lastSnapshotMissingObjectCount,
                     ok,
@@ -1036,9 +1052,13 @@ namespace WoodburySpectatorSync.Coop
                     " ai=" + counts.Ai +
                     " dialogue=" + counts.Dialogue +
                     " players=" + counts.Player +
+                    " custom=" + counts.Custom +
                     " pending=" + _lastSnapshotPendingObjectCount +
                     " missing=" + _lastSnapshotMissingObjectCount +
                     " sent=" + end.SentItemCount + " reason=" + ackReason);
+                _logger.LogInfo("NPCBrain snapshot applied count=" + counts.Custom +
+                                " missing=" + _cabinNpcRegistry.MissingCount +
+                                " criticalMissing=" + _cabinNpcRegistry.CriticalMissingCount);
             }
             catch (Exception ex)
             {
@@ -1502,6 +1522,7 @@ namespace WoodburySpectatorSync.Coop
             _pendingDoorStates.Clear();
             _pendingHoldableStates.Clear();
             _pendingAiStates.Clear();
+            _pendingNpcStates.Clear();
             _smoothedAiStates.Clear();
             _pendingCabinHouseFlags.Clear();
             _pendingCabinGameFlags.Clear();
@@ -1513,6 +1534,7 @@ namespace WoodburySpectatorSync.Coop
             _pendingDoorFirstSeen.Clear();
             _pendingHoldableFirstSeen.Clear();
             _pendingAiFirstSeen.Clear();
+            _pendingNpcFirstSeen.Clear();
             _pendingCabinHouseFirstSeen.Clear();
             _pendingCabinGameFirstSeen.Clear();
             _pendingPizzeriaFirstSeen.Clear();
@@ -1587,6 +1609,53 @@ namespace WoodburySpectatorSync.Coop
 
             _pendingAiStates.Remove(state.Path);
             ClearPendingState(_pendingAiFirstSeen, state.Path);
+        }
+
+        private void ApplyNpcBrainState(NpcBrainState state, bool snapshot)
+        {
+            if (string.IsNullOrEmpty(state.NpcId))
+            {
+                return;
+            }
+
+            if (state.SessionId != 0 && _activeHostSessionId != 0 && state.SessionId != _activeHostSessionId)
+            {
+                _logger.LogWarning("NPCBrain stale session npcId=" + state.NpcId +
+                                   " sid=" + state.SessionId +
+                                   " active=" + _activeHostSessionId);
+                return;
+            }
+
+            if (state.Generation != 0 && _activeSceneGeneration != 0 && state.Generation != _activeSceneGeneration)
+            {
+                _logger.LogWarning("NPCBrain stale generation npcId=" + state.NpcId +
+                                   " gen=" + state.Generation +
+                                   " active=" + _activeSceneGeneration);
+                return;
+            }
+
+            if (_isLoading)
+            {
+                _pendingNpcStates[state.NpcId] = state;
+                TrackPendingState(_pendingNpcFirstSeen, state.NpcId);
+                return;
+            }
+
+            EnsureCabinGameManager();
+            if (_cabinGameManager != null)
+            {
+                _cabinNpcRegistry.Refresh(_cabinGameManager, SceneManager.GetActiveScene().name);
+            }
+
+            if (_cabinGameManager == null || !_cabinNpcRegistry.ApplyState(state, snapshot))
+            {
+                _pendingNpcStates[state.NpcId] = state;
+                TrackPendingState(_pendingNpcFirstSeen, state.NpcId);
+                return;
+            }
+
+            _pendingNpcStates.Remove(state.NpcId);
+            ClearPendingState(_pendingNpcFirstSeen, state.NpcId);
         }
 
         private bool TryApplyDoorState(DoorState state)
@@ -1746,6 +1815,24 @@ namespace WoodburySpectatorSync.Coop
                     }
                     return false;
                 }
+            }
+
+            if (fieldName.StartsWith(CabinCookingPropSync.KeyPrefix, StringComparison.Ordinal))
+            {
+                if (CabinCookingPropSync.TryApplyFlag(_cabinGameManager, fieldName, value, _logger))
+                {
+                    LogCabinCookingPropApply(fieldName);
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
             }
 
             if (key.StartsWith(CabinPostEatingFlagPrefix, StringComparison.Ordinal))
@@ -1962,6 +2049,19 @@ namespace WoodburySpectatorSync.Coop
             ClearPendingState(_pendingCabinGameFirstSeen, key);
 
             return true;
+        }
+
+        private void LogCabinCookingPropApply(string fieldName)
+        {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (nowMs < _nextCabinCookingPropApplyLogMs)
+            {
+                return;
+            }
+
+            _nextCabinCookingPropApplyLogMs = nowMs + 10000;
+            _logger.LogInfo("Cabin cooking prop client apply key=" + fieldName);
+            _sessionLogWrite?.Invoke("Cabin cooking prop client apply key=" + fieldName);
         }
 
         private bool TryApplyCabinHouseActiveFlag(string fieldName, int value)
@@ -4262,6 +4362,7 @@ namespace WoodburySpectatorSync.Coop
             public int Ai;
             public int Dialogue;
             public int Player;
+            public int Custom;
 
             public static SnapshotApplyCounts Empty()
             {
@@ -4286,6 +4387,12 @@ namespace WoodburySpectatorSync.Coop
             if (message is AiTransformMessage ai)
             {
                 _snapshotAiStates[ai.State.Path ?? string.Empty] = ai.State;
+                return true;
+            }
+
+            if (message is NpcBrainStateMessage npc)
+            {
+                _snapshotNpcStates[npc.State.NpcId ?? string.Empty] = npc.State;
                 return true;
             }
 
@@ -4355,6 +4462,16 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
+            foreach (var state in _snapshotNpcStates.Values)
+            {
+                ApplyNpcBrainState(state, snapshot: true);
+                IncrementHostStateApplied();
+                if (!_pendingNpcStates.ContainsKey(state.NpcId ?? string.Empty))
+                {
+                    counts.Custom++;
+                }
+            }
+
             foreach (var message in _snapshotDialogueMessages)
             {
                 if (message is DialogueLineMessage dialogue)
@@ -4405,6 +4522,7 @@ namespace WoodburySpectatorSync.Coop
             _snapshotDoorStates.Clear();
             _snapshotHoldableStates.Clear();
             _snapshotAiStates.Clear();
+            _snapshotNpcStates.Clear();
             _snapshotStoryFlags.Clear();
             _snapshotDialogueMessages.Clear();
         }
@@ -4414,6 +4532,7 @@ namespace WoodburySpectatorSync.Coop
             return _pendingDoorStates.Count +
                    _pendingHoldableStates.Count +
                    _pendingAiStates.Count +
+                   _pendingNpcStates.Count +
                    _pendingCabinHouseFlags.Count +
                    _pendingCabinGameFlags.Count +
                    _pendingPizzeriaFlags.Count +
@@ -4428,6 +4547,7 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.HoldableState:
                 case MessageType.StoryFlag:
                 case MessageType.AiTransform:
+                case MessageType.NpcBrainState:
                 case MessageType.DialogueLine:
                 case MessageType.DialogueStart:
                 case MessageType.DialogueAdvance:
@@ -4535,6 +4655,15 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
+            if (_pendingNpcStates.Count > 0)
+            {
+                var keys = new List<string>(_pendingNpcStates.Keys);
+                foreach (var key in keys)
+                {
+                    ApplyNpcBrainState(_pendingNpcStates[key], snapshot: false);
+                }
+            }
+
             MaybeLogPendingRetryAges();
         }
 
@@ -4580,6 +4709,7 @@ namespace WoodburySpectatorSync.Coop
                 GetMaxPendingAge(_pendingDoorFirstSeen, now),
                 GetMaxPendingAge(_pendingHoldableFirstSeen, now),
                 GetMaxPendingAge(_pendingAiFirstSeen, now),
+                GetMaxPendingAge(_pendingNpcFirstSeen, now),
                 GetMaxPendingAge(_pendingCabinHouseFirstSeen, now),
                 GetMaxPendingAge(_pendingCabinGameFirstSeen, now),
                 GetMaxPendingAge(_pendingPizzeriaFirstSeen, now),
@@ -4596,6 +4726,7 @@ namespace WoodburySpectatorSync.Coop
                 " doors=" + _pendingDoorStates.Count +
                 " holdables=" + _pendingHoldableStates.Count +
                 " ai=" + _pendingAiStates.Count +
+                " npc=" + _pendingNpcStates.Count +
                 " cabinHouse=" + _pendingCabinHouseFlags.Count +
                 " cabinGame=" + _pendingCabinGameFlags.Count +
                 " pizzeria=" + _pendingPizzeriaFlags.Count +
@@ -4916,6 +5047,8 @@ namespace WoodburySpectatorSync.Coop
             if (_cabinGameManager == null) return;
 
             var seq = _cabinGameManager.CurrentSequence;
+            CabinCookingPropSync.ApplyClientPhaseVisuals(_cabinGameManager, _logger);
+
             if (seq != SequenceType.PlayingOuija && seq != SequenceType.GoingToPlayOuija)
             {
                 SetPrivateBool(_cabinGameManager, "isPlayingOuija", false);
@@ -5207,6 +5340,7 @@ namespace WoodburySpectatorSync.Coop
             _nextPendingRetryLogTime = 0f;
             _lastCabinHidingDebug = "-";
             _nextCabinHidingLogTime = 0f;
+            _nextCabinCookingPropApplyLogMs = 0;
             _lastScriptedHostSnapTime = 0f;
             _hostSceneScriptedLock = false;
             _hostCabinPlayerState = -1;
@@ -5580,6 +5714,22 @@ namespace WoodburySpectatorSync.Coop
                 agent.enabled = false;
             }
             _aiDisabled = true;
+        }
+
+        private void SuppressLocalNpcBrain()
+        {
+            if (SceneManager.GetActiveScene().name.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            EnsureCabinGameManager();
+            if (_cabinGameManager == null)
+            {
+                return;
+            }
+
+            _cabinNpcRegistry.SuppressLocalBrain(_cabinGameManager, SceneManager.GetActiveScene().name);
         }
 
         private void DisableLocalMikeControllers()

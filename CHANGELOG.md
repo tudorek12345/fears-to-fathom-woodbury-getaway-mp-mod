@@ -1,6 +1,10 @@
 ﻿# Changelog
 
 ## Unreleased
+- Co-op Cabin: suppressed board-game/Jenga/Ouija cooking visuals on clients so late-start test states no longer leak the casserole tray, fish ingredients, eating plates, or Mike cooking hand props before the Eating sequence.
+- Co-op Cabin: added host-authored casserole/oven cooking prop sync using existing story flags plus transform correction, hid false future-NPC missing diagnostics, throttled NPC heartbeat logs, and extended bounded Cabin scene-ready retries for slower client loads.
+- Co-op Cabin NPC brain: added host-authoritative `NpcBrainState` sync for Cabin Mike variants, hiker/window, host hiding/fixing/endgame, Nora, and cat, with registry-based actor IDs, client-side local brain suppression, snapshot buffering, stale NPC sequence drops, NPC overlay status, and throttled NPC diagnostics.
+- Co-op protocol: bumped wire protocol to 3 and plugin to 0.3.1; snapshot custom counts now carry Cabin NPC brain state and `SnapshotAck` reports applied custom/NPC count.
 - Co-op lifecycle: added explicit `SessionState` machine, `Hello`/`HelloAck` negotiation, session/generation-aware `SceneChange` and `SceneReady`, `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`, UDP apply gating until `Live`, bounded `SceneChange` retry, structured pre-Live drop logs, and protocol version bump to 2.
 - Co-op compatibility: bumped plugin to 0.3.0; old 0.2.x clients/hosts are rejected cleanly instead of silently desyncing.
 - Co-op host: snapshot emission is bracketed and normal world/story/door/holdable/AI deltas are gated until `SnapshotAck` moves the session to `Live`; blind 5-second full-state spam remains removed in favor of emergency/manual resync paths.

@@ -451,6 +451,7 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.HoldableState:
                 case MessageType.StoryFlag:
                 case MessageType.AiTransform:
+                case MessageType.NpcBrainState:
                 case MessageType.DialogueLine:
                 case MessageType.DialogueStart:
                 case MessageType.DialogueAdvance:
@@ -493,6 +494,8 @@ namespace WoodburySpectatorSync.Coop
                 }
                 case MessageType.AiTransform:
                     return Protocol.BuildAiTransform(((AiTransformMessage)message).State);
+                case MessageType.NpcBrainState:
+                    return Protocol.BuildNpcBrainState(((NpcBrainStateMessage)message).State);
                 case MessageType.UdpInfo:
                     return Protocol.BuildUdpInfo(((UdpInfoMessage)message).Port);
                 case MessageType.SceneReady:

@@ -687,6 +687,7 @@ namespace WoodburySpectatorSync.Net
             int appliedAiCount,
             int appliedDialogueCount,
             int appliedPlayerCount,
+            int appliedCustomCount,
             int pendingObjectCount,
             int missingObjectCount,
             bool ok,
@@ -705,10 +706,22 @@ namespace WoodburySpectatorSync.Net
                 writer.Write(appliedAiCount);
                 writer.Write(appliedDialogueCount);
                 writer.Write(appliedPlayerCount);
+                writer.Write(appliedCustomCount);
                 writer.Write(pendingObjectCount);
                 writer.Write(missingObjectCount);
                 writer.Write(ok);
                 WriteString(writer, reason);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildNpcBrainState(NpcBrainState state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.NpcBrainState);
+                WriteNpcBrainState(writer, state);
                 return ms.ToArray();
             }
         }
@@ -1092,6 +1105,9 @@ namespace WoodburySpectatorSync.Net
                                 Active = reader.ReadBoolean()
                             });
                             return true;
+                        case MessageType.NpcBrainState:
+                            message = new NpcBrainStateMessage(ReadNpcBrainState(reader));
+                            return true;
                         case MessageType.PlayerInput:
                             message = new PlayerInputMessage(new PlayerInputState
                             {
@@ -1176,6 +1192,7 @@ namespace WoodburySpectatorSync.Net
                             var appliedAiCount = reader.ReadInt32();
                             var appliedDialogueCount = reader.ReadInt32();
                             var appliedPlayerCount = reader.ReadInt32();
+                            var appliedCustomCount = reader.ReadInt32();
                             var pendingObjectCount = reader.ReadInt32();
                             var missingObjectCount = reader.ReadInt32();
                             var ok = reader.ReadBoolean();
@@ -1190,6 +1207,7 @@ namespace WoodburySpectatorSync.Net
                                 appliedAiCount,
                                 appliedDialogueCount,
                                 appliedPlayerCount,
+                                appliedCustomCount,
                                 pendingObjectCount,
                                 missingObjectCount,
                                 ok,
@@ -1312,6 +1330,79 @@ namespace WoodburySpectatorSync.Net
         private static Quaternion ReadQuaternion(BinaryReader reader)
         {
             return new Quaternion(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+        }
+
+        private static void WriteNpcBrainState(BinaryWriter writer, NpcBrainState state)
+        {
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.NpcSeq);
+            writer.Write(state.UnixTimeMs);
+            WriteString(writer, state.SceneName);
+            WriteString(writer, state.NpcId);
+            WriteString(writer, state.NpcKind);
+            writer.Write(state.Active);
+            writer.Write(state.Visible);
+            writer.Write(state.Critical);
+            WriteVector3(writer, state.Position);
+            WriteQuaternion(writer, state.Rotation);
+            WriteVector3(writer, state.Velocity);
+            writer.Write(state.StateHash);
+            WriteString(writer, state.StateName);
+            WriteString(writer, state.Phase);
+            WriteString(writer, state.Sequence);
+            WriteString(writer, state.TargetPath);
+            WriteVector3(writer, state.TargetPosition);
+            writer.Write(state.HasNavAgent);
+            writer.Write(state.NavAgentEnabled);
+            WriteVector3(writer, state.NavDestination);
+            writer.Write(state.RemainingDistance);
+            writer.Write(state.IsMoving);
+            writer.Write(state.HasAnimator);
+            writer.Write(state.AnimStateHash);
+            writer.Write(state.AnimNextStateHash);
+            writer.Write(state.AnimTransition);
+            writer.Write(state.AnimNormalizedTime);
+            writer.Write(state.AnimSpeed);
+            writer.Write(state.ScriptedFlags);
+        }
+
+        private static NpcBrainState ReadNpcBrainState(BinaryReader reader)
+        {
+            return new NpcBrainState
+            {
+                SessionId = reader.ReadInt32(),
+                Generation = reader.ReadInt32(),
+                NpcSeq = reader.ReadInt32(),
+                UnixTimeMs = reader.ReadInt64(),
+                SceneName = ReadString(reader),
+                NpcId = ReadString(reader),
+                NpcKind = ReadString(reader),
+                Active = reader.ReadBoolean(),
+                Visible = reader.ReadBoolean(),
+                Critical = reader.ReadBoolean(),
+                Position = ReadVector3(reader),
+                Rotation = ReadQuaternion(reader),
+                Velocity = ReadVector3(reader),
+                StateHash = reader.ReadInt32(),
+                StateName = ReadString(reader),
+                Phase = ReadString(reader),
+                Sequence = ReadString(reader),
+                TargetPath = ReadString(reader),
+                TargetPosition = ReadVector3(reader),
+                HasNavAgent = reader.ReadBoolean(),
+                NavAgentEnabled = reader.ReadBoolean(),
+                NavDestination = ReadVector3(reader),
+                RemainingDistance = reader.ReadSingle(),
+                IsMoving = reader.ReadBoolean(),
+                HasAnimator = reader.ReadBoolean(),
+                AnimStateHash = reader.ReadInt32(),
+                AnimNextStateHash = reader.ReadInt32(),
+                AnimTransition = reader.ReadBoolean(),
+                AnimNormalizedTime = reader.ReadSingle(),
+                AnimSpeed = reader.ReadSingle(),
+                ScriptedFlags = reader.ReadInt32()
+            };
         }
     }
 }

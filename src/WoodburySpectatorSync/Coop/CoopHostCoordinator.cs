@@ -30,6 +30,14 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, int> _pizzeriaFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _roadTripFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, AiTransformState> _aiStates = new Dictionary<string, AiTransformState>();
+        private readonly CabinNpcRegistry _cabinNpcRegistry;
+        private readonly Dictionary<string, int> _npcSeqById = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _npcLastStateHashById = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _npcLastSendMsById = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _npcLastLogHashById = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _npcLastLogMsById = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Vector3> _npcLastPositionById = new Dictionary<string, Vector3>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _npcLastPositionMsById = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly List<ICoopHostSceneAdapter> _sceneAdapters = new List<ICoopHostSceneAdapter>();
         private PlayerTransformState _pendingClientTransform;
         private bool _hasPendingClientTransform;
@@ -74,6 +82,7 @@ namespace WoodburySpectatorSync.Coop
         private const long DriftRecoveryClientPktAgeMs = 30000;
         private const long DriftRecoveryCooldownMs = 60000;
         private static readonly int[] SceneChangeRetryBackoffMs = { 1500, 1500, 2000, 2500, 3000, 3500, 4000, 4500 };
+        private static readonly int[] CabinSceneChangeRetryBackoffMs = { 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000 };
         private SnapshotCounts _lastSnapshotCounts = SnapshotCounts.Empty;
 
         private const string CabinHouseFlagPrefix = "CabinHouse.";
@@ -153,6 +162,9 @@ namespace WoodburySpectatorSync.Coop
         private float _nextCabinMikeSyncLogTime;
         private string _lastCabinMikeSyncDebug = "-";
         private string _lastCabinHidingDebug = "-";
+        private string _npcOverlaySummary = "NPC: -";
+        private int _lastCabinCookingPropHash;
+        private long _nextCabinCookingPropLogMs;
         private float _nextCabinHidingLogTime;
 
         private readonly string[] _storyKeys = new[]
@@ -387,6 +399,7 @@ namespace WoodburySpectatorSync.Coop
             _server = server;
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("host", logger, sessionLogWrite);
+            _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "host");
             _clientAvatar = new RemoteAvatar("CoopClientAvatar", new Color(0.2f, 0.7f, 1f, 0.8f));
 
             var doorType = typeof(NOTLonely_Door.DoorScript);
@@ -430,6 +443,7 @@ namespace WoodburySpectatorSync.Coop
         public int LastStoryEventValue => _lastStoryEventValue;
         public long LastStoryEventMs => _lastStoryEventMs;
         public string LastCabinMikeSyncDebug => _lastCabinMikeSyncDebug;
+        public string NpcOverlaySummary => _npcOverlaySummary;
 
         public void Shutdown()
         {
@@ -564,6 +578,7 @@ namespace WoodburySpectatorSync.Coop
                 SendDoorStates();
                 SendHoldableStates();
                 SendAiStates();
+                SendNpcBrainDeltas();
                 _nextWorldSendMs = nowMs + 200;
             }
 
@@ -753,31 +768,35 @@ namespace WoodburySpectatorSync.Coop
                     " ai=" + ack.AppliedAiCount +
                     " dialogue=" + ack.AppliedDialogueCount +
                     " players=" + ack.AppliedPlayerCount +
+                    " custom=" + ack.AppliedCustomCount +
                     " pending=" + ack.PendingObjectCount +
                     " missing=" + ack.MissingObjectCount +
                     " gen=" + ack.Generation + " scene=" + ack.SceneName);
             }
 
-            if (ack.AppliedStoryCount != _lastSnapshotCounts.Story ||
-                ack.AppliedDoorCount != _lastSnapshotCounts.Door ||
-                ack.AppliedHoldableCount != _lastSnapshotCounts.Holdable ||
-                ack.AppliedAiCount != _lastSnapshotCounts.Ai ||
-                ack.AppliedDialogueCount != _lastSnapshotCounts.Dialogue ||
-                ack.AppliedPlayerCount != _lastSnapshotCounts.Player)
+            if (ack.PendingObjectCount > 0 ||
+                ack.MissingObjectCount > 0 ||
+                ack.AppliedDoorCount < _lastSnapshotCounts.Door ||
+                ack.AppliedHoldableCount < _lastSnapshotCounts.Holdable ||
+                ack.AppliedCustomCount < _lastSnapshotCounts.Custom)
             {
-                _logger.LogWarning("Co-op session host: SnapshotAck count mismatch expected story=" +
+                _logger.LogWarning("Co-op session host: SnapshotAck incomplete expected story=" +
                     _lastSnapshotCounts.Story +
                     " doors=" + _lastSnapshotCounts.Door +
                     " holdables=" + _lastSnapshotCounts.Holdable +
                     " ai=" + _lastSnapshotCounts.Ai +
                     " dialogue=" + _lastSnapshotCounts.Dialogue +
                     " players=" + _lastSnapshotCounts.Player +
+                    " custom=" + _lastSnapshotCounts.Custom +
                     " appliedStory=" + ack.AppliedStoryCount +
                     " appliedDoors=" + ack.AppliedDoorCount +
                     " appliedHoldables=" + ack.AppliedHoldableCount +
                     " appliedAi=" + ack.AppliedAiCount +
                     " appliedDialogue=" + ack.AppliedDialogueCount +
-                    " appliedPlayers=" + ack.AppliedPlayerCount);
+                    " appliedPlayers=" + ack.AppliedPlayerCount +
+                    " appliedCustom=" + ack.AppliedCustomCount +
+                    " pending=" + ack.PendingObjectCount +
+                    " missing=" + ack.MissingObjectCount);
             }
 
             _lifecycle.TryTransition(
@@ -1185,8 +1204,27 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var cabinNowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            SendCabinCookingPropFlags(cabinNowMs);
             SendCabinPostEatingFlags(cabinNowMs);
             SendCabinHikerFlags(cabinNowMs);
+        }
+
+        private void SendCabinCookingPropFlags(long nowMs)
+        {
+            if (_cabinGameManager == null) return;
+
+            var hash = CabinCookingPropSync.EmitHostFlags(
+                _cabinGameManager,
+                CabinGameFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_cabinGameFlags, key, value, nowMs));
+
+            if (hash != 0 && (hash != _lastCabinCookingPropHash || nowMs >= _nextCabinCookingPropLogMs))
+            {
+                _lastCabinCookingPropHash = hash;
+                _nextCabinCookingPropLogMs = nowMs + 10000;
+                _logger.LogInfo("Cabin cooking prop host send hash=" + hash +
+                                " seq=" + _cabinGameManager.CurrentSequence);
+            }
         }
 
         private void SendCabinPostEatingFlags(long nowMs)
@@ -1777,7 +1815,172 @@ namespace WoodburySpectatorSync.Coop
             }
 
             SendCabinMikeAiStates();
+            SendCabinCookingPropTransforms();
             SendCabinMikeAnimationFlags();
+        }
+
+        private void SendCabinCookingPropTransforms()
+        {
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+                if (_cabinGameManager == null) return;
+            }
+
+            var casserole = CabinCookingPropSync.GetCasseroleTransform(_cabinGameManager);
+            if (casserole != null)
+            {
+                var hideCookingVisuals = CabinCookingPropSync.ShouldHideCookingVisuals(_cabinGameManager);
+                TryEnqueueAiState(
+                    casserole,
+                    movementThreshold: 0.01f,
+                    rotationThreshold: 0.25f,
+                    activeOverride: hideCookingVisuals ? false : (bool?)null);
+            }
+        }
+
+        private int SendNpcBrainDeltas()
+        {
+            return SendNpcBrainStates(force: false, snapshot: false);
+        }
+
+        private int SendNpcBrainSnapshot()
+        {
+            return SendNpcBrainStates(force: true, snapshot: true);
+        }
+
+        private int SendNpcBrainStates(bool force, bool snapshot)
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                _npcOverlaySummary = "NPC: -";
+                return 0;
+            }
+
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+            }
+
+            if (_cabinGameManager == null)
+            {
+                _npcOverlaySummary = "NPC: missing-manager";
+                return 0;
+            }
+
+            _cabinNpcRegistry.Refresh(_cabinGameManager, sceneName, force);
+
+            var count = 0;
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            foreach (var record in _cabinNpcRegistry.Records)
+            {
+                if (record == null || record.Component == null) continue;
+                var nextSeq = _npcSeqById.TryGetValue(record.Id, out var previousSeq) ? previousSeq + 1 : 1;
+                var velocity = CalculateNpcVelocity(record, nowMs);
+                if (!_cabinNpcRegistry.TryBuildState(
+                        _cabinGameManager,
+                        record.Id,
+                        _server.ActiveSessionId,
+                        _sceneHandshake.Generation,
+                        nextSeq,
+                        nowMs,
+                        velocity,
+                        out var state))
+                {
+                    continue;
+                }
+
+                if (!force && !ShouldSendNpcBrainState(state, nowMs))
+                {
+                    continue;
+                }
+
+                _npcSeqById[record.Id] = nextSeq;
+                _npcLastStateHashById[record.Id] = state.StateHash;
+                _npcLastSendMsById[record.Id] = nowMs;
+                _server.Enqueue(new NpcBrainStateMessage(state));
+                count++;
+
+                if (ShouldLogNpcBrainSend(state, snapshot, nowMs))
+                {
+                    _logger.LogInfo("NPCBrain host send npcId=" + state.NpcId +
+                                    " state=" + state.StateName +
+                                    " phase=" + state.Phase +
+                                    " sequence=" + state.Sequence +
+                                    " npcSeq=" + state.NpcSeq);
+                }
+            }
+
+            _npcOverlaySummary = _cabinNpcRegistry.BuildOverlaySummary(hostSide: true);
+            return count;
+        }
+
+        private bool ShouldLogNpcBrainSend(NpcBrainState state, bool snapshot, long nowMs)
+        {
+            if (snapshot || state.NpcSeq <= 1 || state.NpcSeq % 60 == 0)
+            {
+                _npcLastLogHashById[state.NpcId] = state.StateHash;
+                _npcLastLogMsById[state.NpcId] = nowMs;
+                return true;
+            }
+
+            if (!_npcLastLogHashById.TryGetValue(state.NpcId, out var lastHash) ||
+                lastHash != state.StateHash)
+            {
+                _npcLastLogHashById[state.NpcId] = state.StateHash;
+                _npcLastLogMsById[state.NpcId] = nowMs;
+                return true;
+            }
+
+            if (!_npcLastLogMsById.TryGetValue(state.NpcId, out var lastMs) ||
+                nowMs - lastMs >= 10000)
+            {
+                _npcLastLogMsById[state.NpcId] = nowMs;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool ShouldSendNpcBrainState(NpcBrainState state, long nowMs)
+        {
+            if (!_npcLastSendMsById.TryGetValue(state.NpcId, out var lastSendMs))
+            {
+                return true;
+            }
+
+            if (!_npcLastStateHashById.TryGetValue(state.NpcId, out var lastHash) ||
+                lastHash != state.StateHash)
+            {
+                return true;
+            }
+
+            var heartbeatMs = state.Active ? (state.Critical ? 1000 : 2000) : 5000;
+            if (nowMs - lastSendMs >= heartbeatMs)
+            {
+                return true;
+            }
+
+            return state.Active && state.IsMoving && nowMs - lastSendMs >= 500;
+        }
+
+        private Vector3 CalculateNpcVelocity(CabinNpcRecord record, long nowMs)
+        {
+            if (record == null || record.Component == null) return Vector3.zero;
+            var position = record.Component.transform.position;
+            var velocity = Vector3.zero;
+            if (_npcLastPositionById.TryGetValue(record.Id, out var previousPosition) &&
+                _npcLastPositionMsById.TryGetValue(record.Id, out var previousMs))
+            {
+                var delta = Math.Max(1, nowMs - previousMs) / 1000f;
+                velocity = (position - previousPosition) / delta;
+            }
+
+            _npcLastPositionById[record.Id] = position;
+            _npcLastPositionMsById[record.Id] = nowMs;
+            return velocity;
         }
 
         private void SendCabinMikeAiStates()
@@ -2158,7 +2361,8 @@ namespace WoodburySpectatorSync.Coop
             Transform transform,
             float movementThreshold = 0.05f,
             float rotationThreshold = 1f,
-            bool allowCabinMike = false)
+            bool allowCabinMike = false,
+            bool? activeOverride = null)
         {
             if (transform == null) return;
 
@@ -2167,7 +2371,7 @@ namespace WoodburySpectatorSync.Coop
                 Path = NetPath.GetPath(transform),
                 Position = transform.position,
                 Rotation = transform.rotation,
-                Active = transform.gameObject.activeInHierarchy
+                Active = activeOverride ?? transform.gameObject.activeInHierarchy
             };
             if (string.IsNullOrEmpty(state.Path) || IsCoopProxyPath(state.Path)) return;
             if (!allowCabinMike && IsCabinMikePath(state.Path)) return;
@@ -2259,6 +2463,10 @@ namespace WoodburySpectatorSync.Coop
             SendAiStates();
             counts.Ai = (int)Math.Max(0, _server.HostStateEnqueued - before);
 
+            before = _server.HostStateEnqueued;
+            SendNpcBrainSnapshot();
+            counts.Custom = (int)Math.Max(0, _server.HostStateEnqueued - before);
+
             return counts;
         }
 
@@ -2326,10 +2534,19 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
-        private static int GetSceneChangeRetryBackoffMs(int attempt)
+        private int GetSceneChangeRetryBackoffMs(int attempt)
         {
-            var index = Math.Max(0, Math.Min(SceneChangeRetryBackoffMs.Length - 1, attempt - 1));
-            return SceneChangeRetryBackoffMs[index];
+            var schedule = IsCabinSceneName(_sceneHandshake.SceneName) || IsCabinSceneName(_lastSceneName)
+                ? CabinSceneChangeRetryBackoffMs
+                : SceneChangeRetryBackoffMs;
+            var index = Math.Max(0, Math.Min(schedule.Length - 1, attempt - 1));
+            return schedule[index];
+        }
+
+        private static bool IsCabinSceneName(string sceneName)
+        {
+            return string.Equals(sceneName, "CabinScene", StringComparison.Ordinal) ||
+                   string.Equals(sceneName, "CabinDarkScene", StringComparison.Ordinal);
         }
 
         private void SendSceneChange()
@@ -2458,6 +2675,7 @@ namespace WoodburySpectatorSync.Coop
             _roadTripGameManager = UnityEngine.Object.FindObjectOfType<RoadTripGameManager>();
             _roadTripMikeInCar = UnityEngine.Object.FindObjectOfType<MikeInCar>();
             _roadTripTruck = UnityEngine.Object.FindObjectOfType<MikeTruckInLoopScene>();
+            _cabinNpcRegistry.Refresh(_cabinGameManager, SceneManager.GetActiveScene().name, force: true);
             BindDialogueEvents();
             BindDialogueUiSelection();
         }
@@ -2553,6 +2771,12 @@ namespace WoodburySpectatorSync.Coop
             _doorStates.Clear();
             _holdableStates.Clear();
             _aiStates.Clear();
+            _npcSeqById.Clear();
+            _npcLastStateHashById.Clear();
+            _npcLastSendMsById.Clear();
+            _npcLastPositionById.Clear();
+            _npcLastPositionMsById.Clear();
+            _npcOverlaySummary = "NPC: -";
             _storyFlags.Clear();
             _cabinHouseFlags.Clear();
             _cabinGameFlags.Clear();

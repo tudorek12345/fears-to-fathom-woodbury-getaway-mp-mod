@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.3.0")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.3.1")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -431,6 +431,7 @@ namespace WoodburySpectatorSync
                     " age=" + FormatAge(nowMs, _coopServer.LastHostStateSentMs),
                     "Seq: " + sequenceLabel,
                     "Mike: " + _coopHost.LastCabinMikeSyncDebug,
+                    _coopHost.NpcOverlaySummary,
                     BuildAvatarStatus(),
                     BuildDialogueStatus("Dlg", _coopHost.DialogueConversationId, _coopHost.DialogueEntryId, _coopHost.DialogueChoiceIndex, _coopHost.DialogueLastEventMs, nowMs),
                     BuildStoryStatus(_coopHost.LastStoryEventKey, _coopHost.LastStoryEventValue, _coopHost.LastStoryEventMs, nowMs),
@@ -469,7 +470,8 @@ namespace WoodburySpectatorSync
                     "SceneSync: " + sceneState + " pending=" + pendingScene,
                     "Queues: doors=" + _coopClientCoordinator.PendingDoorCount +
                     " holdables=" + _coopClientCoordinator.PendingHoldableCount +
-                    " ai=" + _coopClientCoordinator.PendingAiCount,
+                    " ai=" + _coopClientCoordinator.PendingAiCount +
+                    " npc=" + _coopClientCoordinator.PendingNpcCount,
                     "HostRx: count=" + _coopClientCoordinator.HostTransformReceiveCount +
                     " id=" + hostId +
                     " age=" + FormatAge(nowMs, _coopClientCoordinator.LastHostTransformReceiveMs),
@@ -487,6 +489,7 @@ namespace WoodburySpectatorSync
                     " age=" + _coopClientCoordinator.LastHostUpdateAgeSeconds.ToString("0.0") + "s",
                     "Seq: " + sequenceLabel,
                     "Mike: " + _coopClientCoordinator.LastMikeSyncDebug,
+                    _coopClientCoordinator.NpcOverlaySummary,
                     BuildAvatarStatus(),
                     BuildDialogueStatus("DlgHost", _coopClientCoordinator.HostDialogueConversationId, _coopClientCoordinator.HostDialogueEntryId, _coopClientCoordinator.HostDialogueChoiceIndex, _coopClientCoordinator.HostDialogueEventMs, nowMs),
                     "DlgLocal: " + localDialogue,
