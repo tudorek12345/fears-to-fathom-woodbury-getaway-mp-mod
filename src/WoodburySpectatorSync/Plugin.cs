@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.3.1")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.3.5")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -432,6 +432,7 @@ namespace WoodburySpectatorSync
                     "Seq: " + sequenceLabel,
                     "Mike: " + _coopHost.LastCabinMikeSyncDebug,
                     _coopHost.NpcOverlaySummary,
+                    _coopHost.BoardGameOverlaySummary,
                     BuildAvatarStatus(),
                     BuildDialogueStatus("Dlg", _coopHost.DialogueConversationId, _coopHost.DialogueEntryId, _coopHost.DialogueChoiceIndex, _coopHost.DialogueLastEventMs, nowMs),
                     BuildStoryStatus(_coopHost.LastStoryEventKey, _coopHost.LastStoryEventValue, _coopHost.LastStoryEventMs, nowMs),
@@ -490,6 +491,7 @@ namespace WoodburySpectatorSync
                     "Seq: " + sequenceLabel,
                     "Mike: " + _coopClientCoordinator.LastMikeSyncDebug,
                     _coopClientCoordinator.NpcOverlaySummary,
+                    _coopClientCoordinator.BoardGameOverlaySummary,
                     BuildAvatarStatus(),
                     BuildDialogueStatus("DlgHost", _coopClientCoordinator.HostDialogueConversationId, _coopClientCoordinator.HostDialogueEntryId, _coopClientCoordinator.HostDialogueChoiceIndex, _coopClientCoordinator.HostDialogueEventMs, nowMs),
                     "DlgLocal: " + localDialogue,

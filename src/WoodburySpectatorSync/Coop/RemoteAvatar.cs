@@ -42,21 +42,12 @@ namespace WoodburySpectatorSync.Coop
 
         private void CreateRoot()
         {
-            _root = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            _root = new GameObject(_name);
             _root.name = _name;
-            _root.transform.localScale = new Vector3(0.35f, 0.9f, 0.35f);
-
-            var renderer = _root.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.material.color = _color;
-            }
-
-            Object.Destroy(_root.GetComponent<Collider>());
 
             var head = new GameObject(_name + "_Head");
             head.transform.SetParent(_root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 0.8f, 0f);
+            head.transform.localPosition = new Vector3(0f, 1.6f, 0f);
             _cameraAnchor = head.transform;
         }
     }

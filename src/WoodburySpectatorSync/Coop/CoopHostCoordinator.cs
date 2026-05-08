@@ -165,6 +165,9 @@ namespace WoodburySpectatorSync.Coop
         private string _npcOverlaySummary = "NPC: -";
         private int _lastCabinCookingPropHash;
         private long _nextCabinCookingPropLogMs;
+        private string _boardGameOverlaySummary = "MiniGame: -";
+        private int _lastCabinBoardGameHash;
+        private long _nextCabinBoardGameLogMs;
         private float _nextCabinHidingLogTime;
 
         private readonly string[] _storyKeys = new[]
@@ -444,6 +447,7 @@ namespace WoodburySpectatorSync.Coop
         public long LastStoryEventMs => _lastStoryEventMs;
         public string LastCabinMikeSyncDebug => _lastCabinMikeSyncDebug;
         public string NpcOverlaySummary => _npcOverlaySummary;
+        public string BoardGameOverlaySummary => _boardGameOverlaySummary;
 
         public void Shutdown()
         {
@@ -1211,6 +1215,7 @@ namespace WoodburySpectatorSync.Coop
 
             var cabinNowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             SendCabinCookingPropFlags(cabinNowMs);
+            SendCabinBoardGameFlags(cabinNowMs);
             SendCabinPostEatingFlags(cabinNowMs);
             SendCabinHikerFlags(cabinNowMs);
         }
@@ -1229,6 +1234,26 @@ namespace WoodburySpectatorSync.Coop
                 _lastCabinCookingPropHash = hash;
                 _nextCabinCookingPropLogMs = nowMs + 10000;
                 _logger.LogInfo("Cabin cooking prop host send hash=" + hash +
+                                " seq=" + _cabinGameManager.CurrentSequence);
+            }
+        }
+
+        private void SendCabinBoardGameFlags(long nowMs)
+        {
+            if (_cabinGameManager == null) return;
+
+            var hash = CabinBoardGameSync.EmitHostFlags(
+                _cabinGameManager,
+                CabinGameFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_cabinGameFlags, key, value, nowMs));
+
+            _boardGameOverlaySummary = CabinBoardGameSync.BuildOverlaySummary(_cabinGameManager);
+
+            if (hash != 0 && (hash != _lastCabinBoardGameHash || nowMs >= _nextCabinBoardGameLogMs))
+            {
+                _lastCabinBoardGameHash = hash;
+                _nextCabinBoardGameLogMs = nowMs + 10000;
+                _logger.LogInfo("Cabin board game host send hash=" + hash +
                                 " seq=" + _cabinGameManager.CurrentSequence);
             }
         }
@@ -1822,6 +1847,7 @@ namespace WoodburySpectatorSync.Coop
 
             SendCabinMikeAiStates();
             SendCabinCookingPropTransforms();
+            SendCabinBoardGameTransforms();
             SendCabinMikeAnimationFlags();
         }
 
@@ -1846,6 +1872,27 @@ namespace WoodburySpectatorSync.Coop
                     movementThreshold: 0.01f,
                     rotationThreshold: 0.25f,
                     activeOverride: isCasserole && hideCookingVisuals ? false : (bool?)null);
+            }
+        }
+
+        private void SendCabinBoardGameTransforms()
+        {
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+                if (_cabinGameManager == null) return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            CabinBoardGameSync.CollectSyncedTransforms(_cabinGameManager, syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.005f,
+                    rotationThreshold: 0.15f);
             }
         }
 
@@ -2403,7 +2450,8 @@ namespace WoodburySpectatorSync.Coop
         {
             return !string.IsNullOrEmpty(key) &&
                    (key.StartsWith(CabinMikeAnimPrefix, StringComparison.Ordinal) ||
-                    IsCabinCookingHighFrequencyStoryFlag(key));
+                    IsCabinCookingHighFrequencyStoryFlag(key) ||
+                    CabinBoardGameSync.IsHighFrequencyStoryFlag(key));
         }
 
         private static bool IsCabinCookingHighFrequencyStoryFlag(string key)
@@ -2798,6 +2846,9 @@ namespace WoodburySpectatorSync.Coop
             _npcLastPositionById.Clear();
             _npcLastPositionMsById.Clear();
             _npcOverlaySummary = "NPC: -";
+            _boardGameOverlaySummary = "MiniGame: -";
+            _lastCabinBoardGameHash = 0;
+            _nextCabinBoardGameLogMs = 0;
             _storyFlags.Clear();
             _cabinHouseFlags.Clear();
             _cabinGameFlags.Clear();

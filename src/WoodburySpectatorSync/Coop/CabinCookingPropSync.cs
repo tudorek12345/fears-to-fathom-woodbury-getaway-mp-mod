@@ -330,22 +330,29 @@ namespace WoodburySpectatorSync.Coop
         {
             if (manager == null || transforms == null) return;
 
-            var casserole = GetCasseroleTransform(manager);
-            if (casserole != null)
+            if (!ShouldHideCookingVisuals(manager))
             {
-                AddUniqueTransform(transforms, casserole);
+                var casserole = GetCasseroleTransform(manager);
+                if (casserole != null)
+                {
+                    AddUniqueTransform(transforms, casserole);
+                }
             }
 
-            var cook = GetMikeCookController(manager);
-            var ouijaTable = GetFieldValue<Transform>(cook, "ouijaTable");
-            if (ouijaTable != null)
+            var sequence = manager.CurrentSequence;
+            if (sequence == SequenceType.GoingToPlayOuija || sequence == SequenceType.PlayingOuija)
             {
-                AddUniqueTransform(transforms, ouijaTable);
-            }
+                var cook = GetMikeCookController(manager);
+                var ouijaTable = GetFieldValue<Transform>(cook, "ouijaTable");
+                if (ouijaTable != null)
+                {
+                    AddUniqueTransform(transforms, ouijaTable);
+                }
 
-            var ouija = GetOuijaController(manager);
-            AddUniqueTransform(transforms, GetFieldValue<Transform>(ouija, "parentTransform"));
-            AddUniqueTransform(transforms, GetFieldValue<Transform>(ouija, "planchetteTransform"));
+                var ouija = GetOuijaController(manager);
+                AddUniqueTransform(transforms, GetFieldValue<Transform>(ouija, "parentTransform"));
+                AddUniqueTransform(transforms, GetFieldValue<Transform>(ouija, "planchetteTransform"));
+            }
         }
 
         public static bool TryApplyFlag(CabinGameManager manager, string fieldName, int value, ManualLogSource logger)

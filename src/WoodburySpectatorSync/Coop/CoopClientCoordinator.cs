@@ -426,6 +426,7 @@ namespace WoodburySpectatorSync.Coop
         public byte LastHostPlayerId => _lastHostPlayerId;
         public string LastMikeSyncDebug => _lastMikeSyncDebug;
         public string NpcOverlaySummary => _cabinNpcRegistry != null ? _cabinNpcRegistry.BuildOverlaySummary(hostSide: false) : "NPC: -";
+        public string BoardGameOverlaySummary => _cabinGameManager != null ? CabinBoardGameSync.BuildOverlaySummary(_cabinGameManager) : "MiniGame: -";
 
         public bool TryGetRemoteDialogue(out string speaker, out string text, out byte kind)
         {
@@ -1821,6 +1822,23 @@ namespace WoodburySpectatorSync.Coop
                 if (CabinCookingPropSync.TryApplyFlag(_cabinGameManager, fieldName, value, _logger))
                 {
                     LogCabinCookingPropApply(fieldName);
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
+            if (fieldName.StartsWith(CabinBoardGameSync.KeyPrefix, StringComparison.Ordinal))
+            {
+                if (CabinBoardGameSync.TryApplyFlag(_cabinGameManager, fieldName, value, _logger))
+                {
                     _pendingCabinGameFlags.Remove(key);
                     ClearPendingState(_pendingCabinGameFirstSeen, key);
                     return true;
@@ -4292,7 +4310,9 @@ namespace WoodburySpectatorSync.Coop
         {
             return !string.IsNullOrEmpty(key) &&
                    (key.StartsWith(CabinGameFlagPrefix + CabinMikeAnimFieldPrefix, StringComparison.Ordinal) ||
-                    IsCabinCookingHighFrequencyStoryFlag(key));
+                    IsCabinCookingHighFrequencyStoryFlag(key) ||
+                    key.StartsWith(CabinGameFlagPrefix + CabinBoardGameSync.KeyPrefix, StringComparison.Ordinal) &&
+                    CabinBoardGameSync.IsHighFrequencyStoryFlag(key.Substring(CabinGameFlagPrefix.Length)));
         }
 
         private static bool IsCabinCookingHighFrequencyStoryFlag(string key)
@@ -4741,6 +4761,11 @@ namespace WoodburySpectatorSync.Coop
                 " cabinGame=" + _pendingCabinGameFlags.Count +
                 " pizzeria=" + _pendingPizzeriaFlags.Count +
                 " roadTrip=" + _pendingRoadTripFlags.Count;
+            if (_pendingCabinGameFlags.Count > 0)
+            {
+                message += " cabinGameKeys=" + BuildPendingFlagSample(_pendingCabinGameFlags, _pendingCabinGameFirstSeen, now);
+            }
+
             if (maxAge >= PendingRetryWarnAgeSeconds)
             {
                 _logger.LogWarning(message);
@@ -4750,6 +4775,43 @@ namespace WoodburySpectatorSync.Coop
                 _logger.LogInfo(message);
             }
             _sessionLogWrite?.Invoke(message);
+        }
+
+        private static string BuildPendingFlagSample(Dictionary<string, int> values, Dictionary<string, float> firstSeen, float now)
+        {
+            if (values == null || values.Count == 0)
+            {
+                return "-";
+            }
+
+            var sample = string.Empty;
+            var count = 0;
+            foreach (var entry in values)
+            {
+                if (count >= 8)
+                {
+                    break;
+                }
+
+                float seenAt;
+                var age = firstSeen != null && firstSeen.TryGetValue(entry.Key, out seenAt)
+                    ? Mathf.Max(0f, now - seenAt)
+                    : 0f;
+                if (sample.Length > 0)
+                {
+                    sample += ",";
+                }
+
+                sample += entry.Key + "=" + entry.Value + "@" + age.ToString("0.0") + "s";
+                count++;
+            }
+
+            if (values.Count > count)
+            {
+                sample += ",+" + (values.Count - count);
+            }
+
+            return sample;
         }
 
         private void MaybeTeleportToHost()
@@ -5058,6 +5120,7 @@ namespace WoodburySpectatorSync.Coop
 
             var seq = _cabinGameManager.CurrentSequence;
             CabinCookingPropSync.ApplyClientPhaseVisuals(_cabinGameManager, _logger);
+            CabinBoardGameSync.ApplyClientPhaseVisuals(_cabinGameManager, _logger);
 
             if (seq != SequenceType.PlayingOuija && seq != SequenceType.GoingToPlayOuija)
             {
@@ -5082,7 +5145,6 @@ namespace WoodburySpectatorSync.Coop
                 SetPrivateGameObjectActive(cabinPlayer, "basementTableLight", true);
                 SetPrivateColliderEnabled(cabinPlayer, "basementTableCollider", false);
                 SetPrivateComponentGameObjectActive(cabinPlayer, "triggerSubGetOuija", false);
-                SetPrivateEnum(cabinPlayer, "currentHoldingBoardGameType", "Ouija");
             }
         }
 
@@ -5880,8 +5942,45 @@ namespace WoodburySpectatorSync.Coop
             _remoteDialogueText = dialogue.Text ?? string.Empty;
             _remoteDialogueKind = dialogue.Kind;
             var duration = Mathf.Max(MinDialogueDisplaySeconds, dialogue.Duration);
+            if (TryShowNativeRemoteDialogue(_remoteDialogueSpeaker, _remoteDialogueText, duration))
+            {
+                ClearRemoteDialogue();
+                return;
+            }
+
             _remoteDialogueExpiresAt = now + duration;
             _remoteDialogueMinClearAt = now + MinDialogueDisplaySeconds;
+        }
+
+        private bool TryShowNativeRemoteDialogue(string speaker, string text, float duration)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            try
+            {
+                var subTextManager = SubTextManager.GetInstance();
+                if (subTextManager == null)
+                {
+                    return false;
+                }
+
+                var displayText = string.IsNullOrEmpty(speaker)
+                    ? text
+                    : speaker + ": " + text;
+                subTextManager.ShowSubText(displayText, Mathf.Max(MinDialogueDisplaySeconds, duration));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (_settings.VerboseLogging.Value)
+                {
+                    _logger.LogWarning("Native remote dialogue display failed: " + ex.Message);
+                }
+                return false;
+            }
         }
 
         private void UpdateRemoteDialogue()

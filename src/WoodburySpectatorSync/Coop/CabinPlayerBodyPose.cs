@@ -28,6 +28,14 @@ namespace WoodburySpectatorSync.Coop
             sourceName = string.Empty;
 
             var cabinPlayer = playerController as CabinPlayerController ?? UnityEngine.Object.FindObjectOfType<CabinPlayerController>();
+
+            if (firstPersonController != null && firstPersonController.gameObject.activeInHierarchy)
+            {
+                bodyTransform = firstPersonController.transform;
+                sourceName = "firstPersonController";
+                return true;
+            }
+
             if (cabinPlayer != null)
             {
                 for (var i = 0; i < VisibleProxyFields.Length; i++)

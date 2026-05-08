@@ -558,7 +558,7 @@ namespace WoodburySpectatorSync.Net
     {
         public const uint Magic = 0x57535331; // "WSS1"
         public const ushort Version = 3;
-        public const string PluginVersion = "0.3.1";
+        public const string PluginVersion = "0.3.5";
         public const int MaxPayloadBytes = 1024 * 1024;
 
         public static byte[] BuildFrame(byte[] payload)

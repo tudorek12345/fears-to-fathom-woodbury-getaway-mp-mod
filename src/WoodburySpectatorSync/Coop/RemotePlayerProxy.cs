@@ -105,6 +105,10 @@ namespace WoodburySpectatorSync.Coop
         private Vector3 _lastRootPosition;
         private float _lastSampleTime;
         private bool _hasMotionSample;
+        private Vector3 _smoothedRootPosition;
+        private Quaternion _smoothedRootRotation = Quaternion.identity;
+        private float _lastSmoothSampleTime;
+        private bool _hasSmoothedRoot;
 
         public Transform Root => _root != null ? _root.transform : null;
         public Transform CameraTransform => _cameraTransform;
@@ -265,6 +269,7 @@ namespace WoodburySpectatorSync.Coop
 
             var bodyPosition = ResolveBodyRootPosition(state);
             var bodyRotation = ResolveUprightBodyRotation(state);
+            SmoothBodyTransform(ref bodyPosition, ref bodyRotation);
             _root.transform.SetPositionAndRotation(bodyPosition, bodyRotation);
             DriveAnimatorFromTransform(bodyPosition, bodyRotation);
 
@@ -278,6 +283,27 @@ namespace WoodburySpectatorSync.Coop
             {
                 _characterController.enabled = true;
             }
+        }
+
+        private void SmoothBodyTransform(ref Vector3 bodyPosition, ref Quaternion bodyRotation)
+        {
+            var now = Time.realtimeSinceStartup;
+            if (!_hasSmoothedRoot || Vector3.Distance(_smoothedRootPosition, bodyPosition) > 4f)
+            {
+                _smoothedRootPosition = bodyPosition;
+                _smoothedRootRotation = bodyRotation;
+                _lastSmoothSampleTime = now;
+                _hasSmoothedRoot = true;
+                return;
+            }
+
+            var deltaTime = Mathf.Max(0.001f, now - _lastSmoothSampleTime);
+            var alpha = 1f - Mathf.Exp(-20f * deltaTime);
+            _smoothedRootPosition = Vector3.Lerp(_smoothedRootPosition, bodyPosition, alpha);
+            _smoothedRootRotation = Quaternion.Slerp(_smoothedRootRotation, bodyRotation, alpha);
+            _lastSmoothSampleTime = now;
+            bodyPosition = _smoothedRootPosition;
+            bodyRotation = _smoothedRootRotation;
         }
 
         private void DriveAnimatorFromTransform(Vector3 newPosition, Quaternion newRotation)
