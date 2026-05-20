@@ -1,6 +1,6 @@
 # Fears to Fathom: Woodbury Getaway Co-op Mod
 
-Experimental BepInEx 5 LAN co-op mod for **Fears to Fathom: Woodbury Getaway**.
+co-op mod for **Fears to Fathom: Woodbury Getaway**.
 
 
 ## Status

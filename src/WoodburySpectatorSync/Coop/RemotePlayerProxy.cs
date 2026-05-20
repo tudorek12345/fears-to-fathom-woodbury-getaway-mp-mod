@@ -692,7 +692,7 @@ namespace WoodburySpectatorSync.Coop
             switch (normalizedId)
             {
                 case "woodbury_cabin_host":
-                    return TryFindNamedAvatar(new[] { "Host" }, out candidate, out sourceName);
+                    return TryFindCabinMikeAvatar(out candidate, out sourceName);
                 case "woodbury_pizzeria_backpacker":
                     return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
                            TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName);
@@ -747,7 +747,7 @@ namespace WoodburySpectatorSync.Coop
 
         private static bool TryFindNonMikeSceneHuman(out GameObject candidate, out string sourceName)
         {
-            if (TryFindNamedAvatar(new[] { "Host", "BackpackerV2", "Backpacker", "Hiker", "Nora" }, out candidate, out sourceName) &&
+            if (TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker", "Hiker", "Nora" }, out candidate, out sourceName) &&
                 !IsMikePath(GetTransformPath(candidate.transform)))
             {
                 return true;
@@ -827,6 +827,11 @@ namespace WoodburySpectatorSync.Coop
             if (!scene.IsValid() || scene != activeScene) return false;
 
             var path = GetTransformPath(candidate.transform);
+            if (IsRejectedSceneAvatarPath(path))
+            {
+                return false;
+            }
+
             if (path.IndexOf("CoopRemotePlayer", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 path.IndexOf("CoopHostAvatar", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 path.IndexOf("CoopClientAvatar", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -870,6 +875,29 @@ namespace WoodburySpectatorSync.Coop
                    horizontalMax >= 0.2f &&
                    horizontalMax <= 2.2f &&
                    size.z <= 1.6f;
+        }
+
+        private static bool IsRejectedSceneAvatarPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+
+            var leaf = path;
+            var slash = leaf.LastIndexOf('/');
+            if (slash >= 0 && slash + 1 < leaf.Length)
+            {
+                leaf = leaf.Substring(slash + 1);
+            }
+
+            if (string.Equals(leaf, "Host", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return path.IndexOf("House/Host", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   path.IndexOf("HostDuring", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   path.IndexOf("HostFixing", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   path.IndexOf("HostEnd", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   path.IndexOf("Host Hiding", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static SourceDescriptor CreateCapsuleSource(Settings settings, FirstPersonController fallbackSource, string reason)

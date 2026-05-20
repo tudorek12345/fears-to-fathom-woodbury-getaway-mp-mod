@@ -11,6 +11,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="tmp-build\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="BepInEx">
       <HintPath>..\..\lib\BepInEx.dll</HintPath>
       <Private>false</Private>

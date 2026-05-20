@@ -192,6 +192,7 @@ namespace WoodburySpectatorSync.Coop
         private string _lastCabinHidingDebug = "-";
         private float _nextCabinHidingLogTime;
         private long _nextCabinCookingPropApplyLogMs;
+        private long _nextCabinAmbientApplyLogMs;
         private float _lastScriptedHostSnapTime;
         private bool _hostSceneScriptedLock;
         private int _hostCabinPlayerState = -1;
@@ -2015,6 +2016,24 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            if (fieldName.StartsWith(CabinAmbientSync.KeyPrefix, StringComparison.Ordinal))
+            {
+                if (CabinAmbientSync.TryApplyFlag(_cabinGameManager, fieldName, value, _logger))
+                {
+                    LogCabinAmbientApply(fieldName);
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
             if (key.StartsWith(CabinPostEatingFlagPrefix, StringComparison.Ordinal))
             {
                 if (TryApplyCabinPostEatingFlag(key.Substring(CabinPostEatingFlagPrefix.Length), value))
@@ -2242,6 +2261,19 @@ namespace WoodburySpectatorSync.Coop
             _nextCabinCookingPropApplyLogMs = nowMs + 10000;
             _logger.LogInfo("Cabin cooking prop client apply key=" + fieldName);
             _sessionLogWrite?.Invoke("Cabin cooking prop client apply key=" + fieldName);
+        }
+
+        private void LogCabinAmbientApply(string fieldName)
+        {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (nowMs < _nextCabinAmbientApplyLogMs)
+            {
+                return;
+            }
+
+            _nextCabinAmbientApplyLogMs = nowMs + 10000;
+            _logger.LogInfo("Cabin ambient client apply key=" + fieldName);
+            _sessionLogWrite?.Invoke("Cabin ambient client apply key=" + fieldName);
         }
 
         private bool TryApplyCabinHouseActiveFlag(string fieldName, int value)
@@ -2710,6 +2742,13 @@ namespace WoodburySpectatorSync.Coop
             if (_cabinGameManager != null)
             {
                 var seq = _cabinGameManager.CurrentSequence;
+                if (seq == SequenceType.Eating &&
+                    (_cabinGameManager.currentMike == CabinGameManager.CurrentMike.PostEating ||
+                     IsActivePostEatingState(mike.state)))
+                {
+                    return true;
+                }
+
                 if (IsEarlyCabinMikeSequence(seq))
                 {
                     return false;
@@ -2730,8 +2769,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             if (mike.gameObject.activeInHierarchy &&
-                mike.state != MikePostEating.State.None &&
-                mike.state != MikePostEating.State.IdleStanding)
+                IsActivePostEatingState(mike.state))
             {
                 return true;
             }
@@ -2746,6 +2784,12 @@ namespace WoodburySpectatorSync.Coop
                    (house.mikeBedroomJumpscare ||
                     house.mikePostJumpscareActive ||
                     house.mikePostJumpscareConvoDone);
+        }
+
+        private static bool IsActivePostEatingState(MikePostEating.State state)
+        {
+            return state != MikePostEating.State.None &&
+                   state != MikePostEating.State.IdleStanding;
         }
 
         private void MaybeLogCabinHidingMirror(MikePostEating mike)
@@ -4473,6 +4517,8 @@ namespace WoodburySpectatorSync.Coop
             return !string.IsNullOrEmpty(key) &&
                    (key.StartsWith(CabinGameFlagPrefix + CabinMikeAnimFieldPrefix, StringComparison.Ordinal) ||
                     IsCabinCookingHighFrequencyStoryFlag(key) ||
+                    key.StartsWith(CabinGameFlagPrefix + CabinAmbientSync.KeyPrefix, StringComparison.Ordinal) &&
+                    CabinAmbientSync.IsHighFrequencyStoryFlag(key.Substring(CabinGameFlagPrefix.Length)) ||
                     key.StartsWith(CabinGameFlagPrefix + CabinBoardGameSync.KeyPrefix, StringComparison.Ordinal) &&
                     CabinBoardGameSync.IsHighFrequencyStoryFlag(key.Substring(CabinGameFlagPrefix.Length)));
         }
@@ -5329,6 +5375,7 @@ namespace WoodburySpectatorSync.Coop
             var seq = _cabinGameManager.CurrentSequence;
             CabinCookingPropSync.ApplyClientPhaseVisuals(_cabinGameManager, _logger);
             CabinBoardGameSync.ApplyClientPhaseVisuals(_cabinGameManager, _logger);
+            CabinAmbientSync.ApplyClientPhaseVisuals(_cabinGameManager, _logger);
 
             if (seq != SequenceType.PlayingOuija && seq != SequenceType.GoingToPlayOuija)
             {
@@ -5625,6 +5672,7 @@ namespace WoodburySpectatorSync.Coop
             _lastCabinHidingDebug = "-";
             _nextCabinHidingLogTime = 0f;
             _nextCabinCookingPropApplyLogMs = 0;
+            _nextCabinAmbientApplyLogMs = 0;
             _lastScriptedHostSnapTime = 0f;
             _hostSceneScriptedLock = false;
             _hostCabinPlayerState = -1;

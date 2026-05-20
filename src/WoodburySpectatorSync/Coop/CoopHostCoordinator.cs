@@ -176,6 +176,8 @@ namespace WoodburySpectatorSync.Coop
         private string _boardGameOverlaySummary = "MiniGame: -";
         private int _lastCabinBoardGameHash;
         private long _nextCabinBoardGameLogMs;
+        private int _lastCabinAmbientHash;
+        private long _nextCabinAmbientLogMs;
         private float _nextCabinHidingLogTime;
 
         private readonly string[] _storyKeys = new[]
@@ -1234,6 +1236,7 @@ namespace WoodburySpectatorSync.Coop
             var cabinNowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             SendCabinCookingPropFlags(cabinNowMs);
             SendCabinBoardGameFlags(cabinNowMs);
+            SendCabinAmbientFlags(cabinNowMs);
             SendCabinPostEatingFlags(cabinNowMs);
             SendCabinHikerFlags(cabinNowMs);
         }
@@ -1272,6 +1275,24 @@ namespace WoodburySpectatorSync.Coop
                 _lastCabinBoardGameHash = hash;
                 _nextCabinBoardGameLogMs = nowMs + 10000;
                 _logger.LogInfo("Cabin board game host send hash=" + hash +
+                                " seq=" + _cabinGameManager.CurrentSequence);
+            }
+        }
+
+        private void SendCabinAmbientFlags(long nowMs)
+        {
+            if (_cabinGameManager == null) return;
+
+            var hash = CabinAmbientSync.EmitHostFlags(
+                _cabinGameManager,
+                CabinGameFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_cabinGameFlags, key, value, nowMs));
+
+            if (hash != 0 && (hash != _lastCabinAmbientHash || nowMs >= _nextCabinAmbientLogMs))
+            {
+                _lastCabinAmbientHash = hash;
+                _nextCabinAmbientLogMs = nowMs + 10000;
+                _logger.LogInfo("Cabin ambient host send hash=" + hash +
                                 " seq=" + _cabinGameManager.CurrentSequence);
             }
         }
@@ -2012,6 +2033,7 @@ namespace WoodburySpectatorSync.Coop
             SendCabinMikeAiStates();
             SendCabinCookingPropTransforms();
             SendCabinBoardGameTransforms();
+            SendCabinAmbientTransforms();
             SendRoadTripVehicleState(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             SendCabinMikeAnimationFlags();
         }
@@ -2058,6 +2080,27 @@ namespace WoodburySpectatorSync.Coop
                     transform,
                     movementThreshold: 0.005f,
                     rotationThreshold: 0.15f);
+            }
+        }
+
+        private void SendCabinAmbientTransforms()
+        {
+            if (_cabinGameManager == null)
+            {
+                _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
+                if (_cabinGameManager == null) return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            CabinAmbientSync.CollectSyncedTransforms(_cabinGameManager, syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.01f,
+                    rotationThreshold: 0.25f);
             }
         }
 
@@ -2488,6 +2531,13 @@ namespace WoodburySpectatorSync.Coop
             if (_cabinGameManager != null)
             {
                 var seq = _cabinGameManager.CurrentSequence;
+                if (seq == SequenceType.Eating &&
+                    (_cabinGameManager.currentMike == CabinGameManager.CurrentMike.PostEating ||
+                     IsActivePostEatingState(mike.state)))
+                {
+                    return true;
+                }
+
                 if (IsEarlyCabinMikeSequence(seq))
                 {
                     return false;
@@ -2508,8 +2558,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             if (mike.gameObject.activeInHierarchy &&
-                mike.state != MikePostEating.State.None &&
-                mike.state != MikePostEating.State.IdleStanding)
+                IsActivePostEatingState(mike.state))
             {
                 return true;
             }
@@ -2519,6 +2568,12 @@ namespace WoodburySpectatorSync.Coop
                    (house.mikeBedroomJumpscare ||
                     house.mikePostJumpscareActive ||
                     house.mikePostJumpscareConvoDone);
+        }
+
+        private static bool IsActivePostEatingState(MikePostEating.State state)
+        {
+            return state != MikePostEating.State.None &&
+                   state != MikePostEating.State.IdleStanding;
         }
 
         private static bool IsEarlyCabinMikeSequence(SequenceType seq)
@@ -2700,7 +2755,10 @@ namespace WoodburySpectatorSync.Coop
             return !string.IsNullOrEmpty(key) &&
                    (key.StartsWith(CabinMikeAnimPrefix, StringComparison.Ordinal) ||
                     IsCabinCookingHighFrequencyStoryFlag(key) ||
-                    CabinBoardGameSync.IsHighFrequencyStoryFlag(key));
+                    key.StartsWith(CabinGameFlagPrefix + CabinAmbientSync.KeyPrefix, StringComparison.Ordinal) &&
+                    CabinAmbientSync.IsHighFrequencyStoryFlag(key.Substring(CabinGameFlagPrefix.Length)) ||
+                    key.StartsWith(CabinGameFlagPrefix + CabinBoardGameSync.KeyPrefix, StringComparison.Ordinal) &&
+                    CabinBoardGameSync.IsHighFrequencyStoryFlag(key.Substring(CabinGameFlagPrefix.Length)));
         }
 
         private static bool IsCabinCookingHighFrequencyStoryFlag(string key)
@@ -3103,6 +3161,8 @@ namespace WoodburySpectatorSync.Coop
             _boardGameOverlaySummary = "MiniGame: -";
             _lastCabinBoardGameHash = 0;
             _nextCabinBoardGameLogMs = 0;
+            _lastCabinAmbientHash = 0;
+            _nextCabinAmbientLogMs = 0;
             _storyFlags.Clear();
             _cabinHouseFlags.Clear();
             _cabinGameFlags.Clear();
