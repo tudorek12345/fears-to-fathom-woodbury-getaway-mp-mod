@@ -50,6 +50,8 @@ namespace WoodburySpectatorSync.Coop
         private FirstPersonController _localFpc;
         private RemotePlayerProxy _hostProxy;
         private readonly CabinNpcRegistry _cabinNpcRegistry;
+        private readonly GenericNpcRegistry _pizzeriaNpcRegistry;
+        private readonly GenericNpcRegistry _roadTripNpcRegistry;
         private readonly Dictionary<string, DoorState> _pendingDoorStates = new Dictionary<string, DoorState>();
         private readonly Dictionary<string, HoldableState> _pendingHoldableStates = new Dictionary<string, HoldableState>();
         private readonly Dictionary<string, AiTransformState> _pendingAiStates = new Dictionary<string, AiTransformState>();
@@ -64,6 +66,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, NpcBrainState> _snapshotNpcStates = new Dictionary<string, NpcBrainState>(StringComparer.Ordinal);
         private readonly Dictionary<string, StoryFlagMessage> _snapshotStoryFlags = new Dictionary<string, StoryFlagMessage>(StringComparer.Ordinal);
         private readonly List<Message> _snapshotDialogueMessages = new List<Message>();
+        private readonly Dictionary<string, int> _lastVehicleSeqById = new Dictionary<string, int>(StringComparer.Ordinal);
+        private int _lastUiMirrorSeq;
         private float _loadingStartTime;
         private float _loadingLastProgress;
         private float _loadingLastProgressTime;
@@ -360,6 +364,8 @@ namespace WoodburySpectatorSync.Coop
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("client", logger, sessionLogWrite);
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "client");
+            _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "client");
+            _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "client");
             _interactor = new CoopClientInteractor(client);
             _hostAvatar = new RemoteAvatar("CoopHostAvatar", new Color(1f, 0.2f, 0.2f, 0.8f));
 
@@ -371,6 +377,7 @@ namespace WoodburySpectatorSync.Coop
             CacheSceneAdapterFields();
             InitializeSceneAdapters();
             OnSceneEnterAdapters(SceneManager.GetActiveScene().name);
+            SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("client", SceneManager.GetActiveScene().name, _logger, _sessionLogWrite);
 
             SceneManager.activeSceneChanged += OnSceneChanged;
         }
@@ -425,7 +432,22 @@ namespace WoodburySpectatorSync.Coop
         public long LastStoryEventMs => _lastStoryEventMs;
         public byte LastHostPlayerId => _lastHostPlayerId;
         public string LastMikeSyncDebug => _lastMikeSyncDebug;
-        public string NpcOverlaySummary => _cabinNpcRegistry != null ? _cabinNpcRegistry.BuildOverlaySummary(hostSide: false) : "NPC: -";
+        public string NpcOverlaySummary
+        {
+            get
+            {
+                var sceneName = SceneManager.GetActiveScene().name;
+                if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return _pizzeriaNpcRegistry != null ? _pizzeriaNpcRegistry.BuildOverlaySummary("NPC") : "NPC: -";
+                }
+                if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return _roadTripNpcRegistry != null ? _roadTripNpcRegistry.BuildOverlaySummary("NPC") : "NPC: -";
+                }
+                return _cabinNpcRegistry != null ? _cabinNpcRegistry.BuildOverlaySummary(hostSide: false) : "NPC: -";
+            }
+        }
         public string BoardGameOverlaySummary => _cabinGameManager != null ? CabinBoardGameSync.BuildOverlaySummary(_cabinGameManager) : "MiniGame: -";
 
         public bool TryGetRemoteDialogue(out string speaker, out string text, out byte kind)
@@ -807,6 +829,26 @@ namespace WoodburySpectatorSync.Coop
                 else if (message is NpcBrainStateMessage npc)
                 {
                     ApplyNpcBrainState(npc.State, snapshot: false);
+                    IncrementHostStateApplied();
+                }
+                else if (message is UiMirrorStateMessage uiMirror)
+                {
+                    HandleUiMirrorState(uiMirror.State);
+                    IncrementHostStateApplied();
+                }
+                else if (message is PathVehicleStateMessage vehicle)
+                {
+                    HandlePathVehicleState(vehicle.State, snapshot: false);
+                    IncrementHostStateApplied();
+                }
+                else if (message is CameraRigStateMessage cameraRig)
+                {
+                    HandleCameraRigState(cameraRig.State);
+                    IncrementHostStateApplied();
+                }
+                else if (message is SceneEventStateMessage sceneEvent)
+                {
+                    HandleSceneEventState(sceneEvent.State);
                     IncrementHostStateApplied();
                 }
                 else if (message is SceneChangeMessage scene)
@@ -1641,13 +1683,29 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
 
-            EnsureCabinGameManager();
-            if (_cabinGameManager != null)
+            var sceneName = SceneManager.GetActiveScene().name;
+            var applied = false;
+            if (state.NpcId.StartsWith("Cabin/", StringComparison.Ordinal))
             {
-                _cabinNpcRegistry.Refresh(_cabinGameManager, SceneManager.GetActiveScene().name);
+                EnsureCabinGameManager();
+                if (_cabinGameManager != null)
+                {
+                    _cabinNpcRegistry.Refresh(_cabinGameManager, sceneName);
+                    applied = _cabinNpcRegistry.ApplyState(state, snapshot);
+                }
+            }
+            else if (state.NpcId.StartsWith("Pizzeria/", StringComparison.Ordinal))
+            {
+                _pizzeriaNpcRegistry.Refresh(sceneName);
+                applied = _pizzeriaNpcRegistry.ApplyState(state, snapshot);
+            }
+            else if (state.NpcId.StartsWith("RoadTrip/", StringComparison.Ordinal))
+            {
+                _roadTripNpcRegistry.Refresh(sceneName);
+                applied = _roadTripNpcRegistry.ApplyState(state, snapshot);
             }
 
-            if (_cabinGameManager == null || !_cabinNpcRegistry.ApplyState(state, snapshot))
+            if (!applied)
             {
                 _pendingNpcStates[state.NpcId] = state;
                 TrackPendingState(_pendingNpcFirstSeen, state.NpcId);
@@ -1656,6 +1714,111 @@ namespace WoodburySpectatorSync.Coop
 
             _pendingNpcStates.Remove(state.NpcId);
             ClearPendingState(_pendingNpcFirstSeen, state.NpcId);
+        }
+
+        private void HandleUiMirrorState(UiMirrorState state)
+        {
+            if (state.SessionId != 0 && _activeHostSessionId != 0 && state.SessionId != _activeHostSessionId)
+            {
+                return;
+            }
+
+            if (state.Generation != 0 && _activeSceneGeneration != 0 && state.Generation != _activeSceneGeneration)
+            {
+                return;
+            }
+
+            if (state.UiSeq != 0 && state.UiSeq < _lastUiMirrorSeq)
+            {
+                return;
+            }
+
+            if (state.UiSeq != 0)
+            {
+                _lastUiMirrorSeq = state.UiSeq;
+            }
+
+            if (string.Equals(state.UiKind, "Dialogue", StringComparison.OrdinalIgnoreCase))
+            {
+                var kind = (byte)Mathf.Clamp(state.Flags, 0, 255);
+                HandleRemoteDialogue(new DialogueLineMessage(
+                    state.Speaker ?? string.Empty,
+                    state.Visible ? (state.Text ?? string.Empty) : string.Empty,
+                    state.Duration,
+                    kind));
+            }
+        }
+
+        private void HandlePathVehicleState(PathVehicleState state, bool snapshot)
+        {
+            if (state.SessionId != 0 && _activeHostSessionId != 0 && state.SessionId != _activeHostSessionId)
+            {
+                return;
+            }
+
+            if (state.Generation != 0 && _activeSceneGeneration != 0 && state.Generation != _activeSceneGeneration)
+            {
+                return;
+            }
+
+            var id = string.IsNullOrEmpty(state.VehicleId) ? state.Path : state.VehicleId;
+            if (!snapshot &&
+                !string.IsNullOrEmpty(id) &&
+                _lastVehicleSeqById.TryGetValue(id, out var lastSeq) &&
+                state.VehicleSeq <= lastSeq)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(id))
+            {
+                _lastVehicleSeqById[id] = state.VehicleSeq;
+            }
+
+            if (string.IsNullOrEmpty(state.Path))
+            {
+                return;
+            }
+
+            ApplyAiState(new AiTransformState
+            {
+                Path = state.Path,
+                Position = state.Position,
+                Rotation = state.Rotation,
+                Active = state.Active
+            });
+        }
+
+        private void HandleCameraRigState(CameraRigState state)
+        {
+            if (state.SessionId != 0 && _activeHostSessionId != 0 && state.SessionId != _activeHostSessionId)
+            {
+                return;
+            }
+
+            if (!state.Active || string.IsNullOrEmpty(state.CameraId))
+            {
+                return;
+            }
+
+            _pendingHostCamPos = state.Position;
+            _pendingHostCamRot = state.Rotation;
+            _hasPendingHostCam = true;
+        }
+
+        private void HandleSceneEventState(SceneEventState state)
+        {
+            if (state.SessionId != 0 && _activeHostSessionId != 0 && state.SessionId != _activeHostSessionId)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(state.EventId))
+            {
+                _lastStoryEventKey = "SceneEvent." + state.EventId;
+                _lastStoryEventValue = state.IntValue;
+                _lastStoryEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            }
         }
 
         private bool TryApplyDoorState(DoorState state)
@@ -4256,7 +4419,6 @@ namespace WoodburySpectatorSync.Coop
             var candidates = new List<Transform>();
             var mikeController = GetMikeControllerComponent();
             if (mikeController != null) candidates.Add(mikeController.transform);
-            if (_cabinGameManager.mikePostEating != null) candidates.Add(_cabinGameManager.mikePostEating.transform);
             if (_cabinGameManager.mikeCabin != null) candidates.Add(_cabinGameManager.mikeCabin.transform);
             if (_cabinGameManager.mikeObject != null) candidates.Add(_cabinGameManager.mikeObject.transform);
 
@@ -4426,13 +4588,31 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
+            if (message is PathVehicleStateMessage vehicle)
+            {
+                var key = string.IsNullOrEmpty(vehicle.State.VehicleId)
+                    ? vehicle.State.Path ?? string.Empty
+                    : vehicle.State.VehicleId;
+                _snapshotAiStates[key] = new AiTransformState
+                {
+                    Path = vehicle.State.Path ?? string.Empty,
+                    Position = vehicle.State.Position,
+                    Rotation = vehicle.State.Rotation,
+                    Active = vehicle.State.Active
+                };
+                return true;
+            }
+
             if (message is StoryFlagMessage flag)
             {
                 _snapshotStoryFlags[flag.Key ?? string.Empty] = flag;
                 return true;
             }
 
-            if (message is DialogueLineMessage ||
+            if (message is UiMirrorStateMessage ||
+                message is CameraRigStateMessage ||
+                message is SceneEventStateMessage ||
+                message is DialogueLineMessage ||
                 message is DialogueStartMessage ||
                 message is DialogueAdvanceMessage ||
                 message is DialogueChoiceMessage ||
@@ -4541,6 +4721,30 @@ namespace WoodburySpectatorSync.Coop
                     IncrementHostStateApplied();
                     counts.Player++;
                 }
+                else if (message is UiMirrorStateMessage uiMirror)
+                {
+                    HandleUiMirrorState(uiMirror.State);
+                    IncrementHostStateApplied();
+                    counts.Dialogue++;
+                }
+                else if (message is PathVehicleStateMessage vehicle)
+                {
+                    HandlePathVehicleState(vehicle.State, snapshot: true);
+                    IncrementHostStateApplied();
+                    counts.Ai++;
+                }
+                else if (message is CameraRigStateMessage cameraRig)
+                {
+                    HandleCameraRigState(cameraRig.State);
+                    IncrementHostStateApplied();
+                    counts.Player++;
+                }
+                else if (message is SceneEventStateMessage sceneEvent)
+                {
+                    HandleSceneEventState(sceneEvent.State);
+                    IncrementHostStateApplied();
+                    counts.Story++;
+                }
             }
 
             ClearSnapshotBuffers();
@@ -4578,6 +4782,10 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.StoryFlag:
                 case MessageType.AiTransform:
                 case MessageType.NpcBrainState:
+                case MessageType.UiMirrorState:
+                case MessageType.CameraRigState:
+                case MessageType.PathVehicleState:
+                case MessageType.SceneEventState:
                 case MessageType.DialogueLine:
                 case MessageType.DialogueStart:
                 case MessageType.DialogueAdvance:
@@ -5362,7 +5570,10 @@ namespace WoodburySpectatorSync.Coop
             _pendingDoorStates.Clear();
             _pendingHoldableStates.Clear();
             _pendingAiStates.Clear();
+            _pendingNpcStates.Clear();
             _smoothedAiStates.Clear();
+            _lastVehicleSeqById.Clear();
+            _lastUiMirrorSeq = 0;
             _pendingCabinHouseFlags.Clear();
             _pendingCabinGameFlags.Clear();
             _pendingPizzeriaFlags.Clear();
@@ -5405,6 +5616,7 @@ namespace WoodburySpectatorSync.Coop
             _pendingDoorFirstSeen.Clear();
             _pendingHoldableFirstSeen.Clear();
             _pendingAiFirstSeen.Clear();
+            _pendingNpcFirstSeen.Clear();
             _pendingCabinHouseFirstSeen.Clear();
             _pendingCabinGameFirstSeen.Clear();
             _pendingPizzeriaFirstSeen.Clear();
@@ -5428,6 +5640,7 @@ namespace WoodburySpectatorSync.Coop
             _hostRoadTripMikeDialogue = false;
             CacheSceneAdapterFields();
             OnSceneEnterAdapters(newScene.name);
+            SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("client", newScene.name, _logger, _sessionLogWrite);
             MarkSceneReadyDirty("active-scene-changed");
         }
 
@@ -5790,18 +6003,23 @@ namespace WoodburySpectatorSync.Coop
 
         private void SuppressLocalNpcBrain()
         {
-            if (SceneManager.GetActiveScene().name.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) < 0)
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return;
+                EnsureCabinGameManager();
+                if (_cabinGameManager != null)
+                {
+                    _cabinNpcRegistry.SuppressLocalBrain(_cabinGameManager, sceneName);
+                }
             }
-
-            EnsureCabinGameManager();
-            if (_cabinGameManager == null)
+            else if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return;
+                _pizzeriaNpcRegistry.SuppressLocalBrain();
             }
-
-            _cabinNpcRegistry.SuppressLocalBrain(_cabinGameManager, SceneManager.GetActiveScene().name);
+            else if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _roadTripNpcRegistry.SuppressLocalBrain();
+            }
         }
 
         private void DisableLocalMikeControllers()

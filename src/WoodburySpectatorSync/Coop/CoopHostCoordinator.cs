@@ -31,6 +31,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, int> _roadTripFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, AiTransformState> _aiStates = new Dictionary<string, AiTransformState>();
         private readonly CabinNpcRegistry _cabinNpcRegistry;
+        private readonly GenericNpcRegistry _pizzeriaNpcRegistry;
+        private readonly GenericNpcRegistry _roadTripNpcRegistry;
         private readonly Dictionary<string, int> _npcSeqById = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _npcLastStateHashById = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _npcLastSendMsById = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -38,6 +40,11 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, long> _npcLastLogMsById = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly Dictionary<string, Vector3> _npcLastPositionById = new Dictionary<string, Vector3>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _npcLastPositionMsById = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _vehicleSeqById = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _vehicleLastHashById = new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _vehicleLastSendMsById = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, Vector3> _vehicleLastPositionById = new Dictionary<string, Vector3>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _vehicleLastPositionMsById = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly List<ICoopHostSceneAdapter> _sceneAdapters = new List<ICoopHostSceneAdapter>();
         private PlayerTransformState _pendingClientTransform;
         private bool _hasPendingClientTransform;
@@ -145,6 +152,7 @@ namespace WoodburySpectatorSync.Coop
         private string _lastDialogueText = string.Empty;
         private string _lastDialogueSpeaker = string.Empty;
         private float _lastDialogueSentTime;
+        private int _uiMirrorSeq;
         private float _nextSubTextPollTime;
         private string _lastSubText = string.Empty;
         private int _dialogueConversationId = -1;
@@ -403,6 +411,8 @@ namespace WoodburySpectatorSync.Coop
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("host", logger, sessionLogWrite);
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "host");
+            _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "host");
+            _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "host");
             _clientAvatar = new RemoteAvatar("CoopClientAvatar", new Color(0.2f, 0.7f, 1f, 0.8f));
 
             var doorType = typeof(NOTLonely_Door.DoorScript);
@@ -420,6 +430,7 @@ namespace WoodburySpectatorSync.Coop
             InitializeSceneAdapters();
             CacheSceneObjects();
             OnSceneEnterAdapters(SceneManager.GetActiveScene().name);
+            SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("host", SceneManager.GetActiveScene().name, _logger, _sessionLogWrite);
             BeginSceneHandshake();
         }
 
@@ -670,6 +681,13 @@ namespace WoodburySpectatorSync.Coop
                     _lastInputState = input.State;
                     _hasInputState = true;
                     _remotePlayer?.ApplyInput(input.State);
+                }
+                else if (message is SceneActionIntentMessage intent)
+                {
+                    _logger.LogInfo("SceneActionIntent host received action=" +
+                        (string.IsNullOrEmpty(intent.State.ActionId) ? "-" : intent.State.ActionId) +
+                        " target=" + (string.IsNullOrEmpty(intent.State.TargetPath) ? "-" : intent.State.TargetPath) +
+                        " scene=" + (string.IsNullOrEmpty(intent.State.SceneName) ? "-" : intent.State.SceneName));
                 }
                 else if (message is PingMessage)
                 {
@@ -1568,6 +1586,78 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private void SendRoadTripVehicleState(long nowMs)
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            if (_roadTripTruck == null)
+            {
+                _roadTripTruck = UnityEngine.Object.FindObjectOfType<MikeTruckInLoopScene>();
+            }
+
+            if (_roadTripTruck == null || _roadTripTruck.transform == null)
+            {
+                return;
+            }
+
+            var id = "RoadTrip/Vehicle/MikeLoop";
+            var transform = _roadTripTruck.transform;
+            var path = NetPath.GetPath(transform);
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            var velocity = CalculateVehicleVelocity(id, transform.position, nowMs);
+            var speed = ReadFloatField(_roadTripTruck, "speed", _roadTripTruckFieldCache, 0f);
+            var distance = ReadFloatField(_roadTripTruck, "distanceTravelled", _roadTripTruckFieldCache, 0f);
+            var flags = 0;
+            if (ReadBoolField(_roadTripTruck, "pushBreak", _roadTripTruckFieldCache)) flags |= 1;
+            if (ReadBoolField(_roadTripTruck, "accelerateFromStop", _roadTripTruckFieldCache)) flags |= 2;
+            if (ReadBoolField(_roadTripTruck, "dialogueBreak", _roadTripTruckFieldCache)) flags |= 4;
+            if (ReadBoolField(_roadTripTruck, "run", _roadTripTruckFieldCache)) flags |= 8;
+
+            var signature = path + "|" + transform.position.ToString("F3") + "|" +
+                            transform.rotation.eulerAngles.ToString("F2") + "|" +
+                            speed.ToString("F2") + "|" + distance.ToString("F2") + "|" +
+                            transform.gameObject.activeInHierarchy + "|" + flags;
+            var hash = StableHash(signature);
+            var lastSend = _vehicleLastSendMsById.TryGetValue(id, out var previousSend) ? previousSend : 0;
+            if (_vehicleLastHashById.TryGetValue(id, out var previousHash) &&
+                previousHash == hash &&
+                nowMs - lastSend < 500)
+            {
+                return;
+            }
+
+            var nextSeq = _vehicleSeqById.TryGetValue(id, out var previousSeq) ? previousSeq + 1 : 1;
+            _vehicleSeqById[id] = nextSeq;
+            _vehicleLastHashById[id] = hash;
+            _vehicleLastSendMsById[id] = nowMs;
+
+            _server.Enqueue(new PathVehicleStateMessage(new PathVehicleState
+            {
+                SessionId = _server.ActiveSessionId,
+                Generation = _sceneHandshake.Generation,
+                VehicleSeq = nextSeq,
+                UnixTimeMs = nowMs,
+                SceneName = sceneName,
+                VehicleId = id,
+                Path = path,
+                Active = transform.gameObject.activeInHierarchy,
+                Position = transform.position,
+                Rotation = transform.rotation,
+                Velocity = velocity,
+                PathDistance = distance,
+                Speed = speed,
+                Flags = flags
+            }));
+        }
+
         private void EmitSceneAdapterSnapshot(long nowMs)
         {
             var sceneName = SceneManager.GetActiveScene().name;
@@ -1811,6 +1901,80 @@ namespace WoodburySpectatorSync.Coop
             return false;
         }
 
+        private static int StableHash(string value)
+        {
+            unchecked
+            {
+                var hash = 23;
+                value = value ?? string.Empty;
+                for (var i = 0; i < value.Length; i++)
+                {
+                    hash = (hash * 31) + value[i];
+                }
+                return hash;
+            }
+        }
+
+        private Vector3 CalculateVehicleVelocity(string id, Vector3 position, long nowMs)
+        {
+            if (string.IsNullOrEmpty(id)) return Vector3.zero;
+            var velocity = Vector3.zero;
+            if (_vehicleLastPositionById.TryGetValue(id, out var previousPosition) &&
+                _vehicleLastPositionMsById.TryGetValue(id, out var previousMs))
+            {
+                var delta = Math.Max(1, nowMs - previousMs) / 1000f;
+                velocity = (position - previousPosition) / delta;
+            }
+
+            _vehicleLastPositionById[id] = position;
+            _vehicleLastPositionMsById[id] = nowMs;
+            return velocity;
+        }
+
+        private static float ReadFloatField(object target, string fieldName, Dictionary<string, FieldInfo> fieldCache, float fallback)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName)) return fallback;
+            if (!fieldCache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                fieldCache[fieldName] = field;
+            }
+
+            if (field == null) return fallback;
+            try
+            {
+                var value = field.GetValue(target);
+                if (value is float f) return f;
+                if (value is int i) return i;
+            }
+            catch
+            {
+            }
+
+            return fallback;
+        }
+
+        private static bool ReadBoolField(object target, string fieldName, Dictionary<string, FieldInfo> fieldCache)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName)) return false;
+            if (!fieldCache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(target.GetType(), fieldName);
+                fieldCache[fieldName] = field;
+            }
+
+            if (field == null) return false;
+            try
+            {
+                var value = field.GetValue(target);
+                return value is bool b && b;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         private static FieldInfo FindInstanceField(Type type, string name)
         {
             while (type != null)
@@ -1848,6 +2012,7 @@ namespace WoodburySpectatorSync.Coop
             SendCabinMikeAiStates();
             SendCabinCookingPropTransforms();
             SendCabinBoardGameTransforms();
+            SendRoadTripVehicleState(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             SendCabinMikeAnimationFlags();
         }
 
@@ -1909,8 +2074,23 @@ namespace WoodburySpectatorSync.Coop
         private int SendNpcBrainStates(bool force, bool snapshot)
         {
             var sceneName = SceneManager.GetActiveScene().name;
-            if (string.IsNullOrEmpty(sceneName) ||
-                sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) < 0)
+            if (string.IsNullOrEmpty(sceneName))
+            {
+                _npcOverlaySummary = "NPC: -";
+                return 0;
+            }
+
+            if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return SendGenericNpcBrainStates(_pizzeriaNpcRegistry, sceneName, force, snapshot);
+            }
+
+            if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return SendGenericNpcBrainStates(_roadTripNpcRegistry, sceneName, force, snapshot);
+            }
+
+            if (sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 _npcOverlaySummary = "NPC: -";
                 return 0;
@@ -1974,6 +2154,59 @@ namespace WoodburySpectatorSync.Coop
             return count;
         }
 
+        private int SendGenericNpcBrainStates(GenericNpcRegistry registry, string sceneName, bool force, bool snapshot)
+        {
+            if (registry == null)
+            {
+                _npcOverlaySummary = "NPC: -";
+                return 0;
+            }
+
+            registry.Refresh(sceneName, force);
+            var count = 0;
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            foreach (var record in registry.Records)
+            {
+                if (record == null || record.Component == null) continue;
+                var nextSeq = _npcSeqById.TryGetValue(record.Id, out var previousSeq) ? previousSeq + 1 : 1;
+                var velocity = CalculateNpcVelocity(record, nowMs);
+                if (!registry.TryBuildState(
+                        record,
+                        _server.ActiveSessionId,
+                        _sceneHandshake.Generation,
+                        nextSeq,
+                        nowMs,
+                        velocity,
+                        out var state))
+                {
+                    continue;
+                }
+
+                if (!force && !ShouldSendNpcBrainState(state, nowMs))
+                {
+                    continue;
+                }
+
+                _npcSeqById[record.Id] = nextSeq;
+                _npcLastStateHashById[record.Id] = state.StateHash;
+                _npcLastSendMsById[record.Id] = nowMs;
+                _server.Enqueue(new NpcBrainStateMessage(state));
+                count++;
+
+                if (ShouldLogNpcBrainSend(state, snapshot, nowMs))
+                {
+                    _logger.LogInfo("NPCBrain host send npcId=" + state.NpcId +
+                                    " state=" + state.StateName +
+                                    " phase=" + state.Phase +
+                                    " sequence=" + state.Sequence +
+                                    " npcSeq=" + state.NpcSeq);
+                }
+            }
+
+            _npcOverlaySummary = registry.BuildOverlaySummary("NPC");
+            return count;
+        }
+
         private bool ShouldLogNpcBrainSend(NpcBrainState state, bool snapshot, long nowMs)
         {
             if (snapshot || state.NpcSeq <= 1 || state.NpcSeq % 60 == 0)
@@ -2024,6 +2257,23 @@ namespace WoodburySpectatorSync.Coop
         }
 
         private Vector3 CalculateNpcVelocity(CabinNpcRecord record, long nowMs)
+        {
+            if (record == null || record.Component == null) return Vector3.zero;
+            var position = record.Component.transform.position;
+            var velocity = Vector3.zero;
+            if (_npcLastPositionById.TryGetValue(record.Id, out var previousPosition) &&
+                _npcLastPositionMsById.TryGetValue(record.Id, out var previousMs))
+            {
+                var delta = Math.Max(1, nowMs - previousMs) / 1000f;
+                velocity = (position - previousPosition) / delta;
+            }
+
+            _npcLastPositionById[record.Id] = position;
+            _npcLastPositionMsById[record.Id] = nowMs;
+            return velocity;
+        }
+
+        private Vector3 CalculateNpcVelocity(GenericNpcRecord record, long nowMs)
         {
             if (record == null || record.Component == null) return Vector3.zero;
             var position = record.Component.transform.position;
@@ -2378,7 +2628,6 @@ namespace WoodburySpectatorSync.Coop
 
             var candidates = new List<Transform>();
             TryAddMikeTransform(candidates, _cabinMikeControllerField != null ? _cabinMikeControllerField.GetValue(_cabinGameManager) as Component : null);
-            if (_cabinGameManager.mikePostEating != null) candidates.Add(_cabinGameManager.mikePostEating.transform);
             if (_cabinGameManager.mikeCabin != null) candidates.Add(_cabinGameManager.mikeCabin.transform);
             if (_cabinGameManager.mikeObject != null) candidates.Add(_cabinGameManager.mikeObject.transform);
 
@@ -2845,6 +3094,11 @@ namespace WoodburySpectatorSync.Coop
             _npcLastSendMsById.Clear();
             _npcLastPositionById.Clear();
             _npcLastPositionMsById.Clear();
+            _vehicleSeqById.Clear();
+            _vehicleLastHashById.Clear();
+            _vehicleLastSendMsById.Clear();
+            _vehicleLastPositionById.Clear();
+            _vehicleLastPositionMsById.Clear();
             _npcOverlaySummary = "NPC: -";
             _boardGameOverlaySummary = "MiniGame: -";
             _lastCabinBoardGameHash = 0;
@@ -2866,6 +3120,7 @@ namespace WoodburySpectatorSync.Coop
             _lastDialogueText = string.Empty;
             _lastDialogueSpeaker = string.Empty;
             _lastDialogueSentTime = 0f;
+            _uiMirrorSeq = 0;
             _lastSubText = string.Empty;
             _dialogueConversationId = -1;
             _dialogueEntryId = -1;
@@ -2887,6 +3142,7 @@ namespace WoodburySpectatorSync.Coop
             _remotePlayer = null;
             _lastSceneName = newScene.name;
             OnSceneEnterAdapters(newScene.name);
+            SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("host", newScene.name, _logger, _sessionLogWrite);
             BeginSceneHandshake();
         }
 
@@ -3192,6 +3448,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!_clientSceneReady) return;
             _server.Enqueue(new DialogueLineMessage(string.Empty, string.Empty, 0f, 0));
+            SendUiMirrorDialogue(string.Empty, string.Empty, 0f, 0, visible: false);
         }
 
         private void HandleBarkLine(Subtitle subtitle)
@@ -3217,6 +3474,28 @@ namespace WoodburySpectatorSync.Coop
             _lastDialogueSentTime = now;
             var duration = Mathf.Clamp(1.5f + text.Length * 0.05f, 2f, 8f);
             _server.Enqueue(new DialogueLineMessage(speaker, text, duration, kind));
+            SendUiMirrorDialogue(speaker, text, duration, kind, visible: true);
+        }
+
+        private void SendUiMirrorDialogue(string speaker, string text, float duration, byte kind, bool visible)
+        {
+            if (!_clientSceneReady) return;
+            _uiMirrorSeq++;
+            _server.Enqueue(new UiMirrorStateMessage(new UiMirrorState
+            {
+                SessionId = _server.ActiveSessionId,
+                Generation = _sceneHandshake.Generation,
+                UiSeq = _uiMirrorSeq,
+                UnixTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                SceneName = SceneManager.GetActiveScene().name,
+                UiKind = "Dialogue",
+                Speaker = speaker ?? string.Empty,
+                Text = text ?? string.Empty,
+                ChoiceIndex = -1,
+                Visible = visible,
+                Duration = duration,
+                Flags = kind
+            }));
         }
 
         private void SendDialogueAdvance(Subtitle subtitle)
@@ -3253,11 +3532,13 @@ namespace WoodburySpectatorSync.Coop
             if (string.IsNullOrEmpty(text))
             {
                 _server.Enqueue(new DialogueLineMessage(string.Empty, string.Empty, 0f, 2));
+                SendUiMirrorDialogue(string.Empty, string.Empty, 0f, 2, visible: false);
                 return;
             }
 
             var duration = Mathf.Clamp(1.5f + text.Length * 0.05f, 2f, 8f);
             _server.Enqueue(new DialogueLineMessage(string.Empty, text, duration, 2));
+            SendUiMirrorDialogue(string.Empty, text, duration, 2, visible: true);
         }
     }
 }

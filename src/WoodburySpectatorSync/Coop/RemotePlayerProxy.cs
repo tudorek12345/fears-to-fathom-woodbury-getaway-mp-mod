@@ -48,7 +48,7 @@ namespace WoodburySpectatorSync.Coop
             public GameObject SourceObject;
             public bool UseSyntheticCapsule;
             public bool UseInvisiblePlaceholder;
-            public bool AllowSyntheticFallbackBody = true;
+            public bool AllowSyntheticFallbackBody;
             public Vector3 InitialPosition;
             public Quaternion InitialRotation = Quaternion.identity;
             public string RigProfile;
@@ -877,6 +877,7 @@ namespace WoodburySpectatorSync.Coop
             return new SourceDescriptor
             {
                 UseSyntheticCapsule = true,
+                AllowSyntheticFallbackBody = true,
                 InitialPosition = fallbackSource != null ? fallbackSource.transform.position : Vector3.zero,
                 InitialRotation = fallbackSource != null ? fallbackSource.transform.rotation : Quaternion.identity,
                 RigProfile = ResolveConfiguredRig(settings, "Auto"),
@@ -1055,6 +1056,7 @@ namespace WoodburySpectatorSync.Coop
             if (_root == null) return;
 
             var renderers = _root.GetComponentsInChildren<Renderer>(true);
+            var visibleRenderers = CountVisibleRenderers(_root);
             var animators = _root.GetComponentsInChildren<Animator>(true);
             var colliders = _root.GetComponentsInChildren<Collider>(true);
             var enabledColliders = 0;
@@ -1071,6 +1073,7 @@ namespace WoodburySpectatorSync.Coop
                 " fallbackBody=" + usedFallbackBody +
                 " fallbackReason=" + (source != null ? source.FallbackReason : string.Empty) +
                 " renderers=" + renderers.Length +
+                " visibleRenderers=" + visibleRenderers +
                 " animators=" + animators.Length +
                 " enabledColliders=" + enabledColliders +
                 " bounds=" + FormatBounds(_root);

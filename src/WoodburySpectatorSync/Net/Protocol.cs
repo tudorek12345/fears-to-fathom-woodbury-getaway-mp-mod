@@ -31,7 +31,12 @@ namespace WoodburySpectatorSync.Net
         SnapshotBegin = 22,
         SnapshotEnd = 23,
         SnapshotAck = 24,
-        NpcBrainState = 25
+        NpcBrainState = 25,
+        SceneActionIntent = 26,
+        UiMirrorState = 27,
+        CameraRigState = 28,
+        PathVehicleState = 29,
+        SceneEventState = 30
     }
 
     public enum ProtocolParseErrorCode
@@ -333,6 +338,61 @@ namespace WoodburySpectatorSync.Net
         }
     }
 
+    public sealed class SceneActionIntentMessage : Message
+    {
+        public SceneActionIntent State;
+
+        public SceneActionIntentMessage(SceneActionIntent state)
+        {
+            Type = MessageType.SceneActionIntent;
+            State = state;
+        }
+    }
+
+    public sealed class UiMirrorStateMessage : Message
+    {
+        public UiMirrorState State;
+
+        public UiMirrorStateMessage(UiMirrorState state)
+        {
+            Type = MessageType.UiMirrorState;
+            State = state;
+        }
+    }
+
+    public sealed class CameraRigStateMessage : Message
+    {
+        public CameraRigState State;
+
+        public CameraRigStateMessage(CameraRigState state)
+        {
+            Type = MessageType.CameraRigState;
+            State = state;
+        }
+    }
+
+    public sealed class PathVehicleStateMessage : Message
+    {
+        public PathVehicleState State;
+
+        public PathVehicleStateMessage(PathVehicleState state)
+        {
+            Type = MessageType.PathVehicleState;
+            State = state;
+        }
+    }
+
+    public sealed class SceneEventStateMessage : Message
+    {
+        public SceneEventState State;
+
+        public SceneEventStateMessage(SceneEventState state)
+        {
+            Type = MessageType.SceneEventState;
+            State = state;
+        }
+    }
+
     public sealed class HelloAckMessage : Message
     {
         public ushort ProtocolVersion;
@@ -542,6 +602,87 @@ namespace WoodburySpectatorSync.Net
         public int ScriptedFlags;
     }
 
+    public struct SceneActionIntent
+    {
+        public int SessionId;
+        public int Generation;
+        public int ActionSeq;
+        public long UnixTimeMs;
+        public string SceneName;
+        public string ActionId;
+        public string TargetPath;
+        public string Payload;
+        public int IntValue;
+        public float FloatValue;
+        public int Flags;
+    }
+
+    public struct UiMirrorState
+    {
+        public int SessionId;
+        public int Generation;
+        public int UiSeq;
+        public long UnixTimeMs;
+        public string SceneName;
+        public string UiKind;
+        public string Speaker;
+        public string Text;
+        public int ChoiceIndex;
+        public bool Visible;
+        public float Duration;
+        public int Flags;
+    }
+
+    public struct CameraRigState
+    {
+        public int SessionId;
+        public int Generation;
+        public int CameraSeq;
+        public long UnixTimeMs;
+        public string SceneName;
+        public string CameraId;
+        public string TargetPath;
+        public bool Active;
+        public Vector3 Position;
+        public Quaternion Rotation;
+        public float Fov;
+        public int Flags;
+    }
+
+    public struct PathVehicleState
+    {
+        public int SessionId;
+        public int Generation;
+        public int VehicleSeq;
+        public long UnixTimeMs;
+        public string SceneName;
+        public string VehicleId;
+        public string Path;
+        public bool Active;
+        public Vector3 Position;
+        public Quaternion Rotation;
+        public Vector3 Velocity;
+        public float PathDistance;
+        public float Speed;
+        public int Flags;
+    }
+
+    public struct SceneEventState
+    {
+        public int SessionId;
+        public int Generation;
+        public int EventSeq;
+        public long UnixTimeMs;
+        public string SceneName;
+        public string EventId;
+        public string EventKind;
+        public string TargetPath;
+        public string Payload;
+        public int IntValue;
+        public float FloatValue;
+        public int Flags;
+    }
+
     public struct PlayerInputState
     {
         public byte PlayerId;
@@ -557,8 +698,8 @@ namespace WoodburySpectatorSync.Net
     public static class Protocol
     {
         public const uint Magic = 0x57535331; // "WSS1"
-        public const ushort Version = 3;
-        public const string PluginVersion = "0.3.5";
+        public const ushort Version = 4;
+        public const string PluginVersion = "0.4.0";
         public const int MaxPayloadBytes = 1024 * 1024;
 
         public static byte[] BuildFrame(byte[] payload)
@@ -722,6 +863,61 @@ namespace WoodburySpectatorSync.Net
             {
                 WriteHeader(writer, MessageType.NpcBrainState);
                 WriteNpcBrainState(writer, state);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildSceneActionIntent(SceneActionIntent state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.SceneActionIntent);
+                WriteSceneActionIntent(writer, state);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildUiMirrorState(UiMirrorState state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.UiMirrorState);
+                WriteUiMirrorState(writer, state);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildCameraRigState(CameraRigState state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.CameraRigState);
+                WriteCameraRigState(writer, state);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildPathVehicleState(PathVehicleState state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.PathVehicleState);
+                WritePathVehicleState(writer, state);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildSceneEventState(SceneEventState state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.SceneEventState);
+                WriteSceneEventState(writer, state);
                 return ms.ToArray();
             }
         }
@@ -1108,6 +1304,21 @@ namespace WoodburySpectatorSync.Net
                         case MessageType.NpcBrainState:
                             message = new NpcBrainStateMessage(ReadNpcBrainState(reader));
                             return true;
+                        case MessageType.SceneActionIntent:
+                            message = new SceneActionIntentMessage(ReadSceneActionIntent(reader));
+                            return true;
+                        case MessageType.UiMirrorState:
+                            message = new UiMirrorStateMessage(ReadUiMirrorState(reader));
+                            return true;
+                        case MessageType.CameraRigState:
+                            message = new CameraRigStateMessage(ReadCameraRigState(reader));
+                            return true;
+                        case MessageType.PathVehicleState:
+                            message = new PathVehicleStateMessage(ReadPathVehicleState(reader));
+                            return true;
+                        case MessageType.SceneEventState:
+                            message = new SceneEventStateMessage(ReadSceneEventState(reader));
+                            return true;
                         case MessageType.PlayerInput:
                             message = new PlayerInputMessage(new PlayerInputState
                             {
@@ -1402,6 +1613,183 @@ namespace WoodburySpectatorSync.Net
                 AnimNormalizedTime = reader.ReadSingle(),
                 AnimSpeed = reader.ReadSingle(),
                 ScriptedFlags = reader.ReadInt32()
+            };
+        }
+
+        private static void WriteSceneActionIntent(BinaryWriter writer, SceneActionIntent state)
+        {
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.ActionSeq);
+            writer.Write(state.UnixTimeMs);
+            WriteString(writer, state.SceneName);
+            WriteString(writer, state.ActionId);
+            WriteString(writer, state.TargetPath);
+            WriteString(writer, state.Payload);
+            writer.Write(state.IntValue);
+            writer.Write(state.FloatValue);
+            writer.Write(state.Flags);
+        }
+
+        private static SceneActionIntent ReadSceneActionIntent(BinaryReader reader)
+        {
+            return new SceneActionIntent
+            {
+                SessionId = reader.ReadInt32(),
+                Generation = reader.ReadInt32(),
+                ActionSeq = reader.ReadInt32(),
+                UnixTimeMs = reader.ReadInt64(),
+                SceneName = ReadString(reader),
+                ActionId = ReadString(reader),
+                TargetPath = ReadString(reader),
+                Payload = ReadString(reader),
+                IntValue = reader.ReadInt32(),
+                FloatValue = reader.ReadSingle(),
+                Flags = reader.ReadInt32()
+            };
+        }
+
+        private static void WriteUiMirrorState(BinaryWriter writer, UiMirrorState state)
+        {
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.UiSeq);
+            writer.Write(state.UnixTimeMs);
+            WriteString(writer, state.SceneName);
+            WriteString(writer, state.UiKind);
+            WriteString(writer, state.Speaker);
+            WriteString(writer, state.Text);
+            writer.Write(state.ChoiceIndex);
+            writer.Write(state.Visible);
+            writer.Write(state.Duration);
+            writer.Write(state.Flags);
+        }
+
+        private static UiMirrorState ReadUiMirrorState(BinaryReader reader)
+        {
+            return new UiMirrorState
+            {
+                SessionId = reader.ReadInt32(),
+                Generation = reader.ReadInt32(),
+                UiSeq = reader.ReadInt32(),
+                UnixTimeMs = reader.ReadInt64(),
+                SceneName = ReadString(reader),
+                UiKind = ReadString(reader),
+                Speaker = ReadString(reader),
+                Text = ReadString(reader),
+                ChoiceIndex = reader.ReadInt32(),
+                Visible = reader.ReadBoolean(),
+                Duration = reader.ReadSingle(),
+                Flags = reader.ReadInt32()
+            };
+        }
+
+        private static void WriteCameraRigState(BinaryWriter writer, CameraRigState state)
+        {
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.CameraSeq);
+            writer.Write(state.UnixTimeMs);
+            WriteString(writer, state.SceneName);
+            WriteString(writer, state.CameraId);
+            WriteString(writer, state.TargetPath);
+            writer.Write(state.Active);
+            WriteVector3(writer, state.Position);
+            WriteQuaternion(writer, state.Rotation);
+            writer.Write(state.Fov);
+            writer.Write(state.Flags);
+        }
+
+        private static CameraRigState ReadCameraRigState(BinaryReader reader)
+        {
+            return new CameraRigState
+            {
+                SessionId = reader.ReadInt32(),
+                Generation = reader.ReadInt32(),
+                CameraSeq = reader.ReadInt32(),
+                UnixTimeMs = reader.ReadInt64(),
+                SceneName = ReadString(reader),
+                CameraId = ReadString(reader),
+                TargetPath = ReadString(reader),
+                Active = reader.ReadBoolean(),
+                Position = ReadVector3(reader),
+                Rotation = ReadQuaternion(reader),
+                Fov = reader.ReadSingle(),
+                Flags = reader.ReadInt32()
+            };
+        }
+
+        private static void WritePathVehicleState(BinaryWriter writer, PathVehicleState state)
+        {
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.VehicleSeq);
+            writer.Write(state.UnixTimeMs);
+            WriteString(writer, state.SceneName);
+            WriteString(writer, state.VehicleId);
+            WriteString(writer, state.Path);
+            writer.Write(state.Active);
+            WriteVector3(writer, state.Position);
+            WriteQuaternion(writer, state.Rotation);
+            WriteVector3(writer, state.Velocity);
+            writer.Write(state.PathDistance);
+            writer.Write(state.Speed);
+            writer.Write(state.Flags);
+        }
+
+        private static PathVehicleState ReadPathVehicleState(BinaryReader reader)
+        {
+            return new PathVehicleState
+            {
+                SessionId = reader.ReadInt32(),
+                Generation = reader.ReadInt32(),
+                VehicleSeq = reader.ReadInt32(),
+                UnixTimeMs = reader.ReadInt64(),
+                SceneName = ReadString(reader),
+                VehicleId = ReadString(reader),
+                Path = ReadString(reader),
+                Active = reader.ReadBoolean(),
+                Position = ReadVector3(reader),
+                Rotation = ReadQuaternion(reader),
+                Velocity = ReadVector3(reader),
+                PathDistance = reader.ReadSingle(),
+                Speed = reader.ReadSingle(),
+                Flags = reader.ReadInt32()
+            };
+        }
+
+        private static void WriteSceneEventState(BinaryWriter writer, SceneEventState state)
+        {
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.EventSeq);
+            writer.Write(state.UnixTimeMs);
+            WriteString(writer, state.SceneName);
+            WriteString(writer, state.EventId);
+            WriteString(writer, state.EventKind);
+            WriteString(writer, state.TargetPath);
+            WriteString(writer, state.Payload);
+            writer.Write(state.IntValue);
+            writer.Write(state.FloatValue);
+            writer.Write(state.Flags);
+        }
+
+        private static SceneEventState ReadSceneEventState(BinaryReader reader)
+        {
+            return new SceneEventState
+            {
+                SessionId = reader.ReadInt32(),
+                Generation = reader.ReadInt32(),
+                EventSeq = reader.ReadInt32(),
+                UnixTimeMs = reader.ReadInt64(),
+                SceneName = ReadString(reader),
+                EventId = ReadString(reader),
+                EventKind = ReadString(reader),
+                TargetPath = ReadString(reader),
+                Payload = ReadString(reader),
+                IntValue = reader.ReadInt32(),
+                FloatValue = reader.ReadSingle(),
+                Flags = reader.ReadInt32()
             };
         }
     }

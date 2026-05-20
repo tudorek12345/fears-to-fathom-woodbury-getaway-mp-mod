@@ -30,8 +30,3 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Build-AvatarBundle.ps1
 
 The output bundle is written to `output/avatars/woodbury_avatars.bundle`.
 
-Install it into the game with:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Build-AvatarBundle.ps1 -InstallToGameDir "C:\Games\Fears to Fathom - Woodbury Getaway"
-```

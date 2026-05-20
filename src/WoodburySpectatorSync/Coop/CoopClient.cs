@@ -538,6 +538,16 @@ namespace WoodburySpectatorSync.Coop
                     return Protocol.BuildPlayerInput(((PlayerInputMessage)message).State);
                 case MessageType.UdpInfo:
                     return Protocol.BuildUdpInfo(((UdpInfoMessage)message).Port);
+                case MessageType.SceneActionIntent:
+                    return Protocol.BuildSceneActionIntent(((SceneActionIntentMessage)message).State);
+                case MessageType.UiMirrorState:
+                    return Protocol.BuildUiMirrorState(((UiMirrorStateMessage)message).State);
+                case MessageType.CameraRigState:
+                    return Protocol.BuildCameraRigState(((CameraRigStateMessage)message).State);
+                case MessageType.PathVehicleState:
+                    return Protocol.BuildPathVehicleState(((PathVehicleStateMessage)message).State);
+                case MessageType.SceneEventState:
+                    return Protocol.BuildSceneEventState(((SceneEventStateMessage)message).State);
                 case MessageType.SceneReady:
                 {
                     var msg = (SceneReadyMessage)message;
@@ -775,6 +785,10 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.DialogueAdvance:
                 case MessageType.DialogueChoice:
                 case MessageType.DialogueEnd:
+                case MessageType.UiMirrorState:
+                case MessageType.CameraRigState:
+                case MessageType.PathVehicleState:
+                case MessageType.SceneEventState:
                 case MessageType.PlayerInput:
                 case MessageType.HelloAck:
                 case MessageType.SnapshotBegin:
