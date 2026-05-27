@@ -20,6 +20,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly RemoteAvatar _clientAvatar;
         private readonly Action<string> _sessionLogWrite;
         private RemotePlayerProxy _remotePlayer;
+        private string _hostDisplayName = "HOST";
+        private string _clientDisplayName = "CLIENT";
         private PlayerInputState _lastInputState;
         private bool _hasInputState;
         private readonly Dictionary<string, DoorState> _doorStates = new Dictionary<string, DoorState>();
@@ -433,6 +435,10 @@ namespace WoodburySpectatorSync.Coop
             CacheSceneObjects();
             OnSceneEnterAdapters(SceneManager.GetActiveScene().name);
             SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("host", SceneManager.GetActiveScene().name, _logger, _sessionLogWrite);
+            if (_settings.ModeSetting.Value == Mode.CoopHost)
+            {
+                SceneDiscoveryDump.LogIfEnabled(_settings, "host", SceneManager.GetActiveScene(), _logger, _sessionLogWrite);
+            }
             BeginSceneHandshake();
         }
 
@@ -713,6 +719,7 @@ namespace WoodburySpectatorSync.Coop
         private void HandleHello(HelloMessage hello)
         {
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _hostDisplayName = PlayerDisplayName.Resolve(_settings, "HOST");
             if (_lifecycle.State != SessionState.Hello)
             {
                 _logger.LogWarning("Co-op session host: ignoring stray Hello in state " + _lifecycle.State);
@@ -723,7 +730,7 @@ namespace WoodburySpectatorSync.Coop
             {
                 var reason = "version-mismatch host=" + Protocol.Version + " client=" + hello.ProtocolVersion;
                 _logger.LogWarning("Co-op session host: rejecting client " + reason);
-                _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, false, reason));
+                _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, false, reason, _hostDisplayName));
                 _lifecycle.ForceDisconnect("hello-rejected:" + reason, nowMs);
                 _sceneHandshake.ResetReady();
                 _awaitingSceneReady = false;
@@ -735,7 +742,7 @@ namespace WoodburySpectatorSync.Coop
             {
                 var reason = "plugin-version-mismatch host=" + Protocol.PluginVersion + " client=" + hello.PluginVersion;
                 _logger.LogWarning("Co-op session host: rejecting client " + reason);
-                _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, false, reason));
+                _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, false, reason, _hostDisplayName));
                 _lifecycle.ForceDisconnect("hello-rejected:" + reason, nowMs);
                 _sceneHandshake.ResetReady();
                 _awaitingSceneReady = false;
@@ -743,7 +750,9 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
 
-            _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, true, "ok"));
+            _clientDisplayName = PlayerDisplayName.Normalize(hello.DisplayName, "CLIENT");
+            _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, true, "ok", _hostDisplayName));
+            UpdateRemotePlayerNameTag();
             _lifecycle.SetSessionId(_server.ActiveSessionId);
             _lifecycle.TryTransition(
                 SessionState.Connected,
@@ -752,6 +761,8 @@ namespace WoodburySpectatorSync.Coop
                 _sceneGeneration,
                 _server.ActiveSessionId,
                 nowMs);
+            _logger.LogInfo("Co-op session host: Hello accepted clientDisplayName=" + _clientDisplayName +
+                " hostDisplayName=" + _hostDisplayName);
             // Now that the handshake is complete, kick off the scene handshake.
             BeginSceneHandshake();
         }
@@ -3086,12 +3097,24 @@ namespace WoodburySpectatorSync.Coop
             {
                 return;
             }
+            UpdateRemotePlayerNameTag();
             _remotePlayer.SetActive(_server.IsClientConnected);
 
             if (_hasInputState)
             {
                 _remotePlayer.ApplyInput(_lastInputState);
             }
+        }
+
+        private void UpdateRemotePlayerNameTag()
+        {
+            if (_remotePlayer == null)
+            {
+                return;
+            }
+
+            var displayName = PlayerDisplayName.Normalize(_clientDisplayName, "CLIENT");
+            _remotePlayer.SetNameTag(displayName, "CLIENT", new Color(0.45f, 0.78f, 1f, 1f));
         }
 
         private bool HasConfiguredRemotePlayerPath()
@@ -3203,6 +3226,10 @@ namespace WoodburySpectatorSync.Coop
             _lastSceneName = newScene.name;
             OnSceneEnterAdapters(newScene.name);
             SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("host", newScene.name, _logger, _sessionLogWrite);
+            if (_settings.ModeSetting.Value == Mode.CoopHost)
+            {
+                SceneDiscoveryDump.LogIfEnabled(_settings, "host", newScene, _logger, _sessionLogWrite);
+            }
             BeginSceneHandshake();
         }
 

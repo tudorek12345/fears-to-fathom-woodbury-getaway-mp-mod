@@ -49,6 +49,8 @@ namespace WoodburySpectatorSync.Coop
         private float _nextInputSendTime;
         private FirstPersonController _localFpc;
         private RemotePlayerProxy _hostProxy;
+        private string _localDisplayName = "CLIENT";
+        private string _hostDisplayName = "HOST";
         private readonly CabinNpcRegistry _cabinNpcRegistry;
         private readonly GenericNpcRegistry _pizzeriaNpcRegistry;
         private readonly GenericNpcRegistry _roadTripNpcRegistry;
@@ -157,9 +159,12 @@ namespace WoodburySpectatorSync.Coop
         private const float PendingRetryLogIntervalSeconds = 5f;
         private const float PendingRetryWarnAgeSeconds = 8f;
         private const float AiSnapDistanceMeters = 4.0f;
-        private const float AiStaleSnapSeconds = 1.0f;
+        private const float AiStaleSnapSeconds = 1.25f;
+        private const float AiInterpolationDelaySeconds = 0.12f;
+        private const float AiExtrapolateGraceSeconds = 0.2f;
+        private const int AiMaxBufferedSamples = 5;
         private const float AiGeneralSmoothing = 13f;
-        private const float AiMikeSmoothing = 30f;
+        private const float AiMikeSmoothing = 16f;
         private const float LocalPlayerHostSideOffsetMeters = 1.35f;
         private bool _forcedCabinSpawn;
         private bool _cabinPrefsPrepared;
@@ -379,6 +384,10 @@ namespace WoodburySpectatorSync.Coop
             InitializeSceneAdapters();
             OnSceneEnterAdapters(SceneManager.GetActiveScene().name);
             SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("client", SceneManager.GetActiveScene().name, _logger, _sessionLogWrite);
+            if (_settings.ModeSetting.Value == Mode.CoopClient)
+            {
+                SceneDiscoveryDump.LogIfEnabled(_settings, "client", SceneManager.GetActiveScene(), _logger, _sessionLogWrite);
+            }
 
             SceneManager.activeSceneChanged += OnSceneChanged;
         }
@@ -432,7 +441,18 @@ namespace WoodburySpectatorSync.Coop
         public int LastStoryEventValue => _lastStoryEventValue;
         public long LastStoryEventMs => _lastStoryEventMs;
         public byte LastHostPlayerId => _lastHostPlayerId;
-        public string LastMikeSyncDebug => _lastMikeSyncDebug;
+        public string LastMikeSyncDebug
+        {
+            get
+            {
+                if (SceneManager.GetActiveScene().name == "CabinScene" && _cabinNpcRegistry != null)
+                {
+                    return _cabinNpcRegistry.BuildMikeTargetSummary();
+                }
+
+                return _lastMikeSyncDebug;
+            }
+        }
         public string NpcOverlaySummary
         {
             get
@@ -498,10 +518,12 @@ namespace WoodburySpectatorSync.Coop
                 {
                     var rng = new System.Random();
                     long nonce = ((long)rng.Next() << 32) | (uint)rng.Next();
-                    _client.Enqueue(new HelloMessage(Protocol.Version, Protocol.PluginVersion, nonce));
+                    _localDisplayName = PlayerDisplayName.Resolve(_settings, "CLIENT");
+                    _client.Enqueue(new HelloMessage(Protocol.Version, Protocol.PluginVersion, nonce, _localDisplayName));
                     _logger.LogInfo("Co-op session client: Hello sent version=" + Protocol.Version +
                         " plugin=" + Protocol.PluginVersion +
-                        " nonce=" + nonce);
+                        " nonce=" + nonce +
+                        " displayName=" + _localDisplayName);
                 }
                 catch (Exception ex)
                 {
@@ -539,6 +561,13 @@ namespace WoodburySpectatorSync.Coop
             CheckDialogueDrift();
             if (_isLoading)
             {
+                SendPingIfDue();
+                return;
+            }
+
+            if (IsMenuOrUtilityScene(SceneManager.GetActiveScene().name))
+            {
+                KeepClientMenuInputUsable();
                 SendPingIfDue();
                 return;
             }
@@ -601,6 +630,22 @@ namespace WoodburySpectatorSync.Coop
             {
                 audio.enabled = false;
             }
+        }
+
+        private static bool IsMenuOrUtilityScene(string sceneName)
+        {
+            if (string.IsNullOrWhiteSpace(sceneName)) return false;
+
+            return string.Equals(sceneName, "MainMenu", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(sceneName, "Disclaimer", StringComparison.OrdinalIgnoreCase) ||
+                   sceneName.IndexOf("Menu", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   sceneName.IndexOf("Disclaimer", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void KeepClientMenuInputUsable()
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
         }
 
         private void DisableLocalGameplay()
@@ -987,6 +1032,8 @@ namespace WoodburySpectatorSync.Coop
             }
 
             _activeHostSessionId = ack.SessionId;
+            _hostDisplayName = PlayerDisplayName.Normalize(ack.DisplayName, "HOST");
+            UpdateHostProxyNameTag();
             _client.SetActiveSessionId(ack.SessionId);
             _lifecycle.SetSessionId(ack.SessionId);
             _lifecycle.TryTransition(
@@ -996,7 +1043,8 @@ namespace WoodburySpectatorSync.Coop
                 _activeSceneGeneration,
                 ack.SessionId,
                 nowMs);
-            _logger.LogInfo("Co-op session client: HelloAck accepted sessionId=" + ack.SessionId);
+            _logger.LogInfo("Co-op session client: HelloAck accepted sessionId=" + ack.SessionId +
+                " hostDisplayName=" + _hostDisplayName);
         }
 
         private void HandleSnapshotBegin(SnapshotBeginMessage begin)
@@ -3610,6 +3658,22 @@ namespace WoodburySpectatorSync.Coop
             smooth.Active = state.Active;
             smooth.IsMike = isMike;
             smooth.LastPacketTime = now;
+            if (shouldSnap)
+            {
+                smooth.Samples.Clear();
+            }
+
+            smooth.Samples.Add(new AiSmoothingSample
+            {
+                Position = state.Position,
+                Rotation = state.Rotation,
+                ReceiveTime = now,
+                State = animatorState
+            });
+            while (smooth.Samples.Count > AiMaxBufferedSamples)
+            {
+                smooth.Samples.RemoveAt(0);
+            }
 
             if (shouldSnap)
             {
@@ -3617,7 +3681,7 @@ namespace WoodburySpectatorSync.Coop
                 target.rotation = state.Rotation;
                 smooth.Initialized = true;
                 smooth.LastRenderTime = now;
-                ApplyAiAnimator(target, state, 0f);
+                ApplyAiAnimator(target, animatorState, 0f);
             }
         }
 
@@ -3712,14 +3776,94 @@ namespace WoodburySpectatorSync.Coop
                     continue;
                 }
 
-                var response = smooth.IsMike ? AiMikeSmoothing : AiGeneralSmoothing;
-                var alpha = 1f - Mathf.Exp(-response * dt);
-                target.position = Vector3.Lerp(before, smooth.TargetPosition, alpha);
-                target.rotation = Quaternion.Slerp(target.rotation, smooth.TargetRotation, alpha);
+                var renderTime = now - AiInterpolationDelaySeconds;
+                AiTransformState animatorState;
+                Vector3 desiredPosition;
+                Quaternion desiredRotation;
+                if (TryGetBufferedAiPose(smooth, renderTime, out desiredPosition, out desiredRotation, out animatorState))
+                {
+                    target.position = desiredPosition;
+                    target.rotation = desiredRotation;
+                }
+                else
+                {
+                    animatorState = smooth.Latest;
+                    var response = smooth.IsMike ? AiMikeSmoothing : AiGeneralSmoothing;
+                    var alpha = 1f - Mathf.Exp(-response * dt);
+                    target.position = Vector3.Lerp(before, smooth.TargetPosition, alpha);
+                    target.rotation = Quaternion.Slerp(target.rotation, smooth.TargetRotation, alpha);
+                }
 
                 var speed = Vector3.Distance(target.position, before) / dt;
-                ApplyAiAnimator(target, smooth.Latest, speed);
+                ApplyAiAnimator(target, animatorState, speed);
             }
+        }
+
+        private static bool TryGetBufferedAiPose(
+            SmoothedAiState smooth,
+            float renderTime,
+            out Vector3 position,
+            out Quaternion rotation,
+            out AiTransformState animatorState)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            animatorState = smooth != null ? smooth.Latest : default;
+            if (smooth == null || smooth.Samples.Count == 0)
+            {
+                return false;
+            }
+
+            if (smooth.Samples.Count == 1)
+            {
+                var only = smooth.Samples[0];
+                if (Time.realtimeSinceStartup - only.ReceiveTime > AiExtrapolateGraceSeconds)
+                {
+                    return false;
+                }
+
+                position = only.Position;
+                rotation = only.Rotation;
+                animatorState = only.State;
+                return true;
+            }
+
+            var first = smooth.Samples[0];
+            if (renderTime <= first.ReceiveTime)
+            {
+                position = first.Position;
+                rotation = first.Rotation;
+                animatorState = first.State;
+                return true;
+            }
+
+            for (var i = 1; i < smooth.Samples.Count; i++)
+            {
+                var previous = smooth.Samples[i - 1];
+                var next = smooth.Samples[i];
+                if (renderTime > next.ReceiveTime)
+                {
+                    continue;
+                }
+
+                var span = Mathf.Max(0.001f, next.ReceiveTime - previous.ReceiveTime);
+                var t = Mathf.Clamp01((renderTime - previous.ReceiveTime) / span);
+                position = Vector3.Lerp(previous.Position, next.Position, t);
+                rotation = Quaternion.Slerp(previous.Rotation, next.Rotation, t);
+                animatorState = t >= 0.5f ? next.State : previous.State;
+                return true;
+            }
+
+            var latest = smooth.Samples[smooth.Samples.Count - 1];
+            if (Time.realtimeSinceStartup - latest.ReceiveTime <= AiExtrapolateGraceSeconds)
+            {
+                position = latest.Position;
+                rotation = latest.Rotation;
+                animatorState = latest.State;
+                return true;
+            }
+
+            return false;
         }
 
         private Transform ResolveAiFallback(AiTransformState state)
@@ -4590,6 +4734,15 @@ namespace WoodburySpectatorSync.Coop
             public bool Initialized;
             public float LastPacketTime;
             public float LastRenderTime;
+            public readonly List<AiSmoothingSample> Samples = new List<AiSmoothingSample>(AiMaxBufferedSamples);
+        }
+
+        private sealed class AiSmoothingSample
+        {
+            public Vector3 Position;
+            public Quaternion Rotation;
+            public float ReceiveTime;
+            public AiTransformState State;
         }
 
         private sealed class SnapshotApplyCounts
@@ -5518,6 +5671,21 @@ namespace WoodburySpectatorSync.Coop
                 new Color(1f, 0.2f, 0.2f, 0.8f),
                 _logger,
                 _sessionLogWrite);
+            if (_hostProxy != null)
+            {
+                UpdateHostProxyNameTag();
+            }
+        }
+
+        private void UpdateHostProxyNameTag()
+        {
+            if (_hostProxy == null)
+            {
+                return;
+            }
+
+            var displayName = PlayerDisplayName.Normalize(_hostDisplayName, "HOST");
+            _hostProxy.SetNameTag(displayName, "HOST", new Color(1f, 0.62f, 0.42f, 1f));
         }
 
         private bool HasConfiguredRemotePlayerPath()
@@ -5689,6 +5857,10 @@ namespace WoodburySpectatorSync.Coop
             CacheSceneAdapterFields();
             OnSceneEnterAdapters(newScene.name);
             SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("client", newScene.name, _logger, _sessionLogWrite);
+            if (_settings.ModeSetting.Value == Mode.CoopClient)
+            {
+                SceneDiscoveryDump.LogIfEnabled(_settings, "client", newScene, _logger, _sessionLogWrite);
+            }
             MarkSceneReadyDirty("active-scene-changed");
         }
 
@@ -5881,6 +6053,11 @@ namespace WoodburySpectatorSync.Coop
         private void UnlockLocalDialogueCamera()
         {
             if (_settings.ModeSetting.Value != Mode.CoopClient) return;
+            if (IsMenuOrUtilityScene(SceneManager.GetActiveScene().name))
+            {
+                KeepClientMenuInputUsable();
+                return;
+            }
 
             var now = Time.realtimeSinceStartup;
             if (now < _nextDialogueUnlockTime) return;

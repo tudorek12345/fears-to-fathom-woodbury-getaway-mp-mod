@@ -39,6 +39,7 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<bool> CoopRouteInteractions;
         public ConfigEntry<bool> CoopAutoStartHost;
         public ConfigEntry<bool> CoopAutoConnectClient;
+        public ConfigEntry<string> CoopDisplayName;
         public ConfigEntry<bool> CoopForceCabinStart;
         public ConfigEntry<string> CoopCabinStartSequence;
         public ConfigEntry<string> CoopRemotePlayerPrefabPath;
@@ -48,6 +49,7 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<string> CoopRemotePlayerAvatarId;
         public ConfigEntry<float> CoopRemotePlayerAvatarScale;
         public ConfigEntry<float> CoopRemotePlayerAvatarYOffset;
+        public ConfigEntry<bool> SceneDiscoveryDump;
 
         public static Settings Bind(ConfigFile config)
         {
@@ -71,6 +73,7 @@ namespace WoodburySpectatorSync.Config
             settings.CoopRouteInteractions = config.Bind("Coop", "RouteInteractionsToHost", true, "Route client interaction clicks to the host (prevents local story triggers)");
             settings.CoopAutoStartHost = config.Bind("Coop", "AutoStartHost", false, "Auto-start co-op host server on launch");
             settings.CoopAutoConnectClient = config.Bind("Coop", "AutoConnectClient", false, "Auto-connect co-op client on launch");
+            settings.CoopDisplayName = config.Bind("Coop", "DisplayName", string.Empty, "Optional co-op nametag display name. Leave empty to use Steam name when available.");
             settings.CoopForceCabinStart = config.Bind("Coop", "ForceCabinStartSequence", true, "Force the client to start at a cabin testing sequence (skips driving intro)");
             settings.CoopCabinStartSequence = config.Bind("Coop", "CabinStartSequence", "StartAfterShower", "CabinSceneSequences enum name (StartAfterShower, StartInKitchenAfterOvenStart, StartHiding)");
             settings.CoopRemotePlayerPrefabPath = config.Bind("Coop", "RemotePlayerPrefabPath", string.Empty, "Optional dedicated remote player source path (NetPath or Resources path). If empty, fallback uses local FPC clone.");
@@ -80,6 +83,7 @@ namespace WoodburySpectatorSync.Config
             settings.CoopRemotePlayerAvatarId = config.Bind("Coop", "RemotePlayerAvatarId", "woodbury_scene_auto", "Avatar id. Use woodbury_scene_auto for in-scene avatars or a bundle manifest id such as quaternius_regular_male for explicit AssetBundle testing.");
             settings.CoopRemotePlayerAvatarScale = config.Bind("Coop", "RemotePlayerAvatarScale", 1f, "Multiplier applied on top of the avatar manifest scale.");
             settings.CoopRemotePlayerAvatarYOffset = config.Bind("Coop", "RemotePlayerAvatarYOffset", 0f, "Extra vertical offset added on top of the avatar manifest offset.");
+            settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", false, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
             return settings;
         }
     }

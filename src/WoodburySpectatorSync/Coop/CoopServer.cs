@@ -520,7 +520,7 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.HelloAck:
                 {
                     var msg = (HelloAckMessage)message;
-                    return Protocol.BuildHelloAck(msg.ProtocolVersion, msg.PluginVersion, msg.SessionId, msg.Accepted, msg.Reason);
+                    return Protocol.BuildHelloAck(msg.ProtocolVersion, msg.PluginVersion, msg.SessionId, msg.Accepted, msg.Reason, msg.DisplayName);
                 }
                 case MessageType.SnapshotBegin:
                 {

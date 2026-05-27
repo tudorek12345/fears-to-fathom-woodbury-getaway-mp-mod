@@ -427,6 +427,22 @@ namespace WoodburySpectatorSync.Coop
                    " Hiker=" + hiker + " missing=" + _lastMissingCount;
         }
 
+        public string BuildMikeTargetSummary()
+        {
+            foreach (var record in _records.Values)
+            {
+                if (record == null || record.Component == null) continue;
+                if (!record.Id.StartsWith("Cabin/Mike/", StringComparison.Ordinal)) continue;
+                if (!record.Component.gameObject.activeInHierarchy) continue;
+
+                var mike = record.Id.Substring("Cabin/Mike/".Length);
+                var moving = HasBoolField(record.Component, true, "moving", "go", "followingHost");
+                return mike + " moving=" + BoolText(moving);
+            }
+
+            return "inactive";
+        }
+
         private Component ResolveComponent(CabinGameManager manager, Entry entry)
         {
             var field = typeof(CabinGameManager).GetField(entry.ManagerFieldName, FieldFlags);

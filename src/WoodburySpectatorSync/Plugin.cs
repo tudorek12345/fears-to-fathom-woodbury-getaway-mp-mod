@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.2")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.8")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -271,6 +271,11 @@ namespace WoodburySpectatorSync
                 _overlay.Toggle();
             }
 
+            if (Input.GetKeyDown(KeyCode.F10))
+            {
+                DumpSceneDiscoveryNow();
+            }
+
             if (_settings.ModeSetting.Value == Mode.Host)
             {
                 if (Input.GetKeyDown(KeyCode.F6))
@@ -308,6 +313,26 @@ namespace WoodburySpectatorSync
                     _sessionLog?.Write("Hotkey F7: coop client " + (_coopClient.IsConnected ? "connected" : "connecting"));
                 }
             }
+        }
+
+        private void DumpSceneDiscoveryNow()
+        {
+            if (_settings == null ||
+                _settings.SceneDiscoveryDump == null ||
+                !_settings.SceneDiscoveryDump.Value)
+            {
+                return;
+            }
+
+            var scene = SceneManager.GetActiveScene();
+            var role = _settings.ModeSetting.Value == Mode.CoopHost || _settings.ModeSetting.Value == Mode.Host
+                ? "host"
+                : _settings.ModeSetting.Value == Mode.CoopClient
+                    ? "client"
+                    : "spectator";
+            Action<string> sessionWrite = _sessionLog != null ? _sessionLog.Write : (Action<string>)null;
+            SceneDiscoveryDump.LogManualIfEnabled(_settings, role, scene, Logger, sessionWrite);
+            _sessionLog?.Write("Hotkey F10: scene discovery manual dump role=" + role + " scene=" + scene.name);
         }
 
         private void HandleAutoStart()

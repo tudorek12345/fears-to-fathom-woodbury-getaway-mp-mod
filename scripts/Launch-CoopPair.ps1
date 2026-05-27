@@ -23,6 +23,8 @@ param(
     [string]$RemotePlayerAvatarId = "woodbury_scene_auto",
     [float]$RemotePlayerAvatarScale = 1.0,
     [float]$RemotePlayerAvatarYOffset = 0.0,
+    [string]$HostDisplayName = "",
+    [string]$ClientDisplayName = "",
     [switch]$ForceStopExisting
 )
 
@@ -194,6 +196,7 @@ function Write-WssConfig {
         [string]$RemotePlayerAvatarId,
         [float]$RemotePlayerAvatarScale,
         [float]$RemotePlayerAvatarYOffset,
+        [string]$DisplayName,
         [string]$HostIp,
         [int]$HostPort,
         [int]$UdpPort,
@@ -232,6 +235,7 @@ UseLocalPlayerController = true
 SnapToHostOnSceneLoad = false
 AutoStartHost = $($AutoStartHost.ToString().ToLowerInvariant())
 AutoConnectClient = $($AutoConnectClient.ToString().ToLowerInvariant())
+DisplayName = $DisplayName
 RemotePlayerPrefabPath = $RemotePlayerPrefabPath
 RemotePlayerRig = $RemotePlayerRig
 RemotePlayerAvatarSource = $RemotePlayerAvatarSource
@@ -275,8 +279,8 @@ $bepInExConfig = Join-Path $GameDir "BepInEx\config\BepInEx.cfg"
 Wait-ForUnlockedFile -Path $bepInExConfig -TimeoutSeconds 20
 
 if (-not $NoPrepareConfigs.IsPresent) {
-    Write-WssConfig -Path $HostConfig -Mode "CoopHost" -AutoStartHost $AutoStartHost.IsPresent -AutoConnectClient $false -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled
-    Write-WssConfig -Path $ClientConfig -Mode "CoopClient" -AutoStartHost $false -AutoConnectClient $AutoConnectClient.IsPresent -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled
+    Write-WssConfig -Path $HostConfig -Mode "CoopHost" -AutoStartHost $AutoStartHost.IsPresent -AutoConnectClient $false -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -DisplayName $HostDisplayName -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled
+    Write-WssConfig -Path $ClientConfig -Mode "CoopClient" -AutoStartHost $false -AutoConnectClient $AutoConnectClient.IsPresent -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -DisplayName $ClientDisplayName -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled
 }
 
 $hostProc = $null
@@ -377,6 +381,8 @@ Write-Host "RemotePlayerAvatarBundlePath: $RemotePlayerAvatarBundlePath"
 Write-Host "RemotePlayerAvatarId: $RemotePlayerAvatarId"
 Write-Host "RemotePlayerAvatarScale: $(Format-InvariantFloat -Value $RemotePlayerAvatarScale)"
 Write-Host "RemotePlayerAvatarYOffset: $(Format-InvariantFloat -Value $RemotePlayerAvatarYOffset)"
+Write-Host "HostDisplayName: $HostDisplayName"
+Write-Host "ClientDisplayName: $ClientDisplayName"
 
 [pscustomobject]@{
     StartedAt = Get-Date
@@ -406,4 +412,6 @@ Write-Host "RemotePlayerAvatarYOffset: $(Format-InvariantFloat -Value $RemotePla
     RemotePlayerAvatarId = $RemotePlayerAvatarId
     RemotePlayerAvatarScale = $RemotePlayerAvatarScale
     RemotePlayerAvatarYOffset = $RemotePlayerAvatarYOffset
+    HostDisplayName = $HostDisplayName
+    ClientDisplayName = $ClientDisplayName
 }

@@ -14,6 +14,7 @@ decompiled/
 # Logs and temp files
 *.log
 *.tmp
+build/
 
 # IDE files
 .vs/
@@ -29,3 +30,4 @@ ROADMAP.md
 ROADMAP.html
 2026-05-08-151213-claude-finished-the-response.txt
 README_STATUS.md
+TODAY_2026-05-26_LOCAL_NOTES.txt

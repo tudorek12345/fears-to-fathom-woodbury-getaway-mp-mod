@@ -273,16 +273,23 @@ namespace WoodburySpectatorSync.Coop
                 }
                 catch (Exception ex)
                 {
-                    Status = "Retrying";
-                    var hostLabel = _settings != null && _settings.SpectatorHostIP != null
-                        ? (_settings.SpectatorHostIP.Value ?? "?")
-                        : "?";
-                    var portLabel = _settings != null && _settings.HostPort != null
-                        ? _settings.HostPort.Value.ToString()
-                        : "?";
-                    var reason = FormatConnectFailureReason(ex);
-                    _logger.LogWarning("Co-op connect failed host=" + hostLabel + ":" + portLabel +
-                        " reason=" + reason + " retryInMs=" + RetryDelayMs);
+                    if (!_running || IsExpectedDisconnectException(ex))
+                    {
+                        Status = "Disconnected";
+                    }
+                    else
+                    {
+                        Status = "Retrying";
+                        var hostLabel = _settings != null && _settings.SpectatorHostIP != null
+                            ? (_settings.SpectatorHostIP.Value ?? "?")
+                            : "?";
+                        var portLabel = _settings != null && _settings.HostPort != null
+                            ? _settings.HostPort.Value.ToString()
+                            : "?";
+                        var reason = FormatConnectFailureReason(ex);
+                        _logger.LogWarning("Co-op connect failed host=" + hostLabel + ":" + portLabel +
+                            " reason=" + reason + " retryInMs=" + RetryDelayMs);
+                    }
                 }
                 finally
                 {
@@ -556,7 +563,7 @@ namespace WoodburySpectatorSync.Coop
                 case MessageType.Hello:
                 {
                     var msg = (HelloMessage)message;
-                    return Protocol.BuildHello(msg.ProtocolVersion, msg.PluginVersion, msg.ClientNonce);
+                    return Protocol.BuildHello(msg.ProtocolVersion, msg.PluginVersion, msg.ClientNonce, msg.DisplayName);
                 }
                 case MessageType.SnapshotAck:
                 {

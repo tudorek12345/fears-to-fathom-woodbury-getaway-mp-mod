@@ -86,7 +86,7 @@ namespace WoodburySpectatorSync.UI
                     lineCount++;
                 }
             }
-            sb.AppendLine("Hotkeys: F6 host on/off, F7 connect, F8 overlay, F9 progress");
+            sb.AppendLine("Hotkeys: F6 host on/off, F7 connect, F8 overlay, F9 progress, F10 dump");
             lineCount++;
             return sb.ToString();
         }

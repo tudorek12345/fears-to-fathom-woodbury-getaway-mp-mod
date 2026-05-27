@@ -317,13 +317,15 @@ namespace WoodburySpectatorSync.Net
         public ushort ProtocolVersion;
         public string PluginVersion;
         public long ClientNonce;
+        public string DisplayName;
 
-        public HelloMessage(ushort protocolVersion, string pluginVersion, long clientNonce)
+        public HelloMessage(ushort protocolVersion, string pluginVersion, long clientNonce, string displayName = "")
         {
             Type = MessageType.Hello;
             ProtocolVersion = protocolVersion;
             PluginVersion = pluginVersion ?? string.Empty;
             ClientNonce = clientNonce;
+            DisplayName = displayName ?? string.Empty;
         }
     }
 
@@ -400,10 +402,11 @@ namespace WoodburySpectatorSync.Net
         public int SessionId;
         public bool Accepted;
         public string Reason;
+        public string DisplayName;
 
         public bool Accept { get { return Accepted; } }
 
-        public HelloAckMessage(ushort protocolVersion, string pluginVersion, int sessionId, bool accepted, string reason)
+        public HelloAckMessage(ushort protocolVersion, string pluginVersion, int sessionId, bool accepted, string reason, string displayName = "")
         {
             Type = MessageType.HelloAck;
             ProtocolVersion = protocolVersion;
@@ -411,6 +414,7 @@ namespace WoodburySpectatorSync.Net
             SessionId = sessionId;
             Accepted = accepted;
             Reason = reason ?? string.Empty;
+            DisplayName = displayName ?? string.Empty;
         }
     }
 
@@ -699,7 +703,7 @@ namespace WoodburySpectatorSync.Net
     {
         public const uint Magic = 0x57535331; // "WSS1"
         public const ushort Version = 4;
-        public const string PluginVersion = "0.4.2";
+        public const string PluginVersion = "0.4.8";
         public const int MaxPayloadBytes = 1024 * 1024;
 
         public static byte[] BuildFrame(byte[] payload)
@@ -762,7 +766,7 @@ namespace WoodburySpectatorSync.Net
             }
         }
 
-        public static byte[] BuildHello(ushort protocolVersion, string pluginVersion, long clientNonce)
+        public static byte[] BuildHello(ushort protocolVersion, string pluginVersion, long clientNonce, string displayName = "")
         {
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms, Encoding.UTF8))
@@ -771,11 +775,12 @@ namespace WoodburySpectatorSync.Net
                 writer.Write(protocolVersion);
                 WriteString(writer, pluginVersion);
                 writer.Write(clientNonce);
+                WriteString(writer, displayName);
                 return ms.ToArray();
             }
         }
 
-        public static byte[] BuildHelloAck(ushort protocolVersion, string pluginVersion, int sessionId, bool accepted, string reason)
+        public static byte[] BuildHelloAck(ushort protocolVersion, string pluginVersion, int sessionId, bool accepted, string reason, string displayName = "")
         {
             using (var ms = new MemoryStream())
             using (var writer = new BinaryWriter(ms, Encoding.UTF8))
@@ -786,6 +791,7 @@ namespace WoodburySpectatorSync.Net
                 writer.Write(sessionId);
                 writer.Write(accepted);
                 WriteString(writer, reason);
+                WriteString(writer, displayName);
                 return ms.ToArray();
             }
         }
@@ -1361,7 +1367,8 @@ namespace WoodburySpectatorSync.Net
                             var protocolVersion = reader.ReadUInt16();
                             var pluginVersion = ReadString(reader);
                             var clientNonce = reader.ReadInt64();
-                            message = new HelloMessage(protocolVersion, pluginVersion, clientNonce);
+                            var displayName = ms.Position < ms.Length ? ReadString(reader) : string.Empty;
+                            message = new HelloMessage(protocolVersion, pluginVersion, clientNonce, displayName);
                             return true;
                         }
                         case MessageType.HelloAck:
@@ -1371,7 +1378,8 @@ namespace WoodburySpectatorSync.Net
                             var sessionId = reader.ReadInt32();
                             var accept = reader.ReadBoolean();
                             var reason = ReadString(reader);
-                            message = new HelloAckMessage(protocolVersion, pluginVersion, sessionId, accept, reason);
+                            var displayName = ms.Position < ms.Length ? ReadString(reader) : string.Empty;
+                            message = new HelloAckMessage(protocolVersion, pluginVersion, sessionId, accept, reason, displayName);
                             return true;
                         }
                         case MessageType.SnapshotBegin:

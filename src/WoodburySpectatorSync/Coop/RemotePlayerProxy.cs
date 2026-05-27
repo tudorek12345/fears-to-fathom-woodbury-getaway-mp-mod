@@ -60,6 +60,120 @@ namespace WoodburySpectatorSync.Coop
             public string FallbackReason = string.Empty;
         }
 
+        private sealed class RemotePlayerNameTag : MonoBehaviour
+        {
+            private const float MaxVisibleDistance = 34f;
+            private const float VerticalPadding = 0.24f;
+            private static GUIStyle _nameStyle;
+            private static GUIStyle _roleStyle;
+
+            private string _displayName = string.Empty;
+            private string _role = string.Empty;
+            private Color _accentColor = Color.white;
+
+            public void Configure(string displayName, string role, Color accentColor)
+            {
+                _displayName = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
+                _role = string.IsNullOrWhiteSpace(role) ? string.Empty : role.Trim().ToUpperInvariant();
+                if (!string.IsNullOrEmpty(_displayName) &&
+                    string.Equals(_displayName, _role, StringComparison.OrdinalIgnoreCase))
+                {
+                    _role = string.Empty;
+                }
+                _accentColor = accentColor;
+                enabled = !string.IsNullOrEmpty(_displayName) || !string.IsNullOrEmpty(_role);
+            }
+
+            private void OnGUI()
+            {
+                if (string.IsNullOrEmpty(_displayName) && string.IsNullOrEmpty(_role)) return;
+                if (!ShouldDrawInScene()) return;
+                if (CountVisibleRenderers(gameObject) <= 0) return;
+
+                var cam = Camera.main;
+                if (cam == null) return;
+
+                var anchor = transform.position + Vector3.up * 1.9f;
+                if (TryGetRendererBounds(gameObject, out var bounds))
+                {
+                    anchor = new Vector3(bounds.center.x, bounds.max.y + VerticalPadding, bounds.center.z);
+                }
+
+                var viewport = cam.WorldToViewportPoint(anchor);
+                if (viewport.z <= 0f || viewport.x < -0.05f || viewport.x > 1.05f || viewport.y < -0.05f || viewport.y > 1.05f)
+                {
+                    return;
+                }
+
+                var distance = Vector3.Distance(cam.transform.position, anchor);
+                if (distance > MaxVisibleDistance) return;
+
+                EnsureStyles();
+
+                var displayName = string.IsNullOrEmpty(_displayName) ? _role : _displayName;
+                var hasRole = !string.IsNullOrEmpty(_role);
+                var role = hasRole ? _role : string.Empty;
+                var nameWidth = _nameStyle.CalcSize(new GUIContent(displayName)).x;
+                var roleWidth = hasRole ? _roleStyle.CalcSize(new GUIContent(role)).x : 0f;
+                var width = Mathf.Clamp(Mathf.Max(nameWidth, roleWidth) + 34f, 92f, 190f);
+                var height = hasRole ? 34f : 24f;
+                var rect = new Rect(
+                    (viewport.x * Screen.width) - (width * 0.5f),
+                    ((1f - viewport.y) * Screen.height) - height - 4f,
+                    width,
+                    height);
+
+                var oldColor = GUI.color;
+                GUI.color = new Color(0.02f, 0.018f, 0.015f, 0.74f);
+                GUI.DrawTexture(rect, Texture2D.whiteTexture);
+                GUI.color = _accentColor;
+                GUI.DrawTexture(new Rect(rect.x, rect.y, 3f, rect.height), Texture2D.whiteTexture);
+
+                _nameStyle.normal.textColor = new Color(0.95f, 0.94f, 0.9f, 1f);
+                _roleStyle.normal.textColor = _accentColor;
+                GUI.Label(new Rect(rect.x + 10f, rect.y + (hasRole ? 3f : 4f), rect.width - 16f, 17f), displayName, _nameStyle);
+                if (hasRole)
+                {
+                    GUI.Label(new Rect(rect.x + 10f, rect.y + 17f, rect.width - 16f, 13f), role, _roleStyle);
+                }
+                GUI.color = oldColor;
+            }
+
+            private static void EnsureStyles()
+            {
+                if (_nameStyle == null)
+                {
+                    _nameStyle = new GUIStyle(GUI.skin.label)
+                    {
+                        alignment = TextAnchor.MiddleCenter,
+                        fontSize = 12,
+                        fontStyle = FontStyle.Bold,
+                        clipping = TextClipping.Clip
+                    };
+                }
+
+                if (_roleStyle == null)
+                {
+                    _roleStyle = new GUIStyle(GUI.skin.label)
+                    {
+                        alignment = TextAnchor.MiddleCenter,
+                        fontSize = 9,
+                        fontStyle = FontStyle.Bold,
+                        clipping = TextClipping.Clip
+                    };
+                }
+            }
+
+            private static bool ShouldDrawInScene()
+            {
+                var sceneName = SceneManager.GetActiveScene().name;
+                if (string.IsNullOrEmpty(sceneName)) return false;
+                if (sceneName.Equals("MainMenu", StringComparison.OrdinalIgnoreCase)) return false;
+                if (sceneName.Equals("Disclaimer", StringComparison.OrdinalIgnoreCase)) return false;
+                return sceneName.IndexOf("Menu", StringComparison.OrdinalIgnoreCase) < 0;
+            }
+        }
+
         private static readonly AnimatorRigMap WoodburyFpcRig = new AnimatorRigMap(
             "WoodburyFpc",
             new[] { "MoveX", "Horizontal", "Strafe", "InputX" },
@@ -102,6 +216,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly HashSet<int> _animFloatParams = new HashSet<int>();
         private readonly HashSet<int> _animBoolParams = new HashSet<int>();
         private readonly AnimatorRigMap _animRig;
+        private readonly bool _animatorHasMotionControlParams;
         private Vector3 _lastRootPosition;
         private float _lastSampleTime;
         private bool _hasMotionSample;
@@ -109,6 +224,7 @@ namespace WoodburySpectatorSync.Coop
         private Quaternion _smoothedRootRotation = Quaternion.identity;
         private float _lastSmoothSampleTime;
         private bool _hasSmoothedRoot;
+        private RemotePlayerNameTag _nameTag;
 
         public Transform Root => _root != null ? _root.transform : null;
         public Transform CameraTransform => _cameraTransform;
@@ -240,6 +356,8 @@ namespace WoodburySpectatorSync.Coop
             }
 
             _animRig = ResolveRigMap(source.RigProfile);
+            _animatorHasMotionControlParams = HasMotionControlParams();
+            InitializeAnimatorPlayback();
 
             LogAvatarDiagnostics(source, usedFallbackBody, logger, diagnosticsSink);
             if (_root != null)
@@ -256,6 +374,22 @@ namespace WoodburySpectatorSync.Coop
             {
                 _root.SetActive(value);
             }
+        }
+
+        public void SetNameTag(string displayName, string role, Color color)
+        {
+            if (_root == null) return;
+
+            if (_nameTag == null)
+            {
+                _nameTag = _root.GetComponent<RemotePlayerNameTag>();
+                if (_nameTag == null)
+                {
+                    _nameTag = _root.AddComponent<RemotePlayerNameTag>();
+                }
+            }
+
+            _nameTag.Configure(displayName, role, color);
         }
 
         public void ApplyTransform(PlayerTransformState state)
@@ -334,6 +468,7 @@ namespace WoodburySpectatorSync.Coop
             SetBoolFromRig(_animRig.SprintBoolNames, sprinting);
             SetBoolFromRig(_animRig.CrouchBoolNames, false);
             SetBoolFromRig(_animRig.JumpBoolNames, false);
+            DriveAnimatorPlaybackSpeed(planarSpeed, moving);
 
             _lastRootPosition = newPosition;
             _lastSampleTime = now;
@@ -343,14 +478,46 @@ namespace WoodburySpectatorSync.Coop
         {
             if (_animator == null) return;
 
+            var planarSpeed = new Vector2(input.MoveX, input.MoveY).magnitude;
+            var moving = Mathf.Abs(input.MoveX) > 0.01f || Mathf.Abs(input.MoveY) > 0.01f;
             SetFloatFromRig(_animRig.StrafeFloatNames, input.MoveX);
             SetFloatFromRig(_animRig.ForwardFloatNames, input.MoveY);
-            SetFloatFromRig(_animRig.SpeedFloatNames, new Vector2(input.MoveX, input.MoveY).magnitude);
+            SetFloatFromRig(_animRig.SpeedFloatNames, planarSpeed);
 
             SetBoolFromRig(_animRig.CrouchBoolNames, input.Crouch);
             SetBoolFromRig(_animRig.SprintBoolNames, input.Sprint);
             SetBoolFromRig(_animRig.JumpBoolNames, input.Jump);
-            SetBoolFromRig(_animRig.MovingBoolNames, Mathf.Abs(input.MoveX) > 0.01f || Mathf.Abs(input.MoveY) > 0.01f);
+            SetBoolFromRig(_animRig.MovingBoolNames, moving);
+            DriveAnimatorPlaybackSpeed(planarSpeed, moving);
+        }
+
+        private void InitializeAnimatorPlayback()
+        {
+            if (_animator == null) return;
+
+            _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+            if (_animatorHasMotionControlParams)
+            {
+                _animator.speed = 1f;
+                return;
+            }
+
+            _animator.Rebind();
+            _animator.Update(0f);
+            _animator.speed = 0f;
+        }
+
+        private void DriveAnimatorPlaybackSpeed(float planarSpeed, bool moving)
+        {
+            if (_animator == null || _animatorHasMotionControlParams) return;
+
+            if (!moving || planarSpeed < 0.05f)
+            {
+                _animator.speed = 0f;
+                return;
+            }
+
+            _animator.speed = Mathf.Clamp(planarSpeed / 1.25f, 0.35f, 1.35f);
         }
 
         private void SetFloatFromRig(string[] names, float value)
@@ -421,6 +588,56 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.IsNullOrEmpty(name)) return false;
             return _animFloatParams.Contains(Animator.StringToHash(name));
+        }
+
+        private bool HasBoolParam(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            return _animBoolParams.Contains(Animator.StringToHash(name));
+        }
+
+        private bool HasMotionControlParams()
+        {
+            if (_animator == null || _animRig == null)
+            {
+                return false;
+            }
+
+            return HasAnyFloatParam(_animRig.StrafeFloatNames) ||
+                   HasAnyFloatParam(_animRig.ForwardFloatNames) ||
+                   HasAnyFloatParam(_animRig.SpeedFloatNames) ||
+                   HasAnyBoolParam(_animRig.MovingBoolNames) ||
+                   HasAnyBoolParam(_animRig.SprintBoolNames) ||
+                   HasAnyBoolParam(_animRig.CrouchBoolNames) ||
+                   HasAnyBoolParam(_animRig.JumpBoolNames);
+        }
+
+        private bool HasAnyFloatParam(string[] names)
+        {
+            if (names == null) return false;
+            for (var i = 0; i < names.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(names[i]) && HasFloatParam(names[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasAnyBoolParam(string[] names)
+        {
+            if (names == null) return false;
+            for (var i = 0; i < names.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(names[i]) && HasBoolParam(names[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool TryGetRigByName(string rigProfile, out AnimatorRigMap map)
@@ -503,6 +720,22 @@ namespace WoodburySpectatorSync.Coop
                 return CreateCapsuleSource(settings, fallbackSource, "configured source=Capsule");
             }
 
+            var configuredAvatarId = GetConfiguredAvatarId(settings);
+            var prefersSceneModel = avatarSource == RemotePlayerAvatarSource.Auto &&
+                                    IsSceneModelAvatarId(configuredAvatarId);
+            if (prefersSceneModel)
+            {
+                if (TryResolveGameModelAvatar(settings, fallbackSource, logger, diagnosticsSink, out var preferredSceneModel))
+                {
+                    preferredSceneModel.FallbackReason = "configured scene avatar";
+                    return preferredSceneModel;
+                }
+
+                LogWarning(logger, diagnosticsSink, "Remote player avatar fallback: configured scene avatar not found id=" +
+                    configuredAvatarId + " scene=" + SceneManager.GetActiveScene().name);
+                return CreateHiddenSource(settings, fallbackSource, "configured scene avatar unavailable");
+            }
+
             if (avatarSource == RemotePlayerAvatarSource.Auto ||
                 avatarSource == RemotePlayerAvatarSource.AssetBundle)
             {
@@ -560,6 +793,18 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return CreateHiddenSource(settings, fallbackSource, "AssetBundle avatar unavailable");
+        }
+
+        private static bool IsSceneModelAvatarId(string avatarId)
+        {
+            if (string.IsNullOrWhiteSpace(avatarId))
+            {
+                return true;
+            }
+
+            var normalized = avatarId.Trim();
+            return string.Equals(normalized, "woodbury_scene_auto", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.StartsWith("woodbury_", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsUsableBundleAvatar(GameObject prefab, out string reason)
@@ -691,6 +936,10 @@ namespace WoodburySpectatorSync.Coop
             var normalizedId = string.IsNullOrWhiteSpace(avatarId) ? "woodbury_scene_auto" : avatarId.Trim().ToLowerInvariant();
             switch (normalizedId)
             {
+                case "woodbury_scene_auto":
+                    return TryFindSceneAutoAvatar(out candidate, out sourceName);
+                case "woodbury_cabin_hiker":
+                    return TryFindCabinNonMikeAvatar(out candidate, out sourceName);
                 case "woodbury_cabin_host":
                     return TryFindCabinMikeAvatar(out candidate, out sourceName);
                 case "woodbury_pizzeria_backpacker":
@@ -712,10 +961,11 @@ namespace WoodburySpectatorSync.Coop
             var sceneName = SceneManager.GetActiveScene().name ?? string.Empty;
             if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
-                       TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker", "Mike New" }, out candidate, out sourceName) ||
+                return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
                        TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName) ||
-                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName);
+                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName) ||
+                       TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
+                       TryFindNamedAvatar(new[] { "Mike New" }, out candidate, out sourceName);
             }
 
             if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -726,10 +976,39 @@ namespace WoodburySpectatorSync.Coop
 
             if (sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return TryFindCabinMikeAvatar(out candidate, out sourceName);
+                return TryFindCabinNonMikeAvatar(out candidate, out sourceName) ||
+                       TryFindCabinMikeAvatar(out candidate, out sourceName);
             }
 
-            return TryFindCabinMikeAvatar(out candidate, out sourceName) ||
+            return TryFindNonMikeSceneHuman(out candidate, out sourceName) ||
+                   TryFindCabinMikeAvatar(out candidate, out sourceName) ||
+                   TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
+                   TryFindComponentAvatar<MikeInCar>(out candidate, out sourceName);
+        }
+
+        private static bool TryFindSceneAutoAvatar(out GameObject candidate, out string sourceName)
+        {
+            candidate = null;
+            sourceName = string.Empty;
+
+            var sceneName = SceneManager.GetActiveScene().name ?? string.Empty;
+            if (sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return TryFindCabinNonMikeAvatar(out candidate, out sourceName) ||
+                       TryFindCabinMikeAvatar(out candidate, out sourceName);
+            }
+
+            if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
+                       TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName) ||
+                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName) ||
+                       TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
+                       TryFindNamedAvatar(new[] { "Mike New" }, out candidate, out sourceName);
+            }
+
+            return TryFindNonMikeSceneHuman(out candidate, out sourceName) ||
+                   TryFindCabinMikeAvatar(out candidate, out sourceName) ||
                    TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
                    TryFindComponentAvatar<MikeInCar>(out candidate, out sourceName);
         }
@@ -743,6 +1022,12 @@ namespace WoodburySpectatorSync.Coop
                    TryFindComponentAvatar<MikeRizzlerController>(out candidate, out sourceName) ||
                    TryFindComponentAvatar<MikeEndGame>(out candidate, out sourceName) ||
                    TryFindComponentAvatar<MikeCabin>(out candidate, out sourceName);
+        }
+
+        private static bool TryFindCabinNonMikeAvatar(out GameObject candidate, out string sourceName)
+        {
+            return TryFindComponentAvatar<CabinHiker>(out candidate, out sourceName) ||
+                   TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker", "Hiker", "Nora" }, out candidate, out sourceName);
         }
 
         private static bool TryFindNonMikeSceneHuman(out GameObject candidate, out string sourceName)
@@ -771,18 +1056,22 @@ namespace WoodburySpectatorSync.Coop
             sourceName = string.Empty;
 
             var components = Resources.FindObjectsOfTypeAll<T>();
+            var bestScore = int.MinValue;
             for (var i = 0; i < components.Length; i++)
             {
                 var component = components[i];
                 if (component == null) continue;
-                if (!IsSafeAvatarCandidate(component.gameObject)) continue;
+                if (!IsSafeAvatarCandidate(component.gameObject, true)) continue;
 
+                var score = ScoreAvatarCandidate(component.gameObject);
+                if (score <= bestScore) continue;
+
+                bestScore = score;
                 candidate = component.gameObject;
                 sourceName = typeof(T).Name + ":" + GetTransformPath(component.transform);
-                return true;
             }
 
-            return false;
+            return candidate != null;
         }
 
         private static bool TryFindNamedAvatar(string[] names, out GameObject candidate, out string sourceName)
@@ -807,18 +1096,20 @@ namespace WoodburySpectatorSync.Coop
                         continue;
                     }
 
-                    if (!IsSafeAvatarCandidate(transform.gameObject)) continue;
+                    if (!IsSafeAvatarCandidate(transform.gameObject, false)) continue;
+
+                    var score = ScoreAvatarCandidate(transform.gameObject);
+                    if (candidate != null && score <= ScoreAvatarCandidate(candidate)) continue;
 
                     candidate = transform.gameObject;
                     sourceName = "Name:" + GetTransformPath(transform);
-                    return true;
                 }
             }
 
-            return false;
+            return candidate != null;
         }
 
-        private static bool IsSafeAvatarCandidate(GameObject candidate)
+        private static bool IsSafeAvatarCandidate(GameObject candidate, bool trustedActor)
         {
             if (candidate == null) return false;
 
@@ -858,7 +1149,7 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
-            if (!HasUsableAnimator(candidate, out _))
+            if (!trustedActor && !HasUsableAnimator(candidate, out _))
             {
                 return false;
             }
@@ -870,11 +1161,35 @@ namespace WoodburySpectatorSync.Coop
 
             var size = bounds.size;
             var horizontalMax = Mathf.Max(size.x, size.z);
+            var maxHeight = trustedActor ? 3.2f : 2.5f;
+            var maxHorizontal = trustedActor ? 3.25f : 2.2f;
+            var maxDepth = trustedActor ? 3.25f : 1.6f;
             return size.y >= 1.1f &&
-                   size.y <= 2.5f &&
+                   size.y <= maxHeight &&
                    horizontalMax >= 0.2f &&
-                   horizontalMax <= 2.2f &&
-                   size.z <= 1.6f;
+                   horizontalMax <= maxHorizontal &&
+                   size.z <= maxDepth;
+        }
+
+        private static int ScoreAvatarCandidate(GameObject candidate)
+        {
+            if (candidate == null) return int.MinValue;
+
+            var score = 0;
+            if (candidate.activeInHierarchy) score += 10000;
+            if (candidate.activeSelf) score += 1000;
+            score += CountVisibleRenderers(candidate) * 20;
+            score += CountRenderers(candidate);
+            if (HasUsableAnimator(candidate, out _)) score += 50;
+
+            var path = GetTransformPath(candidate.transform);
+            if (!string.IsNullOrEmpty(path) &&
+                path.IndexOf("Post Eating", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                score -= 100;
+            }
+
+            return score;
         }
 
         private static bool IsRejectedSceneAvatarPath(string path)
@@ -1076,7 +1391,37 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
+            HideStoryCarryProps();
             DisableColliders();
+        }
+
+        private void HideStoryCarryProps()
+        {
+            if (_root == null) return;
+
+            var transforms = _root.GetComponentsInChildren<Transform>(true);
+            for (var i = 0; i < transforms.Length; i++)
+            {
+                var child = transforms[i];
+                if (child == null || child == _root.transform) continue;
+                if (!LooksLikeStoryCarryProp(child.name)) continue;
+
+                child.gameObject.SetActive(false);
+            }
+        }
+
+        private static bool LooksLikeStoryCarryProp(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+
+            return name.IndexOf("Casserole", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("FishPlate", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Fish Plate", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Plate", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Marinade", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Veggie", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Vegetable", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Tray", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void LogAvatarDiagnostics(SourceDescriptor source, bool usedFallbackBody, ManualLogSource logger, Action<string> diagnosticsSink)
