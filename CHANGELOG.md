@@ -1,6 +1,7 @@
 ﻿# Changelog
 
 ## Unreleased
+- Co-op diagnostics: added `scripts/Compare-SceneDiscoveryDump.ps1` to diff host/client SceneDiscoveryDump logs by scene/component/field and produce parseable `SceneDumpDiff` lines for identifying remaining unsynced state.
 - Co-op stabilization: bumped plugin compatibility to 0.4.8, added buffered client-side AI interpolation for smoother Mike/NPC motion, kept client menu cursor/input usable in menu scenes, and quieted shutdown retry noise after intentional disconnects.
 - Co-op avatars: bumped plugin compatibility to 0.4.7, froze remote scene-model avatar animators when their controller cannot be driven by known movement parameters, and compacted nametags so fallback role labels no longer duplicate.
 - Co-op avatars: bumped plugin compatibility to 0.4.6, exchanged host/client display names during Hello/HelloAck, added launcher-selected host/client display names, and hid themed nametags until a visible gameplay avatar is present so labels no longer float in menus.
