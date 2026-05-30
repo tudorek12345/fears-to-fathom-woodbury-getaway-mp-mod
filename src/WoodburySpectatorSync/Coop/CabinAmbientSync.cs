@@ -18,11 +18,15 @@ namespace WoodburySpectatorSync.Coop
         private const string OutsidePrefix = KeyPrefix + "OutsideLights.";
         private const string BedroomTvPrefix = KeyPrefix + "BedroomTV.";
         private const string BedroomTvActivePrefix = BedroomTvPrefix + "Active.";
+        private const string TruckPrefix = KeyPrefix + "Truck.";
+        private const string TruckActivePrefix = TruckPrefix + "Active.";
+        private const string TruckRadioPrefix = TruckPrefix + "Radio.";
         private const string SinkPrefix = KeyPrefix + "Sink.";
         private const string SinkActivePrefix = SinkPrefix + "Active.";
         private const string FlashlightPrefix = KeyPrefix + "Flashlight.";
         private const string FlashlightActivePrefix = FlashlightPrefix + "Active.";
         private const int TvTimeQuantizeMs = 250;
+        private const int RadioTimeQuantizeMs = 250;
         private const BindingFlags FieldFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
         private static readonly string[] PlayerActiveFields =
@@ -44,6 +48,29 @@ namespace WoodburySpectatorSync.Coop
             "closetLight"
         };
 
+        private static readonly string[] TruckBoolFields =
+        {
+            "justPressedAcc",
+            "isCloseToDestination",
+            "rvSlowDown",
+            "bagOutsideRV",
+            "carStopped"
+        };
+
+        private static readonly string[] TruckActiveFields =
+        {
+            "headLight1",
+            "headLight2",
+            "breakLight1",
+            "breakLight2",
+            "bag",
+            "hornCollider",
+            "mikeLight",
+            "doorCollider",
+            "insidePointLight",
+            "snowCover"
+        };
+
         private static readonly string[] SinkActiveFields =
         {
             "washingPlates",
@@ -59,6 +86,7 @@ namespace WoodburySpectatorSync.Coop
 
         private static readonly Dictionary<string, FieldInfo> FieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private static readonly Dictionary<int, int> BedroomTvHostTimeMsByInstance = new Dictionary<int, int>();
+        private static readonly Dictionary<int, int> RadioHostTimeMsByInstance = new Dictionary<int, int>();
 
         public static int EmitHostFlags(CabinGameManager manager, string fullPrefix, Action<string, int> emit)
         {
@@ -94,6 +122,7 @@ namespace WoodburySpectatorSync.Coop
             EmitLightSwitch(fullPrefix, "Closet", house != null ? GetFieldValue<LightSwitch>(house, "closetLightSwitch") : null, emit, ref hash);
             EmitOutsideLights(fullPrefix, house != null ? GetFieldValue<OutsideLights>(house, "outsideLights") : null, emit, ref hash);
             EmitBedroomTv(fullPrefix, ResolveBedroomTv(manager), emit, ref hash);
+            EmitTruck(fullPrefix, ResolveTruck(manager), emit, ref hash);
             EmitSink(fullPrefix, ResolveSink(manager), emit, ref hash);
             EmitFlashlight(fullPrefix, house != null ? GetFieldValue<FlashLight>(house, "flashLight") : null, emit, ref hash);
 
@@ -111,6 +140,16 @@ namespace WoodburySpectatorSync.Coop
             var sink = ResolveSink(manager);
             AddTransform(GetFieldObject(sink, "washingPlates"), transforms);
             AddTransform(GetFieldObject(sink, "washedPlates"), transforms);
+
+            var truck = ResolveTruck(manager);
+            AddTransform(truck, transforms);
+            AddTransform(GetFieldObject(truck, "steeringHandle"), transforms);
+            AddTransform(GetFieldObject(truck, "frontRightTransform"), transforms);
+            AddTransform(GetFieldObject(truck, "frontLeftTransform"), transforms);
+            AddTransform(GetFieldObject(truck, "backRightTransform"), transforms);
+            AddTransform(GetFieldObject(truck, "backLeftTransform"), transforms);
+            AddTransform(GetFieldObject(truck, "bag"), transforms);
+            AddTransform(GetFieldObject(truck, "doorCollider"), transforms);
         }
 
         public static bool TryApplyFlag(CabinGameManager manager, string fieldName, int value, ManualLogSource logger)
@@ -168,6 +207,18 @@ namespace WoodburySpectatorSync.Coop
             {
                 applied = ApplyBedroomTvFlag(ResolveBedroomTv(manager), fieldName.Substring(BedroomTvPrefix.Length), value);
             }
+            else if (fieldName.StartsWith(TruckActivePrefix, StringComparison.Ordinal))
+            {
+                applied = ApplyTruckActiveFlag(ResolveTruck(manager), fieldName.Substring(TruckActivePrefix.Length), value);
+            }
+            else if (fieldName.StartsWith(TruckRadioPrefix, StringComparison.Ordinal))
+            {
+                applied = ApplyTruckRadioFlag(ResolveTruck(manager), fieldName.Substring(TruckRadioPrefix.Length), value);
+            }
+            else if (fieldName.StartsWith(TruckPrefix, StringComparison.Ordinal))
+            {
+                applied = ApplyTruckFlag(ResolveTruck(manager), fieldName.Substring(TruckPrefix.Length), value);
+            }
             else if (fieldName.StartsWith(SinkActivePrefix, StringComparison.Ordinal))
             {
                 applied = ApplySinkActiveFlag(ResolveSink(manager), fieldName.Substring(SinkActivePrefix.Length), value);
@@ -201,6 +252,7 @@ namespace WoodburySpectatorSync.Coop
             if (manager == null) return;
 
             ApplyBedroomTvVisualState(ResolveBedroomTv(manager));
+            ApplyTruckVisualState(ResolveTruck(manager));
 
             var house = ResolveCabinHouse(manager);
             ApplyLightSwitchVisualState(ResolveLightSwitch(manager, "basementLightSwitch"));
@@ -211,7 +263,259 @@ namespace WoodburySpectatorSync.Coop
         public static bool IsHighFrequencyStoryFlag(string fieldName)
         {
             return !string.IsNullOrEmpty(fieldName) &&
-                   fieldName.StartsWith(BedroomTvPrefix + "VideoTimeMs", StringComparison.Ordinal);
+                   (fieldName.StartsWith(BedroomTvPrefix + "VideoTimeMs", StringComparison.Ordinal) ||
+                    fieldName.StartsWith(TruckRadioPrefix + "AudioTimeMs", StringComparison.Ordinal));
+        }
+
+        private static void EmitTruck(string fullPrefix, TruckController truck, Action<string, int> emit, ref int hash)
+        {
+            if (truck == null)
+            {
+                Emit(fullPrefix + TruckPrefix + "RootActive", 0, emit, ref hash);
+                return;
+            }
+
+            Emit(fullPrefix + TruckPrefix + "RootActive", truck.gameObject.activeSelf ? 1 : 0, emit, ref hash);
+            Emit(fullPrefix + TruckPrefix + "Enabled", truck.enabled ? 1 : 0, emit, ref hash);
+            Emit(fullPrefix + TruckPrefix + "rvState", Convert.ToInt32(truck.rvState), emit, ref hash);
+            Emit(fullPrefix + TruckPrefix + "avgRPM100", Mathf.RoundToInt(truck.avgRPM * 100f), emit, ref hash);
+            Emit(fullPrefix + TruckPrefix + "currentAcceleration", Mathf.RoundToInt(GetFloat(truck, "currentAcceleration")), emit, ref hash);
+            Emit(fullPrefix + TruckPrefix + "currentBreakForce", Mathf.RoundToInt(GetFloat(truck, "currentBreakForce")), emit, ref hash);
+            Emit(fullPrefix + TruckPrefix + "currentTurnAngle100", Mathf.RoundToInt(GetFloat(truck, "currentTurnAngle") * 100f), emit, ref hash);
+
+            for (var i = 0; i < TruckBoolFields.Length; i++)
+            {
+                var fieldName = TruckBoolFields[i];
+                Emit(fullPrefix + TruckPrefix + fieldName, GetBool(truck, fieldName) ? 1 : 0, emit, ref hash);
+            }
+
+            for (var i = 0; i < TruckActiveFields.Length; i++)
+            {
+                EmitObjectActive(fullPrefix, TruckActivePrefix + TruckActiveFields[i], truck, TruckActiveFields[i], emit, ref hash);
+            }
+
+            EmitLightState(fullPrefix + TruckPrefix + "headLight1.", GetLightFromObject(GetFieldObject(truck, "headLight1")), emit, ref hash);
+            EmitLightState(fullPrefix + TruckPrefix + "headLight2.", GetLightFromObject(GetFieldObject(truck, "headLight2")), emit, ref hash);
+            EmitAudioState(fullPrefix + TruckPrefix + "idleAS.", GetFieldObject(truck, "idleAS") as AudioSource, emit, ref hash);
+            EmitAudioState(fullPrefix + TruckPrefix + "accelerateAS.", truck.accelerateAS, emit, ref hash);
+            EmitAudioState(fullPrefix + TruckPrefix + "reverseAS.", GetFieldObject(truck, "reverseAS") as AudioSource, emit, ref hash);
+            EmitAnimatorState(fullPrefix + TruckPrefix + "bobbleHead.", truck.bobbleHeadAnimator, emit, ref hash);
+            EmitRadio(fullPrefix, GetFieldValue<Radio>(truck, "radio"), emit, ref hash);
+        }
+
+        private static bool ApplyTruckActiveFlag(TruckController truck, string name, int value)
+        {
+            if (truck == null) return value == 0;
+            return TrySetObjectActive(truck, name, value != 0);
+        }
+
+        private static bool ApplyTruckFlag(TruckController truck, string name, int value)
+        {
+            if (truck == null) return value == 0;
+
+            if (string.Equals(name, "RootActive", StringComparison.Ordinal))
+            {
+                truck.gameObject.SetActive(value != 0);
+                return true;
+            }
+
+            if (string.Equals(name, "Enabled", StringComparison.Ordinal))
+            {
+                // Keep the local controller from making visual state decisions while still allowing the object to render.
+                truck.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "rvState", StringComparison.Ordinal))
+            {
+                truck.rvState = (TruckController.RVState)Mathf.Clamp(value, 0, 3);
+                ApplyTruckVisualState(truck);
+                return true;
+            }
+
+            if (string.Equals(name, "avgRPM100", StringComparison.Ordinal))
+            {
+                truck.avgRPM = value / 100f;
+                ApplyTruckVisualState(truck);
+                return true;
+            }
+
+            if (string.Equals(name, "currentAcceleration", StringComparison.Ordinal) ||
+                string.Equals(name, "currentBreakForce", StringComparison.Ordinal))
+            {
+                return TrySetFloat(truck, name, value);
+            }
+
+            if (string.Equals(name, "currentTurnAngle100", StringComparison.Ordinal))
+            {
+                return TrySetFloat(truck, "currentTurnAngle", value / 100f);
+            }
+
+            if (name.StartsWith("headLight1.", StringComparison.Ordinal))
+            {
+                return ApplyLightState(GetLightFromObject(GetFieldObject(truck, "headLight1")), name.Substring("headLight1.".Length), value);
+            }
+
+            if (name.StartsWith("headLight2.", StringComparison.Ordinal))
+            {
+                return ApplyLightState(GetLightFromObject(GetFieldObject(truck, "headLight2")), name.Substring("headLight2.".Length), value);
+            }
+
+            if (name.StartsWith("idleAS.", StringComparison.Ordinal))
+            {
+                return ApplyAudioState(GetFieldObject(truck, "idleAS") as AudioSource, name.Substring("idleAS.".Length), value);
+            }
+
+            if (name.StartsWith("accelerateAS.", StringComparison.Ordinal))
+            {
+                return ApplyAudioState(truck.accelerateAS, name.Substring("accelerateAS.".Length), value);
+            }
+
+            if (name.StartsWith("reverseAS.", StringComparison.Ordinal))
+            {
+                return ApplyAudioState(GetFieldObject(truck, "reverseAS") as AudioSource, name.Substring("reverseAS.".Length), value);
+            }
+
+            if (name.StartsWith("bobbleHead.", StringComparison.Ordinal))
+            {
+                return ApplyAnimatorState(truck.bobbleHeadAnimator, name.Substring("bobbleHead.".Length), value);
+            }
+
+            for (var i = 0; i < TruckBoolFields.Length; i++)
+            {
+                if (string.Equals(name, TruckBoolFields[i], StringComparison.Ordinal))
+                {
+                    return TrySetBool(truck, name, value != 0);
+                }
+            }
+
+            return false;
+        }
+
+        private static void EmitRadio(string fullPrefix, Radio radio, Action<string, int> emit, ref int hash)
+        {
+            if (radio == null)
+            {
+                Emit(fullPrefix + TruckRadioPrefix + "RootActive", 0, emit, ref hash);
+                return;
+            }
+
+            Emit(fullPrefix + TruckRadioPrefix + "RootActive", radio.gameObject.activeSelf ? 1 : 0, emit, ref hash);
+            Emit(fullPrefix + TruckRadioPrefix + "Enabled", radio.enabled ? 1 : 0, emit, ref hash);
+            Emit(fullPrefix + TruckRadioPrefix + "isStopped", radio.isStopped ? 1 : 0, emit, ref hash);
+            Emit(fullPrefix + TruckRadioPrefix + "currentClip", radio.currentClip, emit, ref hash);
+            Emit(fullPrefix + TruckRadioPrefix + "cliptimerMs", QuantizeMs(Mathf.RoundToInt(GetFloat(radio, "cliptimer") * 1000f), RadioTimeQuantizeMs), emit, ref hash);
+            EmitTransient(fullPrefix + TruckRadioPrefix + "AudioTimeMs", QuantizeMs(GetAudioTimeMs(radio.audioSource), RadioTimeQuantizeMs), emit);
+            EmitAudioState(fullPrefix + TruckRadioPrefix + "audio.", radio.audioSource, emit, ref hash);
+        }
+
+        private static bool ApplyTruckRadioFlag(TruckController truck, string name, int value)
+        {
+            var radio = GetFieldValue<Radio>(truck, "radio") ?? UnityEngine.Object.FindObjectOfType<Radio>();
+            if (radio == null) return value == 0;
+
+            if (string.Equals(name, "RootActive", StringComparison.Ordinal))
+            {
+                radio.gameObject.SetActive(value != 0);
+                return true;
+            }
+
+            if (string.Equals(name, "Enabled", StringComparison.Ordinal))
+            {
+                radio.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "isStopped", StringComparison.Ordinal))
+            {
+                radio.isStopped = value != 0;
+                ApplyRadioVisualState(radio);
+                return true;
+            }
+
+            if (string.Equals(name, "currentClip", StringComparison.Ordinal))
+            {
+                radio.currentClip = value;
+                ApplyRadioVisualState(radio);
+                return true;
+            }
+
+            if (string.Equals(name, "cliptimerMs", StringComparison.Ordinal))
+            {
+                return TrySetFloat(radio, "cliptimer", value / 1000f);
+            }
+
+            if (string.Equals(name, "AudioTimeMs", StringComparison.Ordinal))
+            {
+                RadioHostTimeMsByInstance[radio.GetInstanceID()] = value;
+                ApplyRadioVisualState(radio);
+                return true;
+            }
+
+            if (name.StartsWith("audio.", StringComparison.Ordinal))
+            {
+                var applied = ApplyAudioState(radio.audioSource, name.Substring("audio.".Length), value);
+                ApplyRadioVisualState(radio);
+                return applied;
+            }
+
+            return false;
+        }
+
+        private static void ApplyTruckVisualState(TruckController truck)
+        {
+            if (truck == null) return;
+
+            var driving = truck.rvState == TruckController.RVState.DrivingRV;
+            TrySetObjectActive(truck, "headLight1", driving || truck.rvState == TruckController.RVState.StoppedRV);
+            TrySetObjectActive(truck, "headLight2", driving || truck.rvState == TruckController.RVState.StoppedRV);
+            TrySetObjectActive(truck, "breakLight1", truck.rvState == TruckController.RVState.StoppedRV || GetFloat(truck, "currentBreakForce") > 1f);
+            TrySetObjectActive(truck, "breakLight2", truck.rvState == TruckController.RVState.StoppedRV || GetFloat(truck, "currentBreakForce") > 1f);
+
+            if (truck.bobbleHeadAnimator != null)
+            {
+                truck.bobbleHeadAnimator.speed = Mathf.Abs(truck.avgRPM) > 10f ? 1f : 0f;
+            }
+        }
+
+        private static void ApplyRadioVisualState(Radio radio)
+        {
+            if (radio == null || radio.audioSource == null) return;
+
+            var clips = radio.radioClips;
+            if (clips != null && clips.Length > 0 && radio.currentClip >= 0 && radio.currentClip < clips.Length)
+            {
+                var clip = clips[radio.currentClip];
+                if (clip != null && radio.audioSource.clip != clip)
+                {
+                    radio.audioSource.clip = clip;
+                }
+            }
+            else if (radio.beSincereRadioClip != null && radio.audioSource.clip == null)
+            {
+                radio.audioSource.clip = radio.beSincereRadioClip;
+            }
+
+            if (RadioHostTimeMsByInstance.TryGetValue(radio.GetInstanceID(), out var hostTimeMs))
+            {
+                ApplyAudioTime(radio.audioSource, hostTimeMs);
+            }
+
+            if (radio.isStopped)
+            {
+                radio.audioSource.volume = 0f;
+                if (radio.audioSource.isPlaying)
+                {
+                    radio.audioSource.Stop();
+                }
+            }
+            else
+            {
+                if (!radio.audioSource.isPlaying && radio.audioSource.clip != null)
+                {
+                    radio.audioSource.Play();
+                }
+            }
         }
 
         private static void EmitLightSwitch(string fullPrefix, string id, LightSwitch lightSwitch, Action<string, int> emit, ref int hash)
@@ -496,6 +800,16 @@ namespace WoodburySpectatorSync.Coop
             return legacy;
         }
 
+        private static TruckController ResolveTruck(CabinGameManager manager)
+        {
+            if (manager != null && manager.truckController != null)
+            {
+                return manager.truckController;
+            }
+
+            return UnityEngine.Object.FindObjectOfType<TruckController>();
+        }
+
         private static void ApplyLightSwitchVisualState(LightSwitch lightSwitch)
         {
             if (lightSwitch == null) return;
@@ -575,6 +889,97 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(suffix, "Intensity1000", StringComparison.Ordinal))
             {
                 light.intensity = Mathf.Max(0f, value / 1000f);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void EmitAudioState(string prefix, AudioSource audioSource, Action<string, int> emit, ref int hash)
+        {
+            Emit(prefix + "Exists", audioSource != null ? 1 : 0, emit, ref hash);
+            if (audioSource == null) return;
+
+            Emit(prefix + "Enabled", audioSource.enabled ? 1 : 0, emit, ref hash);
+            Emit(prefix + "Playing", audioSource.isPlaying ? 1 : 0, emit, ref hash);
+            Emit(prefix + "Volume1000", Mathf.RoundToInt(audioSource.volume * 1000f), emit, ref hash);
+            Emit(prefix + "Loop", audioSource.loop ? 1 : 0, emit, ref hash);
+        }
+
+        private static bool ApplyAudioState(AudioSource audioSource, string suffix, int value)
+        {
+            if (audioSource == null) return value == 0;
+
+            if (string.Equals(suffix, "Exists", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (string.Equals(suffix, "Enabled", StringComparison.Ordinal))
+            {
+                audioSource.enabled = value != 0;
+                return true;
+            }
+
+            if (string.Equals(suffix, "Playing", StringComparison.Ordinal))
+            {
+                if (value != 0)
+                {
+                    if (!audioSource.isPlaying && audioSource.clip != null)
+                    {
+                        audioSource.Play();
+                    }
+                }
+                else if (audioSource.isPlaying)
+                {
+                    audioSource.Stop();
+                }
+
+                return true;
+            }
+
+            if (string.Equals(suffix, "Volume1000", StringComparison.Ordinal))
+            {
+                audioSource.volume = Mathf.Clamp01(value / 1000f);
+                return true;
+            }
+
+            if (string.Equals(suffix, "Loop", StringComparison.Ordinal))
+            {
+                audioSource.loop = value != 0;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void EmitAnimatorState(string prefix, Animator animator, Action<string, int> emit, ref int hash)
+        {
+            Emit(prefix + "Exists", animator != null ? 1 : 0, emit, ref hash);
+            if (animator == null) return;
+
+            Emit(prefix + "Enabled", animator.enabled ? 1 : 0, emit, ref hash);
+            Emit(prefix + "Speed1000", Mathf.RoundToInt(animator.speed * 1000f), emit, ref hash);
+        }
+
+        private static bool ApplyAnimatorState(Animator animator, string suffix, int value)
+        {
+            if (animator == null) return value == 0;
+
+            if (string.Equals(suffix, "Exists", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (string.Equals(suffix, "Enabled", StringComparison.Ordinal))
+            {
+                animator.enabled = value != 0;
+                return true;
+            }
+
+            if (string.Equals(suffix, "Speed1000", StringComparison.Ordinal))
+            {
+                animator.speed = value / 1000f;
                 return true;
             }
 
@@ -716,6 +1121,12 @@ namespace WoodburySpectatorSync.Coop
             return 0;
         }
 
+        private static int GetAudioTimeMs(AudioSource audioSource)
+        {
+            if (audioSource == null) return 0;
+            return Mathf.Clamp(Mathf.RoundToInt(audioSource.time * 1000f), 0, int.MaxValue);
+        }
+
         private static void ApplyVideoPlayerTime(object videoPlayer, int hostTimeMs)
         {
             if (videoPlayer == null || hostTimeMs <= 0) return;
@@ -728,6 +1139,19 @@ namespace WoodburySpectatorSync.Coop
             }
 
             TrySetDoubleProperty(videoPlayer, "time", targetSeconds);
+        }
+
+        private static void ApplyAudioTime(AudioSource audioSource, int hostTimeMs)
+        {
+            if (audioSource == null || audioSource.clip == null || hostTimeMs <= 0) return;
+
+            var targetSeconds = Mathf.Clamp(hostTimeMs / 1000f, 0f, Mathf.Max(0f, audioSource.clip.length - 0.01f));
+            if (Mathf.Abs(audioSource.time - targetSeconds) < 0.35f)
+            {
+                return;
+            }
+
+            audioSource.time = targetSeconds;
         }
 
         private static int QuantizeMs(int value, int quantum)
@@ -754,6 +1178,37 @@ namespace WoodburySpectatorSync.Coop
         {
             var field = FindField(target, fieldName);
             if (field == null || field.FieldType != typeof(bool)) return false;
+            try
+            {
+                field.SetValue(target, value);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static float GetFloat(object target, string fieldName)
+        {
+            var field = FindField(target, fieldName);
+            if (field == null) return 0f;
+            try
+            {
+                var raw = field.GetValue(target);
+                if (raw == null) return 0f;
+                return Convert.ToSingle(raw);
+            }
+            catch (Exception)
+            {
+                return 0f;
+            }
+        }
+
+        private static bool TrySetFloat(object target, string fieldName, float value)
+        {
+            var field = FindField(target, fieldName);
+            if (field == null || field.FieldType != typeof(float)) return false;
             try
             {
                 field.SetValue(target, value);
@@ -815,6 +1270,12 @@ namespace WoodburySpectatorSync.Coop
             if (value is GameObject go) return go;
             if (value is Component component) return component.gameObject;
             return null;
+        }
+
+        private static Light GetLightFromObject(object value)
+        {
+            var go = ExtractGameObject(value);
+            return go != null ? go.GetComponent<Light>() : null;
         }
 
         private static void SetMaterialEmission(Material material, bool enabled)

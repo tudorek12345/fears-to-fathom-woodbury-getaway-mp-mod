@@ -24,6 +24,7 @@ namespace WoodburySpectatorSync
         private CameraFollower _cameraFollower;
         private SceneSync _sceneSync;
         private Overlay _overlay;
+        private CoopMainMenuPanel _coopMenuPanel;
         private CoopBrandMark _brandMark;
         private RemoteDialogueOverlay _remoteDialogueOverlay;
         private SessionLog _sessionLog;
@@ -57,6 +58,7 @@ namespace WoodburySpectatorSync
             ApplyRuntimeOverrides(_settings);
             Application.runInBackground = true;
             _overlay = new Overlay(_settings);
+            _coopMenuPanel = new CoopMainMenuPanel(_settings);
             _brandMark = new CoopBrandMark();
             _remoteDialogueOverlay = new RemoteDialogueOverlay();
             _sessionLog = ShouldEnableSessionLog(_settings)
@@ -238,6 +240,11 @@ namespace WoodburySpectatorSync
             }
 
             _brandMark?.Draw();
+            _coopMenuPanel?.Draw(
+                _coopServer,
+                _coopClient,
+                _overlay,
+                _sessionLog != null ? new Action<string>(_sessionLog.Write) : null);
         }
 
         private string DrawCachedOverlay(string modeLabel, string status, string sceneName)
@@ -274,6 +281,12 @@ namespace WoodburySpectatorSync
             if (Input.GetKeyDown(KeyCode.F10))
             {
                 DumpSceneDiscoveryNow();
+            }
+
+            if (Input.GetKeyDown(KeyCode.F11))
+            {
+                _coopMenuPanel?.Toggle();
+                _sessionLog?.Write("Hotkey F11: co-op menu toggled");
             }
 
             if (_settings.ModeSetting.Value == Mode.Host)

@@ -31,6 +31,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, int> _cabinGameFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _pizzeriaFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, int> _roadTripFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _officeFlags = new Dictionary<string, int>();
+        private readonly Dictionary<string, int> _parkingLotFlags = new Dictionary<string, int>();
         private readonly Dictionary<string, AiTransformState> _aiStates = new Dictionary<string, AiTransformState>();
         private readonly CabinNpcRegistry _cabinNpcRegistry;
         private readonly GenericNpcRegistry _pizzeriaNpcRegistry;
@@ -64,6 +66,8 @@ namespace WoodburySpectatorSync.Coop
         private RoadTripGameManager _roadTripGameManager;
         private MikeInCar _roadTripMikeInCar;
         private MikeTruckInLoopScene _roadTripTruck;
+        private OfficeLayoutGameManager _officeLayoutGameManager;
+        private ParkingLotGameManager _parkingLotGameManager;
 
         private readonly FieldInfo _doorScriptOpened;
         private readonly MethodInfo _doorScriptOpen;
@@ -81,6 +85,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, FieldInfo> _roadTripFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _roadTripMikeFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _roadTripTruckFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _officeFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _parkingLotFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHikerFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHikerControllerFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHostFixingSinkFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -122,6 +128,8 @@ namespace WoodburySpectatorSync.Coop
         private const string RoadTripFlagPrefix = "RoadTripGM.";
         private const string RoadTripMikeFlagPrefix = RoadTripFlagPrefix + "Mike.";
         private const string RoadTripTruckFlagPrefix = RoadTripFlagPrefix + "Truck.";
+        private const string OfficeLayoutFlagPrefix = "OfficeLayoutGM.";
+        private const string ParkingLotFlagPrefix = "ParkingLotGM.";
         private const float MaxInteractDistanceMeters = 3.5f;
         private const float InteractLosPaddingMeters = 0.2f;
         private const long CabinMikeAnimPhaseSendIntervalMs = 250;
@@ -338,6 +346,8 @@ namespace WoodburySpectatorSync.Coop
             "autoStartConversation",
             "convoCompleted",
             "phoneUIState",
+            "conversationTimer",
+            "randomTimerForBump",
             "startBump",
             "playerCanSendMessage"
         };
@@ -361,6 +371,20 @@ namespace WoodburySpectatorSync.Coop
             "accelerateFromStop",
             "dialogueBreak",
             "run"
+        };
+
+        private readonly string[] _officeFieldNames = new[]
+        {
+            "currentState",
+            "currentPlayerState"
+        };
+
+        private readonly string[] _parkingLotFieldNames = new[]
+        {
+            "currentState",
+            "currentPlayerState",
+            "introDone",
+            "isPhoneRinging"
         };
 
         private readonly string[] _cabinHikerFieldNames = new[]
@@ -1248,8 +1272,21 @@ namespace WoodburySpectatorSync.Coop
             SendCabinCookingPropFlags(cabinNowMs);
             SendCabinBoardGameFlags(cabinNowMs);
             SendCabinAmbientFlags(cabinNowMs);
+            SendCabinTrafficFlags(cabinNowMs);
             SendCabinPostEatingFlags(cabinNowMs);
             SendCabinHikerFlags(cabinNowMs);
+        }
+
+        private void SendCabinTrafficFlags(long nowMs)
+        {
+            if (!string.Equals(SceneManager.GetActiveScene().name, "CabinScene", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            CabinTrafficSync.EmitHostFlags(
+                CabinGameFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_cabinGameFlags, key, value, nowMs));
         }
 
         private void SendCabinCookingPropFlags(long nowMs)
@@ -1565,6 +1602,20 @@ namespace WoodburySpectatorSync.Coop
                     _pizzeriaTruckDoor.isinteractable ? 1 : 0,
                     nowMs);
             }
+
+            SceneTrafficSync.EmitPizzeriaHostFlags(
+                PizzeriaFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs));
+            PizzeriaMediaSync.EmitHostFlags(
+                PizzeriaFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs));
+            PizzeriaPropSync.EmitHostFlags(
+                PizzeriaFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs));
+            PizzeriaSceneStateSync.EmitHostFlags(
+                PizzeriaFlagPrefix,
+                _pizzeriaGameManager,
+                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs));
         }
 
         private void SendRoadTripFlags()
@@ -1616,6 +1667,58 @@ namespace WoodburySpectatorSync.Coop
                     nowMs);
                 TryEnqueueAiState(_roadTripTruck.transform, 0.02f, 0.5f);
             }
+
+            SceneTrafficSync.EmitRoadTripHostFlags(
+                RoadTripFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_roadTripFlags, key, value, nowMs));
+            RoadTripSceneStateSync.EmitHostFlags(
+                RoadTripFlagPrefix,
+                _roadTripGameManager,
+                (key, value) => EmitStoryFlagIfChanged(_roadTripFlags, key, value, nowMs));
+        }
+
+        private void SendOfficeLayoutFlags()
+        {
+            if (_officeLayoutGameManager == null)
+            {
+                _officeLayoutGameManager = UnityEngine.Object.FindObjectOfType<OfficeLayoutGameManager>();
+                if (_officeLayoutGameManager == null) return;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            EmitFieldFlags(
+                _officeLayoutGameManager,
+                _officeFieldNames,
+                _officeFieldCache,
+                _officeFlags,
+                OfficeLayoutFlagPrefix,
+                nowMs);
+
+            OfficeSceneStateSync.EmitHostFlags(
+                OfficeLayoutFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_officeFlags, key, value, nowMs));
+        }
+
+        private void SendParkingLotFlags()
+        {
+            if (_parkingLotGameManager == null)
+            {
+                _parkingLotGameManager = UnityEngine.Object.FindObjectOfType<ParkingLotGameManager>();
+                if (_parkingLotGameManager == null) return;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            EmitFieldFlags(
+                _parkingLotGameManager,
+                _parkingLotFieldNames,
+                _parkingLotFieldCache,
+                _parkingLotFlags,
+                ParkingLotFlagPrefix,
+                nowMs);
+
+            ParkingLotSceneStateSync.EmitHostFlags(
+                ParkingLotFlagPrefix,
+                (key, value) => EmitStoryFlagIfChanged(_parkingLotFlags, key, value, nowMs));
         }
 
         private void SendRoadTripVehicleState(long nowMs)
@@ -2045,8 +2148,196 @@ namespace WoodburySpectatorSync.Coop
             SendCabinCookingPropTransforms();
             SendCabinBoardGameTransforms();
             SendCabinAmbientTransforms();
+            SendCabinTrafficTransforms();
+            SendPizzeriaTrafficTransforms();
+            SendPizzeriaPropTransforms();
+            SendPizzeriaSceneTransforms();
+            SendRoadTripTrafficTransforms();
+            SendRoadTripSceneTransforms();
+            SendOfficeLayoutTransforms();
+            SendParkingLotTransforms();
             SendRoadTripVehicleState(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             SendCabinMikeAnimationFlags();
+        }
+
+        private void SendOfficeLayoutTransforms()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            OfficeSceneStateSync.CollectSyncedTransforms(syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.01f,
+                    rotationThreshold: 0.25f);
+            }
+        }
+
+        private void SendParkingLotTransforms()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                (sceneName.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) < 0 &&
+                 sceneName.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            ParkingLotSceneStateSync.CollectSyncedTransforms(syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.02f,
+                    rotationThreshold: 0.5f);
+            }
+        }
+
+        private void SendCabinTrafficTransforms()
+        {
+            if (!string.Equals(SceneManager.GetActiveScene().name, "CabinScene", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            CabinTrafficSync.CollectSyncedTransforms(syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.03f,
+                    rotationThreshold: 0.75f);
+            }
+        }
+
+        private void SendPizzeriaTrafficTransforms()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            SceneTrafficSync.CollectPizzeriaTransforms(syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.03f,
+                    rotationThreshold: 0.75f);
+            }
+        }
+
+        private void SendPizzeriaPropTransforms()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            PizzeriaPropSync.CollectSyncedTransforms(syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.015f,
+                    rotationThreshold: 0.35f);
+            }
+        }
+
+        private void SendPizzeriaSceneTransforms()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            PizzeriaSceneStateSync.CollectSyncedTransforms(syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.01f,
+                    rotationThreshold: 0.25f);
+            }
+        }
+
+        private void SendRoadTripTrafficTransforms()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            var syncedTransforms = new List<Transform>();
+            SceneTrafficSync.CollectRoadTripTransforms(syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.03f,
+                    rotationThreshold: 0.75f);
+            }
+        }
+
+        private void SendRoadTripSceneTransforms()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (string.IsNullOrEmpty(sceneName) ||
+                sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            if (_roadTripGameManager == null)
+            {
+                _roadTripGameManager = UnityEngine.Object.FindObjectOfType<RoadTripGameManager>();
+            }
+
+            var syncedTransforms = new List<Transform>();
+            RoadTripSceneStateSync.CollectSyncedTransforms(_roadTripGameManager, syncedTransforms);
+            for (var i = 0; i < syncedTransforms.Count; i++)
+            {
+                var transform = syncedTransforms[i];
+                if (transform == null) continue;
+                TryEnqueueAiState(
+                    transform,
+                    movementThreshold: 0.02f,
+                    rotationThreshold: 0.5f);
+            }
         }
 
         private void SendCabinCookingPropTransforms()
@@ -3308,6 +3599,20 @@ namespace WoodburySpectatorSync.Coop
                 var name = _roadTripTruckFieldNames[i];
                 _roadTripTruckFieldCache[name] = FindInstanceField(typeof(MikeTruckInLoopScene), name);
             }
+
+            _officeFieldCache.Clear();
+            for (var i = 0; i < _officeFieldNames.Length; i++)
+            {
+                var name = _officeFieldNames[i];
+                _officeFieldCache[name] = FindInstanceField(typeof(OfficeLayoutGameManager), name);
+            }
+
+            _parkingLotFieldCache.Clear();
+            for (var i = 0; i < _parkingLotFieldNames.Length; i++)
+            {
+                var name = _parkingLotFieldNames[i];
+                _parkingLotFieldCache[name] = FindInstanceField(typeof(ParkingLotGameManager), name);
+            }
         }
 
         private void InitializeSceneAdapters()
@@ -3354,6 +3659,27 @@ namespace WoodburySpectatorSync.Coop
                     _roadTripFlags.Clear();
                 },
                 emitHostSnapshot: _ => SendRoadTripFlags()));
+
+            _sceneAdapters.Add(new DelegateHostSceneAdapter(
+                "OfficeLayout",
+                scene => scene.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0,
+                onSceneEnter: () =>
+                {
+                    _officeLayoutGameManager = null;
+                    _officeFlags.Clear();
+                },
+                emitHostSnapshot: _ => SendOfficeLayoutFlags()));
+
+            _sceneAdapters.Add(new DelegateHostSceneAdapter(
+                "ParkingLot",
+                scene => scene.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         scene.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0,
+                onSceneEnter: () =>
+                {
+                    _parkingLotGameManager = null;
+                    _parkingLotFlags.Clear();
+                },
+                emitHostSnapshot: _ => SendParkingLotFlags()));
         }
 
         private void OnSceneEnterAdapters(string sceneName)

@@ -27,6 +27,11 @@ namespace WoodburySpectatorSync.UI
             _visible = !_visible;
         }
 
+        public void SetVisible(bool visible)
+        {
+            _visible = visible;
+        }
+
         public void SetProgressMarker(string marker)
         {
             _progressMarker = marker ?? "";
@@ -86,7 +91,7 @@ namespace WoodburySpectatorSync.UI
                     lineCount++;
                 }
             }
-            sb.AppendLine("Hotkeys: F6 host on/off, F7 connect, F8 overlay, F9 progress, F10 dump");
+            sb.AppendLine("Hotkeys: F6 host on/off, F7 connect, F8 overlay, F9 progress, F10 dump, F11 menu");
             lineCount++;
             return sb.ToString();
         }

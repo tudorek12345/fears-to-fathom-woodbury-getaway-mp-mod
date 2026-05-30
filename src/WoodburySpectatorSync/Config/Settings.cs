@@ -28,6 +28,7 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<float> SmoothingPosition;
         public ConfigEntry<float> SmoothingRotation;
         public ConfigEntry<bool> OverlayEnabled;
+        public ConfigEntry<bool> CoopMenuEnabled;
         public ConfigEntry<bool> VerboseLogging;
         public ConfigEntry<bool> UdpEnabled;
         public ConfigEntry<int> UdpPort;
@@ -62,6 +63,7 @@ namespace WoodburySpectatorSync.Config
             settings.SmoothingPosition = config.Bind("Sync", "SmoothingPosition", 0.15f, "Camera position smoothing 0..1");
             settings.SmoothingRotation = config.Bind("Sync", "SmoothingRotation", 0.15f, "Camera rotation smoothing 0..1");
             settings.OverlayEnabled = config.Bind("UI", "OverlayEnabled", true, "Show overlay by default");
+            settings.CoopMenuEnabled = config.Bind("UI", "CoopMenuEnabled", true, "Show the co-op setup panel in the main menu. Toggle with F11.");
             settings.VerboseLogging = config.Bind("Debug", "VerboseLogging", false, "Verbose logging");
             settings.UdpEnabled = config.Bind("Network", "UdpEnabled", true, "Enable UDP for high-frequency state (camera/transform)");
             settings.UdpPort = config.Bind("Network", "UdpPort", 27056, "UDP port for high-frequency state");

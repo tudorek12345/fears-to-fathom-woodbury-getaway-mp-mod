@@ -1,13 +1,16 @@
 # Fears to Fathom: Woodbury Getaway Co-op Mod
 
-co-op mod for **Fears to Fathom: Woodbury Getaway**.
+Free, unofficial co-op multiplayer mod for **Fears to Fathom: Woodbury Getaway**. Host runs the real game; a second player joins, and the scripted scares happen to both of you in sync.
 
+<!-- AUTO:STATUS-BEGIN -->
+[![co-op built](site/badges/coverage.svg)](https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/) [Live status & roadmap →](https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/)
+
+_Auto-refreshed on every push by `.github/workflows/site.yml`. Initial seed happens on the first run of `scripts/Update-SiteData.ps1`._
+<!-- AUTO:STATUS-END -->
 
 ## Status
 
-Work in progress.
-
-Cabin has the most coverage. Pizzeria and RoadTrip have early sync foundations. Full story parity is still being built and tested scene by scene.
+Cabin has the most coverage. Pizzeria, RoadTrip, Office and ParkingLot have working sync foundations. Full story parity is being built scene by scene. See the [live roadmap](https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/#roadmap) for what's coming next.
 
 ## Requirements
 
@@ -55,12 +58,12 @@ For separate machines, configure one instance as `CoopHost` and the other as `Co
 
 ## Controls
 
-| Key | Action |
-|---|---|
-| `F6` | Toggle host |
-| `F7` | Connect client |
-| `F8` | Toggle overlay |
-| `F9` | Debug/progress action |
+| Key  | Action                 |
+| ---- | ---------------------- |
+| `F6` | Toggle host            |
+| `F7` | Connect client         |
+| `F8` | Toggle overlay         |
+| `F9` | Debug/progress action  |
 
 ## Project Layout
 
