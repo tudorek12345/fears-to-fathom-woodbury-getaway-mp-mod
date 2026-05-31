@@ -660,6 +660,57 @@ pre code { background: transparent; padding: 0; }
   color: var(--fg-soft);
 }
 
+/* ----------------------------------------------------------- FOLLOW / CTA BAND */
+.cta-band {
+  background: linear-gradient(135deg, var(--grad-1), var(--grad-2));
+  padding: 22px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.cta-band-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.cta-band-text { color: #fff; max-width: 640px; }
+.cta-band-text strong { display: block; font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+.cta-band-text span { font-size: 14px; color: rgba(255, 255, 255, 0.86); }
+.cta-band-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.cta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: transform 0.12s, box-shadow 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.cta-pill svg { width: 18px; height: 18px; }
+.cta-pill:hover { text-decoration: none; transform: translateY(-2px); }
+.cta-pill-star {
+  background: #fff;
+  color: #1a2233;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+.cta-pill-star:hover { color: #1a2233; box-shadow: 0 7px 20px rgba(0, 0, 0, 0.28); }
+.cta-pill-bell {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.cta-pill-bell:hover { background: rgba(255, 255, 255, 0.24); color: #fff; }
+@media (max-width: 640px) {
+  .cta-band-inner { flex-direction: column; align-items: flex-start; }
+  .cta-band-actions { width: 100%; }
+  .cta-pill { flex: 1; justify-content: center; }
+}
+
 /* ----------------------------------------------------------- CTA BUTTONS */
 .cta-row {
   display: flex;
