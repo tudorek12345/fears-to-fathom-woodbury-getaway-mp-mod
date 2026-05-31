@@ -4,7 +4,7 @@
     "protocol": 4,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
-    "lastCommit": "4853eb0 \"site: add robots.txt, sitemap.xml, and opt-in privacy analytics\"",
+    "lastCommit": "08c1652 \"site: visible deduped visitor counter in top nav + graceful screenshots gallery\"",
     "lastUpdated": "2026-05-31",
     "overallPercent": 60,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",

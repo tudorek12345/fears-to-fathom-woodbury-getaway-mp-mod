@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "08c1652",
+      "subject": "site: visible deduped visitor counter in top nav + graceful screenshots gallery"
+    },
+    {
+      "sha": "78f4222",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "4853eb0",
       "subject": "site: add robots.txt, sitemap.xml, and opt-in privacy analytics"
     },
@@ -247,14 +255,6 @@
     {
       "sha": "a356981",
       "subject": "Add co-op status site + GitHub Pages auto-deploy"
-    },
-    {
-      "sha": "a69b400",
-      "subject": "update 05/31"
-    },
-    {
-      "sha": "1d1089e",
-      "subject": "scene expansion, html roadmap integration, solving"
     }
   ],
   "popularityProjection": {
