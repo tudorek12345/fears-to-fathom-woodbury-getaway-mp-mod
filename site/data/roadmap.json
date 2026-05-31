@@ -225,6 +225,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "7c9e547",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "a356981",
       "subject": "Add co-op status site + GitHub Pages auto-deploy"
     },
@@ -251,10 +255,6 @@
     {
       "sha": "8e35770",
       "subject": "changes"
-    },
-    {
-      "sha": "803f7d5",
-      "subject": "light patches 05/20/2026"
     }
   ],
   "popularityProjection": {
