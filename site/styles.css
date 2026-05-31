@@ -660,6 +660,56 @@ pre code { background: transparent; padding: 0; }
   color: var(--fg-soft);
 }
 
+/* ----------------------------------------------------------- VISITOR PILL (nav) */
+.visit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  color: var(--fg-soft);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+.visit-pill svg { width: 14px; height: 14px; opacity: 0.8; }
+.visit-pill strong { color: var(--accent); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .visit-pill { display: none; } }
+
+/* ----------------------------------------------------------- GALLERY */
+#gallery { display: none; }            /* revealed by app.js only if a screenshot loads */
+.shot-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+.shot {
+  margin: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.shot.shot-missing { display: none; }  /* hide any screenshot that 404s */
+.shot-feature { grid-column: 1 / -1; }
+@media (min-width: 760px) { .shot-feature { grid-column: span 2; } }
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--bg-alt);
+}
+.shot figcaption {
+  padding: 12px 16px;
+  font-size: 13.5px;
+  color: var(--fg-soft);
+  border-top: 1px solid var(--border-soft);
+}
+
 /* ----------------------------------------------------------- FOLLOW / CTA BAND */
 .cta-band {
   background: linear-gradient(135deg, var(--grad-1), var(--grad-2));

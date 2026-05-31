@@ -18,6 +18,54 @@
     localStorage.setItem("wbc-theme", next);
   });
 
+  // ---------- 0b. Visitor counter + gallery (run independently) ----
+  initVisitorCounter();
+  initGallery();
+
+  function initVisitorCounter() {
+    var el = document.getElementById("visit-count");
+    var pill = document.getElementById("visit-pill");
+    if (!el || !pill) return;
+    var base = "https://api.counterapi.dev/v1/woodbury-coop/site-visits";
+    var counted = false;
+    try { counted = localStorage.getItem("wbc_visited") === "1"; } catch (e) {}
+    // Increment once per browser (dedupe); on return visits just read the total.
+    var url = counted ? base + "/" : base + "/up";
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && typeof d.count === "number") {
+          el.textContent = d.count.toLocaleString();
+          pill.hidden = false;
+          try { localStorage.setItem("wbc_visited", "1"); } catch (e) {}
+        }
+      })
+      .catch(function () { pill.hidden = true; });
+  }
+
+  function initGallery() {
+    var gallery = document.getElementById("gallery");
+    if (!gallery) return;
+    var imgs = Array.prototype.slice.call(gallery.querySelectorAll(".shot img"));
+    if (!imgs.length) return;
+    function evaluate() {
+      var anyLoaded = false;
+      imgs.forEach(function (img) {
+        var ok = img.complete && img.naturalWidth > 0;
+        var fig = img.closest(".shot");
+        if (fig) fig.classList.toggle("shot-missing", !ok);
+        if (ok) anyLoaded = true;
+      });
+      gallery.style.display = anyLoaded ? "" : "none";
+    }
+    imgs.forEach(function (img) {
+      img.addEventListener("load", evaluate);
+      img.addEventListener("error", evaluate);
+    });
+    evaluate();
+    setTimeout(evaluate, 1000);
+  }
+
   // ---------- 1. Fetch all data -------------------------------
   Promise.all([
     fetch("data/sync-status.json").then(safeJson),
