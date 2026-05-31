@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/sitemap.xml

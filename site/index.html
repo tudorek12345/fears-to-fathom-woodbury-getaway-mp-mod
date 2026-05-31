@@ -381,5 +381,22 @@
 </footer>
 
 <script src="app.js"></script>
+
+<!-- Privacy-friendly visitor counting (GoatCounter): no cookies, no personal data,
+     no cross-site tracking. Makes ZERO external requests until you activate it.
+     To turn it on: create a free code at https://www.goatcounter.com (2 min),
+     then replace YOURCODE below with your subdomain (e.g. "woodbury-coop") and push. -->
+<script>
+  (function () {
+    var CODE = "YOURCODE"; // <-- set to your GoatCounter code to start counting
+    if (CODE && CODE !== "YOURCODE") {
+      var s = document.createElement("script");
+      s.async = true;
+      s.src = "//gc.zgo.at/count.js";
+      s.setAttribute("data-goatcounter", "https://" + CODE + ".goatcounter.com/count");
+      document.head.appendChild(s);
+    }
+  })();
+</script>
 </body>
 </html>
