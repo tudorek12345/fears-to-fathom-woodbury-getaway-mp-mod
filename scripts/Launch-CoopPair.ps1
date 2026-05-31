@@ -224,7 +224,8 @@ UdpEnabled = $($UdpEnabled.ToString().ToLowerInvariant())
 UdpPort = $UdpPort
 
 [Debug]
-VerboseLogging = false
+VerboseLogging = true
+SceneDiscoveryDump = true
 
 [UI]
 OverlayEnabled = true

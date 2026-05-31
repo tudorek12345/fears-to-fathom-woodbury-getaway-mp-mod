@@ -64,7 +64,7 @@ namespace WoodburySpectatorSync.Config
             settings.SmoothingRotation = config.Bind("Sync", "SmoothingRotation", 0.15f, "Camera rotation smoothing 0..1");
             settings.OverlayEnabled = config.Bind("UI", "OverlayEnabled", true, "Show overlay by default");
             settings.CoopMenuEnabled = config.Bind("UI", "CoopMenuEnabled", true, "Show the co-op setup panel in the main menu. Toggle with F11.");
-            settings.VerboseLogging = config.Bind("Debug", "VerboseLogging", false, "Verbose logging");
+            settings.VerboseLogging = config.Bind("Debug", "VerboseLogging", true, "Verbose logging");
             settings.UdpEnabled = config.Bind("Network", "UdpEnabled", true, "Enable UDP for high-frequency state (camera/transform)");
             settings.UdpPort = config.Bind("Network", "UdpPort", 27056, "UDP port for high-frequency state");
             settings.CoopTeleportDistance = config.Bind("Coop", "TeleportDistance", 25f, "Auto-teleport client to host if farther than this (meters)");
@@ -85,7 +85,7 @@ namespace WoodburySpectatorSync.Config
             settings.CoopRemotePlayerAvatarId = config.Bind("Coop", "RemotePlayerAvatarId", "woodbury_scene_auto", "Avatar id. Use woodbury_scene_auto for in-scene avatars or a bundle manifest id such as quaternius_regular_male for explicit AssetBundle testing.");
             settings.CoopRemotePlayerAvatarScale = config.Bind("Coop", "RemotePlayerAvatarScale", 1f, "Multiplier applied on top of the avatar manifest scale.");
             settings.CoopRemotePlayerAvatarYOffset = config.Bind("Coop", "RemotePlayerAvatarYOffset", 0f, "Extra vertical offset added on top of the avatar manifest offset.");
-            settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", false, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
+            settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", true, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
             return settings;
         }
     }
