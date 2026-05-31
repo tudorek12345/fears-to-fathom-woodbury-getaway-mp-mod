@@ -1,0 +1,68 @@
+name: Site — refresh data & deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "STATUS.md"
+      - "README.md"
+      - "site/data/**"
+      - "site/badges/**"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly Mon 06:00 UTC — keeps lastUpdated honest
+
+# Single in-flight deploy at a time, but never cancel one mid-flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # to commit refreshed JSON/badge/README back
+  pages: write          # to publish to Pages
+  id-token: write       # OIDC for actions/deploy-pages
+
+jobs:
+  refresh-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Refresh site data
+        shell: pwsh
+        run: ./scripts/Update-SiteData.ps1
+
+      - name: Commit refreshed data (if anything changed)
+        continue-on-error: true   # never let a read-only token block the deploy
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data/sync-status.json site/data/roadmap.json site/badges/coverage.svg STATUS.md README.md
+          if git diff --cached --quiet; then
+            echo "no data changes to commit"
+          else
+            git commit -m "site: auto-refresh data + badge [skip ci]"
+            git push
+          fi
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v4
+        with:
+          enablement: true   # auto-enable Pages on first run if not already on
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

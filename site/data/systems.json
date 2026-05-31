@@ -1,0 +1,109 @@
+{
+  "systems": [
+    {
+      "name": "Session lifecycle",
+      "status": "done",
+      "note": "Hello/HelloAck handshake, SceneChange + SceneReady, SnapshotBegin/End/Ack, UDP gated until Live."
+    },
+    {
+      "name": "NPC brains",
+      "status": "done",
+      "note": "Cabin (Mike variants, hiker, host, Nora, cat) deep; Pizzeria + RoadTrip via GenericNpcRegistry."
+    },
+    {
+      "name": "Doors / Holdables",
+      "status": "done",
+      "note": "CabinDoor + NOTLonely_Door.DoorScript + Holdable replicated across all synced scenes."
+    },
+    {
+      "name": "Story flags",
+      "status": "done",
+      "note": "Per-scene flag dictionaries (cabinHouse, cabinGame, pizzeria, roadTrip, office, parkingLot)."
+    },
+    {
+      "name": "Dialogue mirroring",
+      "status": "done",
+      "note": "Host dialogue events mirrored; native subtitle UI used when available; client UI suppressed."
+    },
+    {
+      "name": "Camera / FOV",
+      "status": "done",
+      "note": "Deep Cabin/Pizzeria/RoadTrip; Office/Parking land FOV + dialogue camera at least."
+    },
+    {
+      "name": "Vehicles",
+      "status": "partial",
+      "note": "RoadTrip typed PathVehicleState smoothing landed in 0.4.0; Pizzeria opening drive synced; ride-along passenger seat still TODO."
+    },
+    {
+      "name": "Traffic",
+      "status": "done",
+      "note": "Cabin + Pizzeria + RoadTrip traffic pool/active state + AiTransform correction."
+    },
+    {
+      "name": "UI mirror",
+      "status": "done",
+      "note": "Pizzeria + RoadTrip + Office UI managers mirrored (intro/fade canvases, dialogue cameras, phone state)."
+    },
+    {
+      "name": "Avatars",
+      "status": "done",
+      "note": "Auto → GameModel → AssetBundle → Capsule fallback chain. HOST/CLIENT nametags; render-only AnimController filtered."
+    },
+    {
+      "name": "Diagnostics",
+      "status": "done",
+      "note": "Per-process session logs, F10 SceneDiscoveryDump, Compare-SceneDiscoveryDump.ps1, Run-CoopSmoke.ps1."
+    },
+    {
+      "name": "Co-op setup UI",
+      "status": "done",
+      "note": "F11 main-menu panel for mode/host/client/avatar/overlay config (no more editing the .cfg by hand)."
+    },
+    {
+      "name": "Cabin Mike sync",
+      "status": "done",
+      "note": "MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController all wired through NpcBrainState."
+    },
+    {
+      "name": "Mini-game state",
+      "status": "done",
+      "note": "Jenga + Ouija controller + planchette + dining-table colliders + initial-position state synced."
+    },
+    {
+      "name": "Cooking props",
+      "status": "done",
+      "note": "Casserole/oven/plate/fish/cooking-hand props gated by story flags; client visuals suppressed before Eating."
+    },
+    {
+      "name": "Vending machines",
+      "status": "done",
+      "note": "Shared between Office + Pizzeria. Cameras, triggers, slot/sliding colliders, soda-can state, audio."
+    },
+    {
+      "name": "Generic triggers",
+      "status": "done",
+      "note": "OnTriggerSub + OnTriggerDisplaySub + OnTrigger + TriggerEventInvoker mirrored across all 4 non-Cabin scenes."
+    },
+    {
+      "name": "Save / load parity",
+      "status": "missing",
+      "note": "Game's ES3 save state not synced across host/client. Sessions assume both start from the same point."
+    },
+    {
+      "name": "Mid-session reconnect",
+      "status": "partial",
+      "note": "Reconnecting enum exists in SessionState; resume-snapshot + replay-missed-flags path not finished."
+    },
+    {
+      "name": "Menu / loading scenes",
+      "status": "partial",
+      "note": "Client menu cursor/input kept usable; nothing actively synced in menu/loading."
+    },
+    {
+      "name": "IL2CPP migration",
+      "status": "missing",
+      "note": "Game ships as Mono. Plugin has a TODO marker for an eventual IL2CPP chainloader swap."
+    }
+  ]
+}

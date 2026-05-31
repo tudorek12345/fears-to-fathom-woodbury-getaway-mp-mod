@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fears to Fathom: Woodbury Getaway Co-op Mod — Multiplayer Status &amp; Roadmap</title>
+<meta name="description" content="Play Fears to Fathom: Woodbury Getaway with a friend. Free unofficial co-op multiplayer mod for the Steam horror game. Live coverage status, roadmap, and source on GitHub.">
+<meta name="keywords" content="Fears to Fathom, Woodbury Getaway, co-op mod, multiplayer mod, F2F coop, Woodbury multiplayer, Woodbury coop, horror game co-op, BepInEx mod">
+<meta name="author" content="tudorek12345">
+<meta name="referrer" content="no-referrer">
+<link rel="canonical" href="https://woodbury-coop.pages.dev/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Fears to Fathom: Woodbury Getaway Co-op Mod">
+<meta property="og:description" content="Free unofficial co-op multiplayer mod for Fears to Fathom: Woodbury Getaway. Live status, roadmap, and source code.">
+<meta property="og:site_name" content="Woodbury Co-op Mod">
+<meta property="og:url" content="https://woodbury-coop.pages.dev/">
+
+<!-- Twitter/X Card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Fears to Fathom: Woodbury Getaway Co-op Mod">
+<meta name="twitter:description" content="Free unofficial co-op multiplayer mod for the Steam horror game. Live status and roadmap.">
+
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="styles.css">
+
+<!-- JSON-LD structured data for search engines -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Fears to Fathom: Woodbury Getaway Co-op Mod",
+  "alternateName": ["Woodbury Co-op", "Woodbury Multiplayer", "F2F Woodbury Coop"],
+  "applicationCategory": "GameApplication",
+  "applicationSubCategory": "Game mod",
+  "operatingSystem": "Windows",
+  "softwareRequirements": "Fears to Fathom: Woodbury Getaway, BepInEx 5 Mono, .NET 4.7.2",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "description": "Unofficial co-op multiplayer mod that lets two players play Fears to Fathom: Woodbury Getaway together. Host runs the real game; the second player joins and the scripted scares happen to both players in sync.",
+  "url": "https://woodbury-coop.pages.dev/",
+  "sameAs": ["https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod"],
+  "author": {"@type": "Person", "name": "tudorek12345"},
+  "license": "https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/LICENSE",
+  "isBasedOn": {
+    "@type": "VideoGame",
+    "name": "Fears to Fathom: Woodbury Getaway",
+    "applicationCategory": "Game",
+    "genre": "Horror",
+    "operatingSystem": "Windows"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- ============================================================ NAV -->
+<header class="topbar">
+  <a class="brand" href="#hero" aria-label="Woodbury Co-op">
+    <span class="brand-mark" aria-hidden="true">F2F</span>
+    <span class="brand-name">Woodbury <span class="brand-accent">Co-op</span></span>
+  </a>
+  <nav class="topnav" aria-label="Primary">
+    <a href="#sync">Status</a>
+    <a href="#systems">Systems</a>
+    <a href="#roadmap">Roadmap</a>
+    <a href="#changes">Updates</a>
+    <a href="#wiki">Game guide</a>
+    <a href="#source">Get the mod</a>
+  </nav>
+  <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
+    <span class="theme-icon" aria-hidden="true"></span>
+  </button>
+</header>
+
+<main>
+
+<!-- ============================================================ HERO -->
+<section id="hero" class="hero">
+  <div class="container">
+    <div class="hero-eyebrow">Unofficial fan co-op mod · Free · Open source</div>
+    <h1 class="hero-title">Play <span class="grad">Fears to Fathom: Woodbury Getaway</span><br>with a friend</h1>
+    <p class="hero-sub" id="hero-subhead">An unofficial co-op multiplayer mod for the Steam horror game — one of you hosts, the other connects, and the scares happen to both of you at the same time.</p>
+
+    <div class="hero-badges" id="hero-badges">
+      <!-- filled by app.js -->
+    </div>
+
+    <div class="hero-cta-row">
+      <div class="progress-ring" role="img" aria-label="Overall mod completion">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-fill" cx="60" cy="60" r="52" id="ring-fill"></circle>
+        </svg>
+        <div class="ring-label">
+          <div class="ring-percent" id="ring-percent">60<span>%</span></div>
+          <div class="ring-caption">built</div>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <div class="cta-row">
+          <a class="btn btn-youtube" id="hero-youtube" href="https://www.youtube.com/@tudorek12345" target="_blank" rel="noopener noreferrer">
+            <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
+            Watch demo on YouTube
+          </a>
+          <a class="btn btn-primary" id="hero-repo" href="#" target="_blank" rel="noopener noreferrer">
+            <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 0a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 0z"/></svg>
+            Get the mod on GitHub
+          </a>
+        </div>
+        <a class="btn btn-ghost" href="#sync">See what works today →</a>
+        <div class="hero-meta" id="hero-meta">
+          <!-- last commit / updated -->
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ SYNC COVERAGE -->
+<section id="sync" class="section">
+  <div class="container">
+    <header class="section-head">
+      <span class="eyebrow">What works today</span>
+      <h2>Status by chapter</h2>
+      <p>Five chapters in the game. The number on each card is how much of that chapter is fully co-op playable right now. Click a card to see what's working and what's still on the to-do list.</p>
+    </header>
+    <div class="scene-grid" id="scene-grid">
+      <!-- rendered by app.js -->
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ SYSTEM MATRIX -->
+<section id="systems" class="section section-alt">
+  <div class="container">
+    <header class="section-head">
+      <span class="eyebrow">Under the hood</span>
+      <h2>Features &amp; systems</h2>
+      <p>The pieces that make co-op work across every chapter — voice, NPCs, doors, dialogue, vehicles, save state. Filter to see what's done, partial, or missing.</p>
+    </header>
+    <div class="filter-chips" id="filter-chips" role="tablist">
+      <button class="chip is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+      <button class="chip" data-filter="done" role="tab" aria-selected="false">Done</button>
+      <button class="chip" data-filter="partial" role="tab" aria-selected="false">Partial</button>
+      <button class="chip" data-filter="missing" role="tab" aria-selected="false">Missing</button>
+    </div>
+    <div class="systems-grid" id="systems-grid">
+      <!-- rendered by app.js -->
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ ROADMAP -->
+<section id="roadmap" class="section">
+  <div class="container">
+    <header class="section-head">
+      <span class="eyebrow">What's next</span>
+      <h2>Roadmap</h2>
+      <p>The big features still coming, the known issues being worked on, and rough release windows. Updated 2026-05-30.</p>
+    </header>
+
+    <h3 class="rm-h">Coming soon</h3>
+    <div class="feature-strip" id="feature-strip"><!-- headline features rendered by app.js --></div>
+
+    <h3 class="rm-h rm-h-mt">Release milestones</h3>
+    <div class="milestone-row" id="milestone-row"><!-- rendered by app.js --></div>
+
+    <details class="roadmap-details">
+      <summary>Show known issues being tracked</summary>
+      <div class="roadmap-grid">
+        <div class="roadmap-col">
+          <h3 class="rm-h">Known issues</h3>
+          <div id="bug-list"><!-- rendered by app.js --></div>
+        </div>
+        <div class="roadmap-col">
+          <h3 class="rm-h">Chapters not fully synced yet</h3>
+          <div id="unsynced-list"><!-- rendered by app.js --></div>
+        </div>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ============================================================ RECENT CHANGES -->
+<section id="changes" class="section section-alt">
+  <div class="container">
+    <header class="section-head">
+      <span class="eyebrow">Live changelog</span>
+      <h2>Recent updates</h2>
+      <p>What's been added in the latest build, organised by chapter. Older versions stay below for the full history.</p>
+    </header>
+    <div class="timeline" id="timeline">
+      <!-- rendered by app.js -->
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ WIKI -->
+<section id="wiki" class="section">
+  <div class="container">
+    <header class="section-head">
+      <span class="eyebrow">Chapter guide</span>
+      <h2>What you'll find in each chapter</h2>
+      <p>Quick overview of the people, places and props in each chapter of Fears to Fathom: Woodbury Getaway — and how much of each one currently works in co-op.</p>
+    </header>
+    <div class="wiki-grid">
+
+      <!-- CABIN -->
+      <article class="wiki-card">
+        <header><h3>Cabin scene</h3><span class="pill pill-done">deep</span></header>
+        <p><b>CabinGameManager</b> drives the scripted sequence (HikerSequence, HostAtDoor, Eating, BoardGame, Ouija…). <b>CabinHouseManager</b> owns the persistent room/door/story booleans. Together they're the source of truth for almost everything in the cabin.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinAmbientSync.cs">CabinAmbientSync.cs</a>, <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinBoardGameSync.cs">CabinBoardGameSync.cs</a></p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>Mike (Cabin variants)</h3><span class="pill pill-done">deep</span></header>
+        <p>Mike is split into stage-specific behaviour scripts: <b>MikeCabin</b>, <b>MikeFishing</b>, <b>MikeCabinCookController</b>, <b>MikePostEating</b>, <b>MikeAfterHiding</b>. Each runs its own NavMesh + dialogue cues; the mod treats them as one logical actor and the host's chosen variant wins.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinNpcRegistry.cs">CabinNpcRegistry.cs</a> via NpcBrainState</p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>Hiker window</h3><span class="pill pill-done">done</span></header>
+        <p><b>CabinHiker</b> and <b>HikerCabinController</b> stage the "hiker at the window" sequence: walk-up, knock, force entry, and the player's host response (<b>HostFixingSink</b>, hide etc.). Most jumpscare-style horror beats hang off these two.</p>
+        <p class="wiki-meta">Sync: hiker state enums + go/moving/reachedPos/followingHost flags; lock window gated on CurrentSequence to prevent client clumping.</p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>Board games — Jenga + Ouija</h3><span class="pill pill-done">done</span></header>
+        <p><b>JengaController</b> tracks pieces, drag/place state, and the dining-table collider mask. <b>OuijaController</b> runs the planchette target / timer / input fields and the audio bed. Both used to drift between peers; now both are host-authoritative with transform correction on the planchette + table.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinBoardGameSync.cs">CabinBoardGameSync.cs</a></p>
+      </article>
+
+      <!-- PIZZERIA -->
+      <article class="wiki-card">
+        <header><h3>Pizzeria scene</h3><span class="pill pill-done">broad</span></header>
+        <p><b>PizzeriaGameManager</b> owns the player mode, conversation timers, pizza/burp gates, phone UI state, and the soda-can seating flow. The scene starts with <b>MikeDrivingInPizzeriaScene</b> handling the cinematic drive-in.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/PizzeriaSceneStateSync.cs">PizzeriaSceneStateSync.cs</a></p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>Mike (Pizzeria)</h3><span class="pill pill-done">done</span></header>
+        <p><b>MikePizzeria</b> handles in-restaurant Mike (table, dialogue, pizza handoff). Joined by <b>PizzeriaHiker</b> and the generic <b>PizzeriaNPC</b> patrons through a registry that mirrors the Cabin recipe.</p>
+        <p class="wiki-meta">Sync: GenericNpcRegistry (Pizzeria) — see <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/SceneSyncRegistries.cs">SceneSyncRegistries.cs</a></p>
+      </article>
+
+      <!-- ROADTRIP -->
+      <article class="wiki-card">
+        <header><h3>RoadTrip scene</h3><span class="pill pill-done">broad</span></header>
+        <p><b>RoadTripGameManager</b> drives the long highway sequence — auto-conversation timing, road-bump events, phone moments, the deer encounter, and the school-bus cinematic. Most of the camera FOV / zoom drama lives here.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/RoadTripSceneStateSync.cs">RoadTripSceneStateSync.cs</a></p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>Mike (RoadTrip)</h3><span class="pill pill-done">done</span></header>
+        <p><b>MikeInCar</b> for passenger-seat Mike. <b>MikeTruckInLoopScene</b>, <b>MikeTruckGoingToNora</b>, and <b>MikeTruckInParking</b> for the truck-mounted variants used through the highway loop + handoffs.</p>
+        <p class="wiki-meta">Sync: PathVehicleState (typed) since wire proto 4.</p>
+      </article>
+
+      <!-- OFFICE -->
+      <article class="wiki-card">
+        <header><h3>Office scene</h3><span class="pill pill-partial">broad</span></header>
+        <p><b>OfficeLayoutGameManager</b> + <b>YellowIntroManager</b> stage the office intro and end-scene yellow text. Subcontrollers cover every desk surface (Table / Computer / Coffee / Phone / TypeMaster / TypingShooter), appliances (radio, fridge, microwave), and restrooms.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/OfficeSceneStateSync.cs">OfficeSceneStateSync.cs</a></p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>OfficeWorkerMonitor</h3><span class="pill pill-done">done</span></header>
+        <p>The cubicle monitor sequence that plays scripted clips behind the worker. Used to pick clips locally on each peer; now the host's clip identity and playback time win, with local monitor brain suppressed.</p>
+        <p class="wiki-meta">Sync key: <code>SceneState.WorkerMonitor.*</code></p>
+      </article>
+
+      <!-- PARKINGLOT -->
+      <article class="wiki-card">
+        <header><h3>ParkingLot scene</h3><span class="pill pill-partial">moderate</span></header>
+        <p><b>ParkingLotGameManager</b> sequences the parking-lot beats — call timing, intro, phone ringing, talk/hug mode, elevator travel. The setting drops you between scripted vehicle and elevator beats.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/ParkingLotSceneStateSync.cs">ParkingLotSceneStateSync.cs</a></p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>WalkingCopController</h3><span class="pill pill-done">done</span></header>
+        <p>Scripted walking-cop NPC who paces the parking lot. Used to run his NavMesh and animator locally on every peer, drifting hard; now host-authored with NavMesh brain suppressed on client.</p>
+        <p class="wiki-meta">Sync key: <code>SceneState.WalkingCop.*</code></p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>ParkingLotElevatorManager</h3><span class="pill pill-done">done</span></header>
+        <p>The freight elevator — travel state, door open/close, audio cues, and the anti-throw zones that prevent items from being thrown out of bounds. Door + tailgate transforms are corrected directly.</p>
+        <p class="wiki-meta">Sync key: <code>SceneState.Elevator.*</code> · <code>SceneState.AntiThrow.*</code></p>
+      </article>
+
+      <article class="wiki-card">
+        <header><h3>VendingMachineManager</h3><span class="pill pill-done">done</span></header>
+        <p>Shared between Office and Pizzeria. Owns the vending dialogue camera, machine triggers, slot/sliding colliders, current soda-can visibility + kinematic state, vending audio, and player-camera FOV during the interaction.</p>
+        <p class="wiki-meta">Sync: <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/VendingMachineSceneSync.cs">VendingMachineSceneSync.cs</a></p>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ GET THE MOD -->
+<section id="source" class="section section-alt">
+  <div class="container">
+    <header class="section-head">
+      <span class="eyebrow">Try it</span>
+      <h2>Get the mod</h2>
+      <p>Free and open source. Requires a copy of <i>Fears to Fathom: Woodbury Getaway</i> on Steam plus the BepInEx 5 (Mono) mod loader. The README on GitHub walks through install in a couple of minutes.</p>
+    </header>
+
+    <div class="get-wrap">
+      <a class="get-card get-card-yt" href="https://www.youtube.com/@tudorek12345" target="_blank" rel="noopener noreferrer">
+        <div class="get-card-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
+        </div>
+        <div class="get-card-body">
+          <h3>Watch on YouTube</h3>
+          <p>Gameplay clips and demo runs from the mod's developer.</p>
+          <span class="get-card-cta">youtube.com/@tudorek12345 →</span>
+        </div>
+      </a>
+
+      <a class="get-card get-card-gh" id="get-card-gh" href="#" target="_blank" rel="noopener noreferrer">
+        <div class="get-card-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 0a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 0z"/></svg>
+        </div>
+        <div class="get-card-body">
+          <h3>Source on GitHub</h3>
+          <p>Install instructions, latest release, full code. Open an issue if something doesn't work.</p>
+          <span class="get-card-cta">tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod →</span>
+        </div>
+      </a>
+    </div>
+
+    <div class="gh-secondary">
+      <nav class="gh-links" aria-label="Repository views">
+        <a class="gh-link" id="gh-link-readme"    target="_blank" rel="noopener noreferrer">Install guide (README)</a>
+        <a class="gh-link" id="gh-link-releases"  target="_blank" rel="noopener noreferrer">Latest release</a>
+        <a class="gh-link" id="gh-link-issues"    target="_blank" rel="noopener noreferrer">Report an issue</a>
+        <a class="gh-link" id="gh-link-changelog" target="_blank" rel="noopener noreferrer">Full changelog</a>
+        <a class="gh-link" id="gh-link-commits"   target="_blank" rel="noopener noreferrer">All commits</a>
+      </nav>
+      <div class="commit-block">
+        <h4>Latest commits</h4>
+        <ul class="commit-list" id="commit-list"><!-- rendered by app.js --></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <p><b>Woodbury Co-op</b> is a free, unofficial fan project. Not affiliated with the developer or publisher of <i>Fears to Fathom: Woodbury Getaway</i>.</p>
+    <p class="footer-meta">Built with care by <a href="https://github.com/tudorek12345" target="_blank" rel="noopener noreferrer">tudorek12345</a> · <a href="https://www.youtube.com/@tudorek12345" target="_blank" rel="noopener noreferrer">YouTube</a> · <a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod" target="_blank" rel="noopener noreferrer">GitHub</a></p>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
