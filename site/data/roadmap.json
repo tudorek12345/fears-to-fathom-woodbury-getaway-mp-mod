@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "4853eb0",
+      "subject": "site: add robots.txt, sitemap.xml, and opt-in privacy analytics"
+    },
+    {
+      "sha": "9b56ea6",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "6d24268",
       "subject": "site: add star/follow call-to-action band for measuring interest"
     },
@@ -247,14 +255,6 @@
     {
       "sha": "1d1089e",
       "subject": "scene expansion, html roadmap integration, solving"
-    },
-    {
-      "sha": "0c5309b",
-      "subject": "commit, html roadmap work, scene extensions experimental"
-    },
-    {
-      "sha": "6aa4334",
-      "subject": "60% done"
     }
   ],
   "popularityProjection": {
