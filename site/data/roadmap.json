@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "6d24268",
+      "subject": "site: add star/follow call-to-action band for measuring interest"
+    },
+    {
+      "sha": "3426848",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "7c9e547",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -247,14 +255,6 @@
     {
       "sha": "6aa4334",
       "subject": "60% done"
-    },
-    {
-      "sha": "61eec6f",
-      "subject": "changes"
-    },
-    {
-      "sha": "8e35770",
-      "subject": "changes"
     }
   ],
   "popularityProjection": {
