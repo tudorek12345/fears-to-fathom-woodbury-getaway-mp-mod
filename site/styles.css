@@ -781,6 +781,34 @@ pre code { background: transparent; padding: 0; }
 }
 .btn-youtube:hover { background: #d40029; color: #fff; text-decoration: none; }
 
+/* Discord — conservative: dark on-brand pill, blurple edge that wakes on hover */
+.btn-discord {
+  background: rgba(88, 101, 242, 0.10);
+  color: var(--fg);
+  border-color: rgba(88, 101, 242, 0.55);
+  position: relative;
+  overflow: hidden;
+}
+.btn-discord .btn-ic { color: #8b95f8; transition: color 0.2s; }
+.btn-discord:hover {
+  color: #fff;
+  background: #5865f2;
+  border-color: #5865f2;
+  box-shadow: 0 6px 22px rgba(88, 101, 242, 0.4);
+  text-decoration: none;
+}
+.btn-discord:hover .btn-ic { color: #fff; }
+/* slow sheen sweep — modern, subtle, not bouncy */
+.btn-discord::after {
+  content: "";
+  position: absolute;
+  top: 0; left: -60%;
+  width: 40%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(139,149,248,0.35), transparent);
+  transform: skewX(-18deg);
+  animation: dc-sheen 5.5s ease-in-out infinite;
+}
+
 /* ----------------------------------------------------------- HEADLINE FEATURES */
 .feature-strip {
   display: grid;
@@ -873,6 +901,17 @@ pre code { background: transparent; padding: 0; }
 .get-card-yt { background: linear-gradient(135deg, rgba(255,0,51,0.08), var(--bg-card) 60%); }
 .get-card-yt .get-card-icon { color: #ff0033; background: rgba(255,0,51,0.12); }
 .get-card-gh .get-card-icon { color: var(--fg); background: var(--bg-alt); }
+.get-card-dc { background: linear-gradient(135deg, rgba(88,101,242,0.10), var(--bg-card) 60%); }
+.get-card-dc .get-card-icon { color: #8b95f8; background: rgba(88,101,242,0.14); }
+.get-card-dc:hover { border-color: #5865f2; }
+.get-card-dc:hover .get-card-icon { color: #fff; background: #5865f2; }
+.get-card-dc .get-card-cta { color: #8b95f8; }
+
+@keyframes dc-sheen {
+  0%, 70%, 100% { left: -60%; }
+  85% { left: 130%; }
+}
+body.fx-off .btn-discord::after { display: none; }
 .get-card-icon {
   width: 56px;
   height: 56px;
@@ -1487,6 +1526,7 @@ body.fx-off * { animation: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .fx-grain, .fx-tracking, .snow, .rec-badge .rec-dot,
   .wordmark-title { animation: none !important; }
+  .btn-discord::after { animation: none !important; display: none; }
 }
 
 /* ---- WOODBURY wordmark (nav brand) ---- */
