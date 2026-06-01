@@ -1,0 +1,67 @@
+================================================================
+  Woodbury Co-op  —  Install Guide
+  Free, unofficial 2-player co-op multiplayer mod for
+  Fears to Fathom: Woodbury Getaway
+================================================================
+
+  Live status & roadmap:
+    https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/
+  Source, releases & issues:
+    https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod
+  Discord (help & co-op partner finding):
+    https://discord.gg/tyEhwgSxzV
+
+----------------------------------------------------------------
+REQUIREMENTS
+----------------------------------------------------------------
+  - Fears to Fathom: Woodbury Getaway on Steam
+    (each player needs their OWN copy)
+  - Windows PC
+  - BepInEx 5 — Mono / x64 build (the mod loader, free)
+  - To play over the internet: the host needs port 27055 (TCP) and
+    27056 (UDP) reachable — via port-forwarding OR a virtual-LAN tool
+    like ZeroTier / Radmin VPN / Hamachi. Same-network play needs nothing.
+
+----------------------------------------------------------------
+STEP 1 — Install BepInEx 5 (Mono)   [one time]
+----------------------------------------------------------------
+  1. Download "BepInEx 5 (x64, Mono)" from:
+       https://github.com/BepInEx/BepInEx/releases
+  2. Extract it into your game folder — the folder that contains
+     "Fears to Fathom - Woodbury Getaway.exe".
+  3. Launch the game once, then quit. This creates BepInEx\plugins\.
+
+----------------------------------------------------------------
+STEP 2 — Install the Co-op mod
+----------------------------------------------------------------
+  1. Copy  WoodburySpectatorSync.dll  from this download into:
+        <GameFolder>\BepInEx\plugins\
+  2. (Optional) If an "avatars" folder is included, copy it to:
+        <GameFolder>\BepInEx\plugins\WoodburySpectatorSync\avatars\
+
+----------------------------------------------------------------
+STEP 3 — Play together
+----------------------------------------------------------------
+  1. Both players launch the game normally from Steam.
+  2. At the main menu, press  F11  to open the co-op panel.
+  3. HOST  -> choose Host. Share your IP with your friend.
+     CLIENT -> choose Join, type the host's IP, press Connect.
+  4. The host plays the real game; the second player joins and the
+     same scares / story beats happen to both of you in sync.
+
+  Hotkeys:
+     F11  - co-op setup panel (host / join)
+     F8   - toggle the connection overlay
+
+----------------------------------------------------------------
+GOOD TO KNOW
+----------------------------------------------------------------
+  - Work in progress: ~60% of a full playthrough is co-op playable.
+    Cabin is the most complete; Pizzeria, RoadTrip, Office and
+    ParkingLot have growing coverage. Expect some bugs.
+  - Start a chapter from the same point for the smoothest experience.
+  - This is an unofficial fan project. Not affiliated with the
+    developer or publisher of Fears to Fathom: Woodbury Getaway.
+
+  Found a bug? Open an issue on GitHub or hop in the Discord above.
+================================================================
