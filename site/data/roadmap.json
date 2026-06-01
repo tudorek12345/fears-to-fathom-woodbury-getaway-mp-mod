@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "d7faff0",
+      "subject": "Add INSTALL.txt for ModDB / Nexus download packaging"
+    },
+    {
+      "sha": "df83c51",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "a807bf3",
       "subject": "site: fix canonical/OG URLs + add co-op/multiplayer FAQ for search"
     },
@@ -246,14 +254,6 @@
     },
     {
       "sha": "f592965",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "08c1652",
-      "subject": "site: visible deduped visitor counter in top nav + graceful screenshots gallery"
-    },
-    {
-      "sha": "78f4222",
       "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ],
