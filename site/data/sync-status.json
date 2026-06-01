@@ -4,7 +4,7 @@
     "protocol": 4,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
-    "lastCommit": "59b43b6 \"site: add Google Search Console verification file\"",
+    "lastCommit": "a807bf3 \"site: fix canonical/OG URLs + add co-op/multiplayer FAQ for search\"",
     "lastUpdated": "2026-06-01",
     "overallPercent": 60,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",

@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "a807bf3",
+      "subject": "site: fix canonical/OG URLs + add co-op/multiplayer FAQ for search"
+    },
+    {
+      "sha": "36caae9",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "59b43b6",
       "subject": "site: add Google Search Console verification file"
     },
@@ -246,14 +254,6 @@
     },
     {
       "sha": "78f4222",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "4853eb0",
-      "subject": "site: add robots.txt, sitemap.xml, and opt-in privacy analytics"
-    },
-    {
-      "sha": "9b56ea6",
       "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ],
