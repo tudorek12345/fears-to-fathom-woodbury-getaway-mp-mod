@@ -225,6 +225,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "4091b90",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "d7faff0",
       "subject": "Add INSTALL.txt for ModDB / Nexus download packaging"
     },
@@ -251,10 +255,6 @@
     {
       "sha": "a85b518",
       "subject": "site: fix YouTube links to youtube.com/heperkoo"
-    },
-    {
-      "sha": "f592965",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ],
   "popularityProjection": {

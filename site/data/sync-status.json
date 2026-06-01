@@ -4,7 +4,7 @@
     "protocol": 4,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
-    "lastCommit": "d7faff0 \"Add INSTALL.txt for ModDB / Nexus download packaging\"",
+    "lastCommit": "4091b90 \"site: auto-refresh data + badge [skip ci]\"",
     "lastUpdated": "2026-06-01",
     "overallPercent": 60,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",
