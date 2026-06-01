@@ -1263,6 +1263,31 @@ pre code { background: transparent; padding: 0; }
 .gh-privacy li { margin-bottom: 6px; }
 .gh-privacy code { font-size: 11px; }
 
+/* ----------------------------------------------------------- FAQ */
+.faq-list { display: grid; gap: 12px; max-width: 860px; }
+.faq-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 4px;
+}
+.faq-item summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after { content: "+"; font-size: 20px; color: var(--accent); transition: transform 0.2s; }
+.faq-item[open] summary::after { transform: rotate(45deg); }
+.faq-item p { margin: 0; padding: 0 18px 16px; font-size: 14.5px; color: var(--fg-soft); }
+
 /* ----------------------------------------------------------- FOOTER */
 .footer {
   padding: 36px 0 52px;
