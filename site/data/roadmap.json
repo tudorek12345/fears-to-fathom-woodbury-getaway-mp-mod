@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "eacf877",
+      "subject": "site: bigger labeled visitor counter, More-projects section, copyright/ownership notice"
+    },
+    {
+      "sha": "c799750",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "5de8822",
       "subject": "site: add Discord (hero button, Get-the-mod card, footer) with conservative sheen anima..."
     },
@@ -247,14 +255,6 @@
     {
       "sha": "4072156",
       "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "4091b90",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "d7faff0",
-      "subject": "Add INSTALL.txt for ModDB / Nexus download packaging"
     }
   ],
   "popularityProjection": {
