@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "92d489e",
+      "subject": "site: remove \"free\" framing from all visitor-facing copy + structured data"
+    },
+    {
+      "sha": "4072156",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "4091b90",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -247,14 +255,6 @@
     {
       "sha": "59b43b6",
       "subject": "site: add Google Search Console verification file"
-    },
-    {
-      "sha": "32cf365",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "a85b518",
-      "subject": "site: fix YouTube links to youtube.com/heperkoo"
     }
   ],
   "popularityProjection": {

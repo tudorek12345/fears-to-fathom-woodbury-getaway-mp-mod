@@ -4,7 +4,7 @@
     "protocol": 4,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
-    "lastCommit": "4091b90 \"site: auto-refresh data + badge [skip ci]\"",
+    "lastCommit": "92d489e \"site: remove \"free\" framing from all visitor-facing copy + structured data\"",
     "lastUpdated": "2026-06-01",
     "overallPercent": 60,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",
