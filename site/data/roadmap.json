@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-05-31",
+    "compiled": "2026-06-01",
     "source": "Read-only audit + decompiled cross-check + session analysis"
   },
   "headlineFeatures": [
@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "a85b518",
+      "subject": "site: fix YouTube links to youtube.com/heperkoo"
+    },
+    {
+      "sha": "f592965",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "08c1652",
       "subject": "site: visible deduped visitor counter in top nav + graceful screenshots gallery"
     },
@@ -247,14 +255,6 @@
     {
       "sha": "3426848",
       "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "7c9e547",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "a356981",
-      "subject": "Add co-op status site + GitHub Pages auto-deploy"
     }
   ],
   "popularityProjection": {
