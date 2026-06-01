@@ -9,59 +9,60 @@
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", "Consolas", "Roboto Mono", monospace;
 
-  /* dark (default) */
-  --bg: #0b1220;
-  --bg-elev: #131c30;
-  --bg-card: #182338;
-  --bg-alt: #0e1626;
-  --bg-code: #0a1122;
-  --border: #233151;
-  --border-soft: #1c2741;
-  --fg: #e6edf7;
-  --fg-soft: #9aa7c2;
-  --fg-mute: #6c7a96;
-  --accent: #6ea7ff;
-  --accent-2: #90cdf4;
-  --accent-3: #b794f4;
-  --grad-1: #6ea7ff;
-  --grad-2: #b794f4;
-  --done: #43a047;
-  --done-bg: rgba(67, 160, 71, 0.16);
-  --partial: #fb8c00;
-  --partial-bg: rgba(251, 140, 0, 0.16);
-  --missing: #ef5350;
-  --missing-bg: rgba(239, 83, 80, 0.16);
-  --neutral: #78909c;
-  --neutral-bg: rgba(120, 144, 156, 0.16);
-  --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  --radius: 14px;
-  --radius-sm: 10px;
+  /* dark (default) — Woodbury cold snow-night / found-footage VHS */
+  --bg: #06090f;
+  --bg-elev: #0a0f18;
+  --bg-card: #0c121d;
+  --bg-alt: #080c14;
+  --bg-code: #04070d;
+  --border: #1d2839;
+  --border-soft: #141d2b;
+  --fg: #eef4fc;
+  --fg-soft: #b6c2d6;
+  --fg-mute: #788aa3;
+  --accent: #ff2b3d;          /* blood red — primary */
+  --accent-2: #9fc7e8;        /* icy blue — secondary */
+  --accent-3: #ff2b3d;
+  --grad-1: #ff3b46;
+  --grad-2: #7a0f18;
+  --done: #46c06a;
+  --done-bg: rgba(70, 192, 106, 0.15);
+  --partial: #ffb02e;
+  --partial-bg: rgba(255, 176, 46, 0.15);
+  --missing: #ff5a5a;
+  --missing-bg: rgba(255, 90, 90, 0.15);
+  --neutral: #7a8aa3;
+  --neutral-bg: rgba(122, 138, 163, 0.15);
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.6);
+  --radius: 5px;
+  --radius-sm: 3px;
 }
 
 :root[data-theme="light"] {
-  --bg: #f5f7fa;
+  /* light = high-contrast clean reading mode */
+  --bg: #f4f6f9;
   --bg-elev: #ffffff;
   --bg-card: #ffffff;
-  --bg-alt: #eef2f7;
+  --bg-alt: #eceff4;
   --bg-code: #eceff1;
-  --border: #d6deea;
-  --border-soft: #e6ecf3;
-  --fg: #1a2233;
-  --fg-soft: #475066;
-  --fg-mute: #7787a0;
-  --accent: #1e88e5;
-  --accent-2: #0d47a1;
-  --accent-3: #6a1b9a;
-  --grad-1: #1e3a5f;
-  --grad-2: #2c5282;
-  --done: #2e7d32;
-  --done-bg: rgba(46, 125, 50, 0.12);
-  --partial: #ed6c02;
-  --partial-bg: rgba(237, 108, 2, 0.12);
-  --missing: #c62828;
-  --missing-bg: rgba(198, 40, 40, 0.12);
-  --neutral: #607d8b;
-  --neutral-bg: rgba(96, 125, 139, 0.12);
+  --border: #cfd8e6;
+  --border-soft: #e3e9f1;
+  --fg: #11161f;
+  --fg-soft: #3c4658;
+  --fg-mute: #6a7689;
+  --accent: #c81020;
+  --accent-2: #1d5e8c;
+  --accent-3: #c81020;
+  --grad-1: #c81020;
+  --grad-2: #7a0f18;
+  --done: #1f7a36;
+  --done-bg: rgba(31, 122, 54, 0.12);
+  --partial: #b56a00;
+  --partial-bg: rgba(181, 106, 0, 0.12);
+  --missing: #c0202a;
+  --missing-bg: rgba(192, 32, 42, 0.12);
+  --neutral: #5a6677;
+  --neutral-bg: rgba(90, 102, 119, 0.12);
   --shadow: 0 4px 14px rgba(20, 30, 50, 0.08);
 }
 
@@ -1328,4 +1329,254 @@ pre code { background: transparent; padding: 0; }
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* =============================================================
+   WOODBURY — found-footage VHS treatment
+   All effects are decorative, pointer-events:none, and are
+   removed by body.fx-off and by prefers-reduced-motion.
+   Body text stays high-contrast and is never blurred.
+   ============================================================= */
+
+/* Cold atmospheric base wash behind everything */
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(120% 80% at 50% -10%, #0d1726 0%, transparent 55%),
+    radial-gradient(90% 60% at 50% 110%, #120810 0%, transparent 55%),
+    var(--bg);
+}
+
+/* ---- fixed full-screen effect stack ---- */
+.fx, .snow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;            /* above content, below nothing interactive */
+}
+.fx-scanlines, .fx-grain, .fx-vignette, .fx-tracking {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.fx-scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0px,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,0.16) 3px,
+    rgba(0,0,0,0) 4px
+  );
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+}
+.fx-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  animation: grain-jitter 0.6s steps(2) infinite;
+}
+.fx-vignette {
+  background: radial-gradient(110% 90% at 50% 45%, transparent 55%, rgba(0,0,0,0.55) 100%);
+}
+.fx-tracking {
+  background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(159,199,232,0.10) 45%, rgba(255,255,255,0.18) 50%, rgba(159,199,232,0.10) 55%, rgba(255,255,255,0) 100%);
+  height: 14%;
+  opacity: 0;
+  animation: tracking-sweep 9s linear infinite;
+}
+:root[data-theme="light"] .fx-scanlines { opacity: 0.18; }
+:root[data-theme="light"] .fx-vignette { display: none; }
+
+/* ---- snow (cold winter cabin) ---- */
+.snow {
+  z-index: 55;
+  background-image:
+    radial-gradient(1.4px 1.4px at 20% 30%, rgba(255,255,255,0.8), transparent),
+    radial-gradient(1.2px 1.2px at 70% 60%, rgba(255,255,255,0.7), transparent),
+    radial-gradient(1.6px 1.6px at 40% 80%, rgba(255,255,255,0.65), transparent),
+    radial-gradient(1.1px 1.1px at 85% 15%, rgba(255,255,255,0.7), transparent),
+    radial-gradient(1.3px 1.3px at 55% 45%, rgba(255,255,255,0.6), transparent);
+  background-size: 600px 600px, 500px 500px, 700px 700px, 450px 450px, 550px 550px;
+  animation: snowfall 14s linear infinite;
+  opacity: 0.55;
+}
+:root[data-theme="light"] .snow { opacity: 0.25; }
+
+/* ---- REC / tape badge (found-footage) ---- */
+.rec-badge {
+  position: fixed;
+  left: 16px;
+  bottom: 14px;
+  z-index: 61;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--fg);
+  text-shadow: 0 1px 3px #000;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.rec-badge .rec-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: rec-blink 1.2s steps(1) infinite;
+}
+
+/* ---- RGB chromatic split — DISPLAY TEXT ONLY (never body copy) ---- */
+.wordmark-title,
+.hero-title {
+  text-shadow:
+    0.022em 0 0 rgba(255, 43, 61, 0.65),
+    -0.022em 0 0 rgba(159, 199, 232, 0.55);
+}
+
+/* ---- keyframes ---- */
+@keyframes grain-jitter {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(-6px, 4px); }
+}
+@keyframes tracking-sweep {
+  0%, 78%   { transform: translateY(-20vh); opacity: 0; }
+  82%       { opacity: 1; }
+  100%      { transform: translateY(120vh); opacity: 0; }
+}
+@keyframes snowfall {
+  0%   { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+  100% { background-position: 0 600px, 0 500px, 0 700px, 0 450px, 0 550px; }
+}
+@keyframes rec-blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0.15; } }
+@keyframes wordmark-flicker {
+  0%, 96%, 100% { opacity: 1; }
+  97%  { opacity: 0.6; }
+  98%  { opacity: 0.92; }
+  99%  { opacity: 0.45; }
+}
+
+/* ---- filmic card / chrome accents ---- */
+.scene-card, .wiki-card, .feature-card, .system-row,
+.bug-card, .unsynced-card, .dist-card, .get-card, .gh-card, .gh-secondary,
+.tabs, .faq-item, .tl-entry, .gh-commits, .roadmap-details {
+  border-top: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+}
+.eyebrow, .scene-card-status, .gh-commits-h, .commit-block h4,
+.feature-status, .milestone-id, .rm-h, .dist-effort {
+  font-family: var(--font-mono);
+}
+.topbar { border-bottom-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+
+/* ---- READABILITY: bump base size, kill split on small text ---- */
+body { font-size: 16.5px; }
+.section-head p, .scene-card-summary, .wiki-card p, .bug-detail,
+.system-row-note, .feature-card p, .faq-item p { font-size: 15px; }
+
+/* =============================================================
+   FX OFF  +  reduced motion  — calm, maximally readable
+   ============================================================= */
+body.fx-off .fx,
+body.fx-off .snow,
+body.fx-off .rec-badge { display: none !important; }
+body.fx-off .wordmark-title,
+body.fx-off .hero-title { text-shadow: none !important; }
+body.fx-off * { animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-grain, .fx-tracking, .snow, .rec-badge .rec-dot,
+  .wordmark-title { animation: none !important; }
+}
+
+/* ---- WOODBURY wordmark (nav brand) ---- */
+.brand { gap: 11px; }
+.wordmark { display: inline-flex; flex-direction: column; line-height: 1; }
+.wordmark-kicker {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.wordmark-title {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--fg);
+  animation: wordmark-flicker 6s steps(1) infinite;
+}
+.wordmark-title .co { color: var(--accent); }
+.brand-tape {
+  display: inline-grid;
+  place-items: center;
+  width: 30px; height: 22px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 10px rgba(255,43,61,0.35) inset;
+  flex-shrink: 0;
+}
+
+/* ---- hero art (original SVG cabin/snow scene) ---- */
+.hero { isolation: isolate; }
+.hero-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  object-fit: cover;
+  opacity: 0.9;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+}
+:root[data-theme="light"] .hero-art { opacity: 0.5; }
+.hero::before {
+  /* extra cold glow over the art */
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(60% 50% at 22% 18%, rgba(255,43,61,0.10), transparent 60%);
+  pointer-events: none;
+}
+
+/* sharper, more utilitarian hero title */
+.hero-title { letter-spacing: -0.5px; }
+.hero-eyebrow { font-family: var(--font-mono); letter-spacing: 2px; }
+
+/* FX toggle button mirrors the theme toggle */
+.fx-toggle {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.fx-toggle:hover { border-color: var(--accent); color: var(--accent); }
+body.fx-off .fx-toggle { color: var(--fg-mute); }
+
+@media (max-width: 720px) {
+  .wordmark-kicker { display: none; }
+  .wordmark-title { font-size: 16px; }
+  .rec-badge { font-size: 10px; }
+}
+@media (max-width: 520px) {
+  .brand-tape { display: none; }
 }

@@ -18,6 +18,26 @@
     localStorage.setItem("wbc-theme", next);
   });
 
+  // ---------- 0a. FX / reading-mode toggle (persists) -----------
+  const fxBtn = document.getElementById("fx-toggle");
+  if (localStorage.getItem("wbc-fx") === "off") document.body.classList.add("fx-off");
+  fxBtn?.addEventListener("click", () => {
+    const off = document.body.classList.toggle("fx-off");
+    localStorage.setItem("wbc-fx", off ? "off" : "on");
+  });
+
+  // ---------- 0a. REC found-footage timestamp ticker ------------
+  (function recTicker() {
+    var el = document.getElementById("rec-time");
+    if (!el || document.body.classList.contains("fx-off")) return;
+    var s = Math.floor(Math.random() * 5400); // start somewhere into the "tape"
+    function pad(n) { return String(n).padStart(2, "0"); }
+    setInterval(function () {
+      s++;
+      el.textContent = pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60);
+    }, 1000);
+  })();
+
   // ---------- 0b. Visitor counter + gallery (run independently) ----
   initVisitorCounter();
   initGallery();

@@ -83,11 +83,24 @@
 </head>
 <body>
 
+<!-- ============================================================ VHS EFFECT LAYERS (decorative) -->
+<div class="fx" aria-hidden="true">
+  <div class="fx-grain"></div>
+  <div class="fx-scanlines"></div>
+  <div class="fx-tracking"></div>
+  <div class="fx-vignette"></div>
+</div>
+<div class="snow" aria-hidden="true"></div>
+<div class="rec-badge" aria-hidden="true"><span class="rec-dot"></span>REC <span id="rec-time">00:00:00</span></div>
+
 <!-- ============================================================ NAV -->
 <header class="topbar">
   <a class="brand" href="#hero" aria-label="Woodbury Co-op">
-    <span class="brand-mark" aria-hidden="true">F2F</span>
-    <span class="brand-name">Woodbury <span class="brand-accent">Co-op</span></span>
+    <span class="brand-tape" aria-hidden="true">VHS</span>
+    <span class="wordmark">
+      <span class="wordmark-kicker" aria-hidden="true">Fears to Fathom</span>
+      <span class="wordmark-title">Woodbury <span class="co">Co-op</span></span>
+    </span>
   </a>
   <nav class="topnav" aria-label="Primary">
     <a href="#sync">Status</a>
@@ -103,6 +116,7 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
     <strong id="visit-count">…</strong>
   </span>
+  <button class="fx-toggle" id="fx-toggle" type="button" aria-label="Toggle visual effects (reading mode)" title="Toggle VHS effects / reading mode">FX</button>
   <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
     <span class="theme-icon" aria-hidden="true"></span>
   </button>
@@ -112,6 +126,50 @@
 
 <!-- ============================================================ HERO -->
 <section id="hero" class="hero">
+  <svg class="hero-art" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0a1322"/>
+        <stop offset="0.6" stop-color="#0b1320"/>
+        <stop offset="1" stop-color="#10131c"/>
+      </linearGradient>
+      <radialGradient id="moonGlow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#cfe0f2" stop-opacity="0.5"/>
+        <stop offset="1" stop-color="#cfe0f2" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="winGlow" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#ff2b3d" stop-opacity="0.8"/>
+        <stop offset="1" stop-color="#ff2b3d" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="1200" height="600" fill="url(#sky)"/>
+    <circle cx="930" cy="130" r="150" fill="url(#moonGlow)"/>
+    <circle cx="930" cy="130" r="46" fill="#dfe9f4"/>
+    <circle cx="912" cy="118" r="46" fill="#0b1320" opacity="0.35"/>
+    <!-- distant ridge -->
+    <path d="M0 360 L180 320 L360 350 L560 315 L760 350 L980 320 L1200 345 L1200 600 L0 600 Z" fill="#0c1422"/>
+    <!-- pine tree line -->
+    <g fill="#070d17">
+      <path d="M120 380 l34 70 l-68 0 Z M120 350 l30 55 l-60 0 Z"/>
+      <path d="M250 400 l40 84 l-80 0 Z M250 366 l34 64 l-68 0 Z"/>
+      <path d="M1050 392 l38 80 l-76 0 Z M1050 360 l32 60 l-64 0 Z"/>
+      <path d="M1140 410 l42 88 l-84 0 Z M1140 374 l36 68 l-72 0 Z"/>
+    </g>
+    <!-- cabin -->
+    <g>
+      <path d="M520 430 L640 360 L760 430 Z" fill="#0a0f18"/>
+      <rect x="548" y="430" width="184" height="120" fill="#0b1119"/>
+      <rect x="560" y="430" width="160" height="6" fill="#05080e"/>
+      <!-- lit window -->
+      <circle cx="640" cy="486" r="70" fill="url(#winGlow)"/>
+      <rect x="612" y="462" width="56" height="48" fill="#ff2b3d" opacity="0.92"/>
+      <rect x="638" y="462" width="4" height="48" fill="#0b1119"/>
+      <rect x="612" y="484" width="56" height="4" fill="#0b1119"/>
+    </g>
+    <!-- snow ground -->
+    <path d="M0 540 Q300 515 600 535 T1200 530 L1200 600 L0 600 Z" fill="#141c28"/>
+    <path d="M0 565 Q300 548 600 562 T1200 558 L1200 600 L0 600 Z" fill="#1b2735"/>
+  </svg>
   <div class="container">
     <div class="hero-eyebrow">Unofficial fan co-op mod · Open source</div>
     <h1 class="hero-title">Play <span class="grad">Fears to Fathom: Woodbury Getaway</span><br>with a friend</h1>
