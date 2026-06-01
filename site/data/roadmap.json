@@ -225,6 +225,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "4fb13b1",
+      "subject": "site: distinctive Woodbury found-footage VHS re-skin"
+    },
+    {
+      "sha": "fd1c421",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "92d489e",
       "subject": "site: remove \"free\" framing from all visitor-facing copy + structured data"
     },
@@ -247,14 +255,6 @@
     {
       "sha": "a807bf3",
       "subject": "site: fix canonical/OG URLs + add co-op/multiplayer FAQ for search"
-    },
-    {
-      "sha": "36caae9",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "59b43b6",
-      "subject": "site: add Google Search Console verification file"
     }
   ],
   "popularityProjection": {
