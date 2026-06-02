@@ -845,6 +845,45 @@ pre code { background: transparent; padding: 0; }
   animation: dc-sheen 5.5s ease-in-out infinite;
 }
 
+/* ----------------------------------------------------------- SUPPORT / EARLY ACCESS */
+.support-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.support-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px;
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 16px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: transform 0.12s, box-shadow 0.15s, background 0.15s, border-color 0.15s;
+}
+.support-btn svg { width: 20px; height: 20px; }
+.support-btn:hover { text-decoration: none; transform: translateY(-2px); }
+.support-patreon {
+  background: #ff424d;
+  color: #fff;
+}
+.support-patreon:hover { background: #e23842; color: #fff; box-shadow: 0 8px 24px rgba(255, 66, 77, 0.4); }
+.support-tip {
+  background: transparent;
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+.support-tip svg { color: var(--accent); }
+.support-tip:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 6px 20px rgba(255, 43, 61, 0.25); }
+.support-note {
+  margin: 18px 0 0;
+  font-size: 13.5px;
+  color: var(--fg-mute);
+  max-width: 640px;
+}
+
 /* ----------------------------------------------------------- HEADLINE FEATURES */
 .feature-strip {
   display: grid;

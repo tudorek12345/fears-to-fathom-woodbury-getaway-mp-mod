@@ -278,7 +278,7 @@
     unr.innerHTML = `
       <summary>
         <div class="tl-head">
-          <h3>Unreleased</h3>
+          <h3>${escapeHtml(changelog.unreleased.label || "Latest")}</h3>
           <span class="tl-meta">${escapeHtml(changelog.unreleased.rangeNote || "")}</span>
         </div>
       </summary>
@@ -321,7 +321,6 @@
           <p>${escapeHtml(f.summary)}</p>
           <div class="feature-meta">
             ${f.scenes && f.scenes.length ? `<span>${escapeHtml(f.scenes.join(" · "))}</span>` : ""}
-            ${f.effort ? `<span>~${escapeHtml(f.effort)}</span>` : ""}
           </div>
         </article>`
         )
@@ -361,9 +360,8 @@
         <article class="unsynced-card">
           <header class="unsynced-head">
             <h4>${escapeHtml(s.name)}</h4>
-            <span class="unsynced-effort">${escapeHtml(s.effort)}</span>
           </header>
-          <p class="bug-detail"><b>${escapeHtml(s.status)}</b> — ${escapeHtml(s.impact)}</p>
+          <p class="bug-detail">${escapeHtml(s.impact)}</p>
         </article>`
         )
         .join("");
@@ -379,10 +377,6 @@
           <div class="milestone-id">v${escapeHtml(m.id)}</div>
           <h4>${escapeHtml(m.title)}</h4>
           <p class="milestone-sub">${escapeHtml(m.subtitle)}</p>
-          <div class="milestone-eta">
-            <span>~${escapeHtml(m.etaWeeksFocused)} wks focused</span>
-            <span>~${escapeHtml(m.etaWeeksCalendar)} wks calendar</span>
-          </div>
           <ul>${m.items.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>
         </div>`
         )

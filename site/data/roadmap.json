@@ -1,287 +1,84 @@
 {
   "meta": {
-    "compiled": "2026-06-01",
-    "source": "Read-only audit + decompiled cross-check + session analysis"
+    "compiled": "2026-06-02",
+    "source": "Live project status"
   },
   "headlineFeatures": [
     {
       "title": "Passenger seat — ride together in vehicles",
-      "summary": "Both players inside the same truck or car during scripted drives instead of one driver and one teleported follower. Applies to the RoadTrip highway loop, the Pizzeria opening drive-in, and the Cabin DrivingToCabin intro.",
-      "scenes": [
-        "RoadTrip",
-        "Pizzeria",
-        "Cabin"
-      ],
-      "status": "planned for v0.7.0",
-      "effort": "2–3 days per scene"
+      "summary": "Both players sitting in the same truck or car during the driving parts, instead of one driving and one teleported along. Road Trip, the Pizzeria drive-in, and the Cabin intro drive.",
+      "scenes": ["Road Trip", "Pizzeria", "Cabin"],
+      "status": "Next up"
     },
     {
       "title": "Mid-game save & resume",
-      "summary": "Today: both players have to start a chapter from the same point. After this lands, the host can save and the client picks up the same story state on next session.",
-      "scenes": [
-        "all"
-      ],
-      "status": "planned for v1.0",
-      "effort": "1–2 weeks"
+      "summary": "Save together and pick up later from the same point, instead of both starting a chapter from the start.",
+      "scenes": ["All chapters"],
+      "status": "Planned"
     },
     {
-      "title": "Synced death and end-of-game",
-      "summary": "If one of you dies or finishes the credits sequence, the other follows automatically instead of getting stranded in-scene.",
-      "scenes": [
-        "all"
-      ],
-      "status": "planned for v0.6.0",
-      "effort": "1–2 days"
-    }
-  ],
-  "bugs": [
-    {
-      "id": "cabin-dark-scene-typo",
-      "severity": "high",
-      "title": "CabinDarkScene typo — 5 sites match a name that doesn't exist",
-      "detail": "The real game scene is CabinSceneDark (CabinGameManager.cs:15, :2897). The mod references \"CabinDarkScene\" (letters swapped) in 5 places. CoopClientCoordinator.cs:1294 has no fallback to the real name, so the client never preps cabin start prefs when entering the dark variant. The others are dead branches.",
-      "sites": [
-        "src/WoodburySpectatorSync/Coop/CoopClientCoordinator.cs:1294",
-        "src/WoodburySpectatorSync/Coop/CoopClientCoordinator.cs:1515",
-        "src/WoodburySpectatorSync/Coop/CoopClientCoordinator.cs:3020",
-        "src/WoodburySpectatorSync/Coop/CoopHostCoordinator.cs:3227",
-        "src/WoodburySpectatorSync/Coop/CoopHostCoordinator.cs:3624"
-      ],
-      "effort": "15 minutes"
-    },
-    {
-      "id": "reconnecting-dead-end",
-      "severity": "high",
-      "title": "Reconnecting state has no exit handler",
-      "detail": "SessionLifecycle.cs:169-179 defines transitions INTO Reconnecting. CoopHostCoordinator.cs:589 transitions to it on \"no-scene-ready\" retry exhaustion. But grep finds zero `case SessionState.Reconnecting` handlers anywhere. Once you land in Reconnecting nothing pulls you back out.",
-      "sites": [
-        "src/WoodburySpectatorSync/Coop/SessionLifecycle.cs",
-        "src/WoodburySpectatorSync/Coop/CoopHostCoordinator.cs:589"
-      ],
-      "effort": "1–2 days"
-    },
-    {
-      "id": "stale-discovery-manifest",
-      "severity": "low",
-      "title": "SceneDiscoveryManifest.IsDiscoveryOnlyScene is stale",
-      "detail": "SceneSyncRegistries.cs:64-66 still flags scenes containing \"Office\", \"Parking\", or \"Lot\" as discovery-only. Both Office and ParkingLot now have full sync modules. Every Office/Parking scene entry logs a misleading 'discovery only' diagnostic line.",
-      "sites": [
-        "src/WoodburySpectatorSync/Coop/SceneSyncRegistries.cs:61-67"
-      ],
-      "effort": "5 minutes"
-    },
-    {
-      "id": "no-save-load-parity",
-      "severity": "medium",
-      "title": "No ES3 save/load parity",
-      "detail": "Game uses ES3 (decompiled-firstpass/ES3.cs). Zero ES3 references in the mod. If host loads a save mid-session, the client starts fresh and replays nothing. Only persistent prefs the mod touches are PlayerPrefs for the cabin-start-sequence handoff.",
-      "sites": [
-        "src/WoodburySpectatorSync (no ES3 references anywhere)"
-      ],
-      "effort": "1–2 weeks (own milestone, needs new SaveSyncing SessionState)"
-    },
-    {
-      "id": "player-input-movement-only",
-      "severity": "low",
-      "title": "PlayerInputState is movement-only",
-      "detail": "Protocol.cs:690-700 carries MoveX/Y + LookYaw/Pitch + Jump/Crouch/Sprint. No interact / use / throw / aim / reload buttons. Story interactions go through InteractRequest routing, so this is fine for story beats but proxy animator won't get button-driven cues.",
-      "sites": [
-        "src/WoodburySpectatorSync/Net/Protocol.cs:690-700"
-      ],
-      "effort": "2–3 days"
-    },
-    {
-      "id": "parkinglotmanager-field-audit",
-      "severity": "low",
-      "title": "Audit ~18 unresolved field-name reflections",
-      "detail": "RE verification found 266/284 named field reflections resolve to real declared fields. The 18 misses cluster on ParkingLotManager. Reflection helper (OfficeSceneStateSync.cs:1802-1820) silently caches null on miss so these are no-ops, not crashes — but they emit nothing for those keys.",
-      "sites": [
-        "src/WoodburySpectatorSync/Coop/ParkingLotSceneStateSync.cs"
-      ],
-      "effort": "half day"
+      "title": "Synced death & ending",
+      "summary": "If one of you dies or reaches the credits, the other follows — no one gets left stranded.",
+      "scenes": ["All chapters"],
+      "status": "Planned"
     }
   ],
   "unsyncedScenes": [
     {
-      "name": "MainMenu",
-      "status": "menu cursor only",
-      "impact": "F11 panel works, but host/client menu choices don't sync. Could cause stale lobby state.",
-      "effort": "1 day"
+      "name": "Menus & loading",
+      "impact": "Lobby/menu choices aren't shared yet — set up the session in-game with F11."
     },
     {
-      "name": "Disclaimer",
-      "status": "unsynced",
-      "impact": "If peers hit it at different times the handshake stalls.",
-      "effort": "half day"
+      "name": "Death & end credits",
+      "impact": "If one player dies or finishes, the other doesn't follow automatically yet."
     },
     {
-      "name": "EndCredits",
-      "status": "unsynced",
-      "impact": "Players diverge at end-of-game flow (EndCreditsManager.cs:101).",
-      "effort": "half day"
-    },
-    {
-      "name": "DeathManager / respawn",
-      "status": "unsynced",
-      "impact": "DeathManager loads MainMenu — if one peer dies the other doesn't follow.",
-      "effort": "1 day"
-    },
-    {
-      "name": "CabinSceneDark depth",
-      "status": "partial (after CabinDarkScene typo fix)",
-      "impact": "Several gates need a Dark variant — seated-proxy selection, NPC targeting, cabin-start-prefs.",
-      "effort": "1–3 days"
+      "name": "Dark cabin — deeper beats",
+      "impact": "The dark return-to-cabin run is in; a few of its later moments still need polish."
     }
   ],
   "milestones": [
     {
-      "id": "0.6.0",
-      "title": "Playable end-to-end (0.6.0)",
-      "subtitle": "Hand to a streamer without embarrassment",
-      "etaWeeksFocused": "3–4",
-      "etaWeeksCalendar": "6–10",
+      "id": "0.6",
+      "title": "Playable end to end",
+      "subtitle": "A full, clean run you can stream",
       "items": [
-        "Fix CabinDarkScene typo (5 sites)",
-        "Stop flagging Office/Parking as discovery-only",
-        "Audit ParkingLotManager field reflections",
-        "Wire Reconnecting's exit path",
-        "DeathManager → MainMenu handoff sync",
-        "EndCredits handoff sync",
-        "MainMenu / Disclaimer handshake hardening",
-        "Close Office + ParkingLot dump-diff gaps",
-        "CabinSceneDark depth audit",
-        "One-button host/client launcher UX",
-        "Playtest + bugfix loop (1–2 cal. weeks)"
+        "Reconnect handling",
+        "Synced death + end credits",
+        "Menu / loading hand-off",
+        "Office + Parking Lot polish",
+        "One-button host / join"
       ]
     },
     {
-      "id": "0.7.0",
-      "title": "Ride-along (0.7.0)",
-      "subtitle": "Both players in the same vehicle for the drive sequences",
-      "etaWeeksFocused": "1–2",
-      "etaWeeksCalendar": "2–4",
+      "id": "0.7",
+      "title": "Ride-along",
+      "subtitle": "Both players in the same vehicle for the drives",
       "items": [
-        "Passenger seat — RoadTrip (MikeInCar / truck cabin)",
-        "Passenger seat — Pizzeria (MikeDrivingInPizzeriaScene opening)",
-        "Passenger seat — Cabin DrivingToCabin (flips skip-intro to ride-along)",
-        "Shared in-car camera + dialogue camera during driving",
-        "Optional radio-station control hand-off"
+        "Passenger seat — Road Trip",
+        "Passenger seat — Pizzeria drive-in",
+        "Passenger seat — Cabin intro drive",
+        "Shared in-car camera & dialogue"
       ]
     },
     {
-      "id": "1.0.0",
-      "title": "True full co-op (1.0.0)",
-      "subtitle": "Save state, mid-session join, polish",
-      "etaWeeksFocused": "8–14",
-      "etaWeeksCalendar": "10–18",
+      "id": "1.0",
+      "title": "Full co-op",
+      "subtitle": "Save state, drop-in join, polish",
       "items": [
-        "ES3 save-load parity (host save → client replay, own SessionState)",
-        "Mid-session join (not just resume)",
-        "Passenger seat polish across all driving scenes",
-        "PlayerInput interact/use/throw on the wire (proxy animation cues)",
-        "Buffered/reorder robustness for higher-latency peers",
-        "Per-peer voice indicator + ping graph",
-        "Host moderation: kick / ban"
+        "Save & resume together",
+        "Drop-in join mid-session",
+        "Smoother play on higher-latency connections",
+        "Voice indicator + host controls"
       ]
-    }
-  ],
-  "distribution": [
-    {
-      "title": "Thunderstore listing",
-      "status": "todo",
-      "impact": "biggest blocker to mass adoption — one-click r2modman install",
-      "effort": "~1 weekend"
-    },
-    {
-      "title": "Nexus Mods listing",
-      "status": "todo",
-      "impact": "second largest install channel, weekend effort",
-      "effort": "~1 weekend"
-    },
-    {
-      "title": "60–120 s demo video",
-      "status": "todo",
-      "impact": "no clip = no virality. This is the single highest-leverage item for popularity.",
-      "effort": "1 day to film + edit"
-    },
-    {
-      "title": "README polish (screenshots, GIF, what-works table)",
-      "status": "todo",
-      "impact": "first impression at the Nexus/Thunderstore page",
-      "effort": "1 day"
-    },
-    {
-      "title": "Discord / community channel",
-      "status": "todo",
-      "impact": "issue triage + early playtester pipeline",
-      "effort": "1 hour to set up"
-    },
-    {
-      "title": "Streamer outreach (3–5 horror creators)",
-      "status": "todo",
-      "impact": "one mid-tier streamer covering it can be the entire B-tier downloads pipeline",
-      "effort": "1 day"
     }
   ],
   "recentCommits": [
-    {
-      "sha": "eacf877",
-      "subject": "site: bigger labeled visitor counter, More-projects section, copyright/ownership notice"
-    },
-    {
-      "sha": "c799750",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "5de8822",
-      "subject": "site: add Discord (hero button, Get-the-mod card, footer) with conservative sheen anima..."
-    },
-    {
-      "sha": "3a3e589",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "4fb13b1",
-      "subject": "site: distinctive Woodbury found-footage VHS re-skin"
-    },
-    {
-      "sha": "fd1c421",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "92d489e",
-      "subject": "site: remove \"free\" framing from all visitor-facing copy + structured data"
-    },
-    {
-      "sha": "4072156",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    }
-  ],
-  "popularityProjection": {
-    "tiers": [
-      {
-        "tier": "A",
-        "label": "Lethal Company-style viral",
-        "likelihood": "low",
-        "ceiling": "bounded by base game's owner count (paid indie chapter)"
-      },
-      {
-        "tier": "B",
-        "label": "Subnautica Nitrox / Lethal Company V2 tier",
-        "likelihood": "plausible with Thunderstore + demo video",
-        "ceiling": "50K–500K installs, 5–20 mid-tier streamer videos"
-      },
-      {
-        "tier": "C",
-        "label": "Small but real community",
-        "likelihood": "very likely once playable end-to-end",
-        "ceiling": "1K–10K installs, dedicated Discord"
-      }
-    ],
-    "drivers": [
-      "Install friction — Thunderstore listing is a 10× multiplier",
-      "60s demo clip — without it nothing reposts",
-      "One streamer trying it — single highest-impact event"
-    ]
-  }
+    {"sha": "eacf877", "subject": "site: bigger labeled visitor counter, More-projects section, copyright"},
+    {"sha": "5de8822", "subject": "site: Discord button + card"},
+    {"sha": "4fb13b1", "subject": "site: distinctive Woodbury found-footage re-skin"},
+    {"sha": "a807bf3", "subject": "site: canonical fix + co-op/multiplayer FAQ"},
+    {"sha": "1d1089e", "subject": "scene expansion, roadmap integration"},
+    {"sha": "6aa4334", "subject": "60% done"}
+  ]
 }
