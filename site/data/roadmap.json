@@ -83,6 +83,18 @@
   ],
   "recentCommits": [
     {
+      "sha": "dd37dcd",
+      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
+    },
+    {
+      "sha": "4f6e559",
+      "subject": "late night CoopSecondPlayerController"
+    },
+    {
+      "sha": "03129a9",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "970a8f9",
       "subject": "Settings update"
     },
@@ -101,18 +113,6 @@
     {
       "sha": "cf433e2",
       "subject": "scene extensions"
-    },
-    {
-      "sha": "a99685f",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "f8ca40b",
-      "subject": "site: gamer-friendly changelog, no dates, early-access support, MWCMP co-flagship, serv..."
-    },
-    {
-      "sha": "354d1fe",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }

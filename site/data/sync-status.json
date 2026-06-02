@@ -1,10 +1,10 @@
 {
   "meta": {
-    "plugin": "0.4.12",
+    "plugin": "0.4.13",
     "protocol": 4,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
-    "lastCommit": "970a8f9 \"Settings update\"",
+    "lastCommit": "dd37dcd \"Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway...\"",
     "lastUpdated": "2026-06-02",
     "overallPercent": 60,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",
