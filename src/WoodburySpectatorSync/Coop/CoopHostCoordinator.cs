@@ -20,6 +20,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly RemoteAvatar _clientAvatar;
         private readonly Action<string> _sessionLogWrite;
         private readonly VoiceChatSync _voiceChat;
+        private readonly PlayerFootstepSync _footstepSync;
         private RemotePlayerProxy _remotePlayer;
         private string _hostDisplayName = "HOST";
         private string _clientDisplayName = "CLIENT";
@@ -465,6 +466,7 @@ namespace WoodburySpectatorSync.Coop
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("host", logger, sessionLogWrite);
             _voiceChat = new VoiceChatSync(logger, settings, "host", sessionLogWrite);
+            _footstepSync = new PlayerFootstepSync(logger, settings, "host", sessionLogWrite);
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "host");
             _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "host");
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "host");
@@ -524,6 +526,7 @@ namespace WoodburySpectatorSync.Coop
         public string NpcOverlaySummary => _npcOverlaySummary;
         public string BoardGameOverlaySummary => _boardGameOverlaySummary;
         public string VoiceOverlaySummary => _voiceChat != null ? _voiceChat.Summary : "Voice: off";
+        public string FootstepOverlaySummary => _footstepSync != null ? _footstepSync.Summary : "Footsteps: off";
         public string HostWaitSummary => _hostWaitSummary;
         public bool ShouldShowHostWaitIndicator => ShouldShowHostWaitIndicatorInternal();
         public string HostWaitIndicatorTitle => BuildHostWaitIndicatorTitle();
@@ -541,6 +544,7 @@ namespace WoodburySpectatorSync.Coop
             UnbindDialogueEvents();
             UnbindDialogueUiSelection();
             _voiceChat?.Shutdown();
+            _footstepSync?.Shutdown();
             _clientAvatar.SetActive(false);
             if (_remotePlayer != null && _remotePlayer.Root != null)
             {
@@ -676,6 +680,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             UpdateVoice(nowMs);
+            UpdateFootsteps(nowMs);
             PollSubText();
             PollPhoneMirror(nowMs);
 
@@ -1058,6 +1063,37 @@ namespace WoodburySpectatorSync.Coop
                 });
         }
 
+        private void UpdateFootsteps(long nowMs)
+        {
+            if (_footstepSync == null ||
+                !TryBuildHostTransform(out var transformState) ||
+                !TryBuildHostInput(out var inputState))
+            {
+                return;
+            }
+
+            _footstepSync.UpdateLocal(
+                _lifecycle.CurrentSessionId,
+                _sceneGeneration,
+                SceneManager.GetActiveScene().name,
+                0,
+                transformState.Position,
+                inputState,
+                state =>
+                {
+                    var message = new SceneEventStateMessage(state);
+                    if (_settings.UdpEnabled.Value && _server.HasUdp)
+                    {
+                        _server.SendUdp(message);
+                    }
+                    else
+                    {
+                        _server.Enqueue(message);
+                    }
+                    return true;
+                });
+        }
+
         private Transform ResolveRemoteVoiceAnchor()
         {
             if (_remotePlayer != null && _remotePlayer.Root != null)
@@ -1257,6 +1293,19 @@ namespace WoodburySpectatorSync.Coop
 
                     _voiceChat?.HandleRemoteFrame(voice.State, ResolveRemoteVoiceAnchor());
                     MaybeHandleRemoteVoiceReaction(voice.State, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+                }
+                else if (message is SceneEventStateMessage sceneEvent)
+                {
+                    if (!_lifecycle.IsLive)
+                    {
+                        _lifecycle.NoteDrop("SceneEventState", sceneEvent.State.EventKind, nowSeconds);
+                        continue;
+                    }
+
+                    if (PlayerFootstepSync.IsFootstepEvent(sceneEvent.State))
+                    {
+                        _footstepSync?.TryHandleRemote(sceneEvent.State, ResolveRemoteVoiceAnchor());
+                    }
                 }
                 else if (message is SceneActionIntentMessage intent)
                 {

@@ -22,6 +22,7 @@ namespace WoodburySpectatorSync.Coop
         private RemoteAvatar _hostAvatar;
         private readonly Action<string> _sessionLogWrite;
         private readonly VoiceChatSync _voiceChat;
+        private readonly PlayerFootstepSync _footstepSync;
 
         private CoopClientController _controller;
         private Camera _camera;
@@ -409,6 +410,7 @@ namespace WoodburySpectatorSync.Coop
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("client", logger, sessionLogWrite);
             _voiceChat = new VoiceChatSync(logger, settings, "client", sessionLogWrite);
+            _footstepSync = new PlayerFootstepSync(logger, settings, "client", sessionLogWrite);
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "client");
             _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "client");
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "client");
@@ -438,6 +440,7 @@ namespace WoodburySpectatorSync.Coop
         {
             SceneManager.activeSceneChanged -= OnSceneChanged;
             _voiceChat?.Shutdown();
+            _footstepSync?.Shutdown();
             _hostAvatar.SetActive(false);
             if (_hostProxy != null && _hostProxy.Root != null)
             {
@@ -523,6 +526,7 @@ namespace WoodburySpectatorSync.Coop
         }
         public string BoardGameOverlaySummary => _cabinGameManager != null ? CabinBoardGameSync.BuildOverlaySummary(_cabinGameManager) : "MiniGame: -";
         public string VoiceOverlaySummary => _voiceChat != null ? _voiceChat.Summary : "Voice: off";
+        public string FootstepOverlaySummary => _footstepSync != null ? _footstepSync.Summary : "Footsteps: off";
 
         public void DrawVoiceHud()
         {
@@ -655,6 +659,7 @@ namespace WoodburySpectatorSync.Coop
 
             SendPlayerTransform();
             SendInputState();
+            UpdateFootsteps(nowMs);
             TryForceCabinStart();
             ApplyPendingStates();
             UpdateSmoothedAiStates();
@@ -873,6 +878,70 @@ namespace WoodburySpectatorSync.Coop
                 });
         }
 
+        private void UpdateFootsteps(long nowMs)
+        {
+            if (_footstepSync == null || !_lifecycle.IsLive)
+            {
+                return;
+            }
+
+            EnsureLocalPlayerRefs();
+            var camera = CabinPlayerBodyPose.ResolveCamera(_localFpc) ?? GetActiveCamera();
+            if (camera == null)
+            {
+                return;
+            }
+
+            Transform bodyTransform;
+            if (_settings.CoopUseLocalPlayer.Value &&
+                CabinPlayerBodyPose.TryResolve(_localFpc, PlayerController.GetInstance(), out bodyTransform, out _))
+            {
+                // Seated/cutscene bodies are more accurate than the hidden first-person controller.
+            }
+            else
+            {
+                bodyTransform = camera.transform;
+            }
+
+            var euler = camera.transform.rotation.eulerAngles;
+            var input = new PlayerInputState
+            {
+                PlayerId = 1,
+                MoveX = Input.GetAxisRaw("Horizontal"),
+                MoveY = Input.GetAxisRaw("Vertical"),
+                LookYaw = euler.y,
+                LookPitch = euler.x,
+                Jump = Input.GetKey(KeyCode.Space),
+                Crouch = Input.GetKey(KeyCode.LeftControl),
+                Sprint = Input.GetKey(KeyCode.LeftShift)
+            };
+
+            var sessionId = _lifecycle.CurrentSessionId != 0 ? _lifecycle.CurrentSessionId : _activeHostSessionId;
+            _footstepSync.UpdateLocal(
+                sessionId,
+                _activeSceneGeneration,
+                SceneManager.GetActiveScene().name,
+                1,
+                bodyTransform.position,
+                input,
+                SendFootstepEvent);
+        }
+
+        private bool SendFootstepEvent(SceneEventState state)
+        {
+            var message = new SceneEventStateMessage(state);
+            if (_settings.UdpEnabled.Value && _client.HasUdp)
+            {
+                _client.SendUdp(message);
+            }
+            else
+            {
+                _client.Enqueue(message);
+            }
+
+            return true;
+        }
+
         private Transform ResolveRemoteVoiceAnchor()
         {
             if (_hostProxy != null && _hostProxy.Root != null)
@@ -1030,6 +1099,12 @@ namespace WoodburySpectatorSync.Coop
                 }
                 else if (message is SceneEventStateMessage sceneEvent)
                 {
+                    if (PlayerFootstepSync.IsFootstepEvent(sceneEvent.State))
+                    {
+                        HandleSceneEventState(sceneEvent.State);
+                        continue;
+                    }
+
                     HandleSceneEventState(sceneEvent.State);
                     IncrementHostStateApplied();
                 }
@@ -2091,6 +2166,16 @@ namespace WoodburySpectatorSync.Coop
         {
             if (state.SessionId != 0 && _activeHostSessionId != 0 && state.SessionId != _activeHostSessionId)
             {
+                return;
+            }
+
+            if (PlayerFootstepSync.IsFootstepEvent(state))
+            {
+                if (_lifecycle.IsLive)
+                {
+                    _footstepSync?.TryHandleRemote(state, ResolveRemoteVoiceAnchor());
+                }
+
                 return;
             }
 
@@ -5641,6 +5726,12 @@ namespace WoodburySpectatorSync.Coop
                 }
                 else if (message is SceneEventStateMessage sceneEvent)
                 {
+                    if (PlayerFootstepSync.IsFootstepEvent(sceneEvent.State))
+                    {
+                        HandleSceneEventState(sceneEvent.State);
+                        continue;
+                    }
+
                     HandleSceneEventState(sceneEvent.State);
                     IncrementHostStateApplied();
                     counts.Story++;
