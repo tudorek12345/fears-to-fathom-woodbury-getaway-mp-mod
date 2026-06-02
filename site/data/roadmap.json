@@ -7,19 +7,27 @@
     {
       "title": "Passenger seat — ride together in vehicles",
       "summary": "Both players sitting in the same truck or car during the driving parts, instead of one driving and one teleported along. Road Trip, the Pizzeria drive-in, and the Cabin intro drive.",
-      "scenes": ["Road Trip", "Pizzeria", "Cabin"],
+      "scenes": [
+        "Road Trip",
+        "Pizzeria",
+        "Cabin"
+      ],
       "status": "Next up"
     },
     {
       "title": "Mid-game save & resume",
       "summary": "Save together and pick up later from the same point, instead of both starting a chapter from the start.",
-      "scenes": ["All chapters"],
+      "scenes": [
+        "All chapters"
+      ],
       "status": "Planned"
     },
     {
       "title": "Synced death & ending",
       "summary": "If one of you dies or reaches the credits, the other follows — no one gets left stranded.",
-      "scenes": ["All chapters"],
+      "scenes": [
+        "All chapters"
+      ],
       "status": "Planned"
     }
   ],
@@ -74,11 +82,37 @@
     }
   ],
   "recentCommits": [
-    {"sha": "eacf877", "subject": "site: bigger labeled visitor counter, More-projects section, copyright"},
-    {"sha": "5de8822", "subject": "site: Discord button + card"},
-    {"sha": "4fb13b1", "subject": "site: distinctive Woodbury found-footage re-skin"},
-    {"sha": "a807bf3", "subject": "site: canonical fix + co-op/multiplayer FAQ"},
-    {"sha": "1d1089e", "subject": "scene expansion, roadmap integration"},
-    {"sha": "6aa4334", "subject": "60% done"}
+    {
+      "sha": "f8ca40b",
+      "subject": "site: gamer-friendly changelog, no dates, early-access support, MWCMP co-flagship, serv..."
+    },
+    {
+      "sha": "354d1fe",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
+      "sha": "eacf877",
+      "subject": "site: bigger labeled visitor counter, More-projects section, copyright/ownership notice"
+    },
+    {
+      "sha": "c799750",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
+      "sha": "5de8822",
+      "subject": "site: add Discord (hero button, Get-the-mod card, footer) with conservative sheen anima..."
+    },
+    {
+      "sha": "3a3e589",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
+      "sha": "4fb13b1",
+      "subject": "site: distinctive Woodbury found-footage VHS re-skin"
+    },
+    {
+      "sha": "fd1c421",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    }
   ]
 }
