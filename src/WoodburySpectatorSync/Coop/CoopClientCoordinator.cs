@@ -74,6 +74,10 @@ namespace WoodburySpectatorSync.Coop
         private readonly List<Message> _snapshotDialogueMessages = new List<Message>();
         private readonly Dictionary<string, int> _lastVehicleSeqById = new Dictionary<string, int>(StringComparer.Ordinal);
         private int _lastUiMirrorSeq;
+        private string _pendingPhoneMirrorPayload = string.Empty;
+        private int _pendingPhoneMirrorSeq;
+        private long _nextPhoneMirrorRetryMs;
+        private long _nextPhoneMirrorLogMs;
         private float _loadingStartTime;
         private float _loadingLastProgress;
         private float _loadingLastProgressTime;
@@ -96,6 +100,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, FieldInfo> _cabinShedFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinUnderstairsFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHostHidingFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
+        private readonly Dictionary<string, FieldInfo> _cabinDeathFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHikerFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHikerControllerFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private readonly Dictionary<string, FieldInfo> _cabinHostFixingSinkFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -147,6 +152,9 @@ namespace WoodburySpectatorSync.Coop
         private const string CabinUnderstairsFlagPrefix = CabinGameFlagPrefix + "Understairs.";
         private const string CabinUnderstairsActivePrefix = CabinUnderstairsFlagPrefix + "Active.";
         private const string CabinHostHidingFlagPrefix = CabinGameFlagPrefix + "HostHiding.";
+        private const string CabinDeathFlagPrefix = CabinGameFlagPrefix + "Death.";
+        private const string CabinDeathActivePrefix = CabinDeathFlagPrefix + "Active.";
+        private const string CabinDeathEnabledPrefix = CabinDeathFlagPrefix + "Enabled.";
         private const string CabinHikerFlagPrefix = CabinGameFlagPrefix + "CabinHiker.";
         private const string CabinHikerControllerFlagPrefix = CabinGameFlagPrefix + "HikerController.";
         private const string CabinHostFixingSinkFlagPrefix = CabinGameFlagPrefix + "HostFixingSink.";
@@ -174,6 +182,8 @@ namespace WoodburySpectatorSync.Coop
         private const float AiStaleSnapSeconds = 1.25f;
         private const float AiInterpolationDelaySeconds = 0.12f;
         private const float AiExtrapolateGraceSeconds = 0.2f;
+        private const float AiMaxPredictionSeconds = 0.18f;
+        private const float AiMaxPredictionVelocity = 7.5f;
         private const int AiMaxBufferedSamples = 5;
         private const float AiGeneralSmoothing = 13f;
         private const float AiMikeSmoothing = 16f;
@@ -595,6 +605,7 @@ namespace WoodburySpectatorSync.Coop
             ForceApplyLatchedTransform();
             UpdateHostTransformHeartbeat();
             UpdateSceneLoad();
+            TryApplyPendingPhoneMirror();
             SendSceneReadyIfNeeded();
             UpdateRemoteDialogue();
             CheckDialogueDrift();
@@ -1864,6 +1875,80 @@ namespace WoodburySpectatorSync.Coop
                     state.Duration,
                     kind));
             }
+            else if (string.Equals(state.UiKind, PhoneMirrorSync.UiKind, StringComparison.OrdinalIgnoreCase))
+            {
+                HandlePhoneMirrorState(state);
+            }
+        }
+
+        private void HandlePhoneMirrorState(UiMirrorState state)
+        {
+            if (!state.Visible || string.IsNullOrEmpty(state.Text))
+            {
+                _pendingPhoneMirrorPayload = string.Empty;
+                _pendingPhoneMirrorSeq = 0;
+                return;
+            }
+
+            if (TryApplyPhoneMirrorPayload(state.Text, state.UiSeq, logOnSuccess: true))
+            {
+                _pendingPhoneMirrorPayload = string.Empty;
+                _pendingPhoneMirrorSeq = 0;
+                return;
+            }
+
+            _pendingPhoneMirrorPayload = state.Text;
+            _pendingPhoneMirrorSeq = state.UiSeq;
+        }
+
+        private void TryApplyPendingPhoneMirror()
+        {
+            if (string.IsNullOrEmpty(_pendingPhoneMirrorPayload))
+            {
+                return;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (nowMs < _nextPhoneMirrorRetryMs)
+            {
+                return;
+            }
+
+            _nextPhoneMirrorRetryMs = nowMs + 500;
+            if (TryApplyPhoneMirrorPayload(_pendingPhoneMirrorPayload, _pendingPhoneMirrorSeq, logOnSuccess: true))
+            {
+                _pendingPhoneMirrorPayload = string.Empty;
+                _pendingPhoneMirrorSeq = 0;
+            }
+        }
+
+        private bool TryApplyPhoneMirrorPayload(string payload, int uiSeq, bool logOnSuccess)
+        {
+            PhoneMirrorSync.Summary summary;
+            var applied = PhoneMirrorSync.TryApplyPayload(payload, SceneManager.GetActiveScene().name, out summary);
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (!applied)
+            {
+                if (nowMs >= _nextPhoneMirrorLogMs)
+                {
+                    var pendingLine = "PhoneMirror client pending uiSeq=" + uiSeq + " " + summary;
+                    _logger.LogWarning(pendingLine);
+                    _sessionLogWrite?.Invoke(pendingLine);
+                    _nextPhoneMirrorLogMs = nowMs + 5000;
+                }
+
+                return false;
+            }
+
+            if (logOnSuccess && nowMs >= _nextPhoneMirrorLogMs)
+            {
+                var line = "PhoneMirror client apply uiSeq=" + uiSeq + " " + summary;
+                _logger.LogInfo(line);
+                _sessionLogWrite?.Invoke(line);
+                _nextPhoneMirrorLogMs = nowMs + 5000;
+            }
+
+            return true;
         }
 
         private void HandlePathVehicleState(PathVehicleState state, bool snapshot)
@@ -2235,6 +2320,23 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            if (key.StartsWith(CabinDeathFlagPrefix, StringComparison.Ordinal))
+            {
+                if (TryApplyCabinDeathFlag(key.Substring(CabinDeathFlagPrefix.Length), value))
+                {
+                    _pendingCabinGameFlags.Remove(key);
+                    ClearPendingState(_pendingCabinGameFirstSeen, key);
+                    return true;
+                }
+
+                if (allowDefer)
+                {
+                    _pendingCabinGameFlags[key] = value;
+                    TrackPendingState(_pendingCabinGameFirstSeen, key);
+                }
+                return false;
+            }
+
             if (key.StartsWith(CabinHikerControllerFlagPrefix, StringComparison.Ordinal))
             {
                 if (TryApplyCabinHikerControllerFlag(key.Substring(CabinHikerControllerFlagPrefix.Length), value))
@@ -2537,6 +2639,102 @@ namespace WoodburySpectatorSync.Coop
             var applied = TryApplyObjectFieldFlag(host, fieldName, _cabinHostHidingFieldCache, value);
             MaybeLogCabinHidingMirror(_cabinGameManager.mikePostEating);
             return applied;
+        }
+
+        private bool TryApplyCabinDeathFlag(string fieldName, int value)
+        {
+            var death = DeathManager.instance;
+            if (death == null)
+            {
+                death = UnityEngine.Object.FindObjectOfType<DeathManager>();
+            }
+
+            if (death == null)
+            {
+                return false;
+            }
+
+            if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (fieldName.StartsWith("Active.", StringComparison.Ordinal))
+            {
+                var activeFieldName = fieldName.Substring("Active.".Length);
+                if (string.Equals(activeFieldName, "jumpscareLight", StringComparison.Ordinal))
+                {
+                    if (death.jumpscareLight == null) return false;
+                    death.jumpscareLight.SetActive(value != 0);
+                    return true;
+                }
+
+                return TryApplyGameObjectActiveFlag(death, activeFieldName, _cabinDeathFieldCache, value);
+            }
+
+            if (fieldName.StartsWith("Enabled.", StringComparison.Ordinal))
+            {
+                return TryApplyBehaviourEnabledFlag(death, fieldName.Substring("Enabled.".Length), value);
+            }
+
+            var applied = TryApplyObjectFieldFlag(death, fieldName, _cabinDeathFieldCache, value);
+            if (applied && string.Equals(fieldName, "isDead", StringComparison.Ordinal) && value != 0)
+            {
+                if (_localFpc != null)
+                {
+                    _localFpc.enabled = false;
+                }
+
+                var uiManagerField = _cabinGameManager != null
+                    ? FindInstanceField(_cabinGameManager.GetType(), "uiManager")
+                    : null;
+                var uiManager = uiManagerField != null ? uiManagerField.GetValue(_cabinGameManager) : null;
+                var phoneUiField = uiManager != null ? FindInstanceField(uiManager.GetType(), "phoneUI") : null;
+                var phoneUi = phoneUiField != null ? phoneUiField.GetValue(uiManager) : null;
+                var allowPhoneField = phoneUi != null ? FindInstanceField(phoneUi.GetType(), "allowPhone") : null;
+                if (allowPhoneField != null && allowPhoneField.FieldType == typeof(bool))
+                {
+                    allowPhoneField.SetValue(phoneUi, false);
+                }
+            }
+
+            return applied;
+        }
+
+        private bool TryApplyBehaviourEnabledFlag(object owner, string fieldName, int value)
+        {
+            if (owner == null || string.IsNullOrEmpty(fieldName))
+            {
+                return false;
+            }
+
+            if (!_cabinDeathFieldCache.TryGetValue(fieldName, out var field))
+            {
+                field = FindInstanceField(owner.GetType(), fieldName);
+                _cabinDeathFieldCache[fieldName] = field;
+            }
+
+            if (field == null)
+            {
+                return true;
+            }
+
+            try
+            {
+                var behaviour = field.GetValue(owner) as Behaviour;
+                if (behaviour == null)
+                {
+                    return false;
+                }
+
+                behaviour.enabled = value != 0;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Apply death effect flag failed for " + fieldName + ": " + ex.Message);
+                return false;
+            }
         }
 
         private bool TryApplyCabinHikerFlag(string fieldName, int value)
@@ -4137,7 +4335,24 @@ namespace WoodburySpectatorSync.Coop
                 AiTransformState animatorState;
                 Vector3 desiredPosition;
                 Quaternion desiredRotation;
-                if (TryGetBufferedAiPose(smooth, renderTime, out desiredPosition, out desiredRotation, out animatorState))
+                var predictionEnabled = _settings == null ||
+                                        _settings.CoopRemotePlayerPrediction == null ||
+                                        _settings.CoopRemotePlayerPrediction.Value;
+                var predictionSeconds = _settings != null && _settings.CoopRemotePlayerPredictionSeconds != null
+                    ? _settings.CoopRemotePlayerPredictionSeconds.Value
+                    : 0.08f;
+                var maxPredictionDistance = _settings != null && _settings.CoopRemotePlayerMaxPredictionDistance != null
+                    ? _settings.CoopRemotePlayerMaxPredictionDistance.Value
+                    : 0.35f;
+                if (TryGetBufferedAiPose(
+                        smooth,
+                        renderTime,
+                        predictionEnabled,
+                        predictionSeconds,
+                        maxPredictionDistance,
+                        out desiredPosition,
+                        out desiredRotation,
+                        out animatorState))
                 {
                     target.position = desiredPosition;
                     target.rotation = desiredRotation;
@@ -4159,6 +4374,9 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryGetBufferedAiPose(
             SmoothedAiState smooth,
             float renderTime,
+            bool predictionEnabled,
+            float predictionSeconds,
+            float maxPredictionDistance,
             out Vector3 position,
             out Quaternion rotation,
             out AiTransformState animatorState)
@@ -4212,15 +4430,62 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var latest = smooth.Samples[smooth.Samples.Count - 1];
-            if (Time.realtimeSinceStartup - latest.ReceiveTime <= AiExtrapolateGraceSeconds)
+            var latestAge = Time.realtimeSinceStartup - latest.ReceiveTime;
+            if (latestAge <= AiExtrapolateGraceSeconds)
             {
-                position = latest.Position;
+                position = PredictAiPosition(
+                    smooth.Samples[smooth.Samples.Count - 2],
+                    latest,
+                    renderTime,
+                    predictionEnabled,
+                    predictionSeconds,
+                    maxPredictionDistance);
                 rotation = latest.Rotation;
                 animatorState = latest.State;
                 return true;
             }
 
             return false;
+        }
+
+        private static Vector3 PredictAiPosition(
+            AiSmoothingSample previous,
+            AiSmoothingSample latest,
+            float renderTime,
+            bool predictionEnabled,
+            float predictionSeconds,
+            float maxPredictionDistance)
+        {
+            if (!predictionEnabled)
+            {
+                return latest.Position;
+            }
+
+            predictionSeconds = Mathf.Clamp(predictionSeconds, 0f, AiMaxPredictionSeconds);
+            maxPredictionDistance = Mathf.Clamp(maxPredictionDistance, 0f, 2f);
+            if (predictionSeconds <= 0f || maxPredictionDistance <= 0f)
+            {
+                return latest.Position;
+            }
+
+            var sampleSpan = Mathf.Max(0.001f, latest.ReceiveTime - previous.ReceiveTime);
+            var velocity = (latest.Position - previous.Position) / sampleSpan;
+            velocity.y = Mathf.Clamp(velocity.y, -0.35f, 0.35f);
+            if (velocity.sqrMagnitude > AiMaxPredictionVelocity * AiMaxPredictionVelocity)
+            {
+                velocity = Vector3.ClampMagnitude(velocity, AiMaxPredictionVelocity);
+            }
+
+            var forwardTime = Mathf.Max(0f, renderTime - latest.ReceiveTime) + predictionSeconds;
+            forwardTime = Mathf.Clamp(forwardTime, 0f, AiMaxPredictionSeconds);
+            var offset = velocity * forwardTime;
+            offset.y = Mathf.Clamp(offset.y, -0.08f, 0.08f);
+            if (offset.sqrMagnitude > maxPredictionDistance * maxPredictionDistance)
+            {
+                offset = Vector3.ClampMagnitude(offset, maxPredictionDistance);
+            }
+
+            return latest.Position + offset;
         }
 
         private Transform ResolveAiFallback(AiTransformState state)
@@ -6200,6 +6465,7 @@ namespace WoodburySpectatorSync.Coop
             _cabinShedFieldCache.Clear();
             _cabinUnderstairsFieldCache.Clear();
             _cabinHostHidingFieldCache.Clear();
+            _cabinDeathFieldCache.Clear();
             _pizzeriaFieldCache.Clear();
             _pizzeriaMikeFieldCache.Clear();
             _pizzeriaGameObjectFieldCache.Clear();

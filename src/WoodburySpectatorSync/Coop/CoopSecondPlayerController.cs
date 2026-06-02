@@ -39,6 +39,7 @@ namespace WoodburySpectatorSync.Coop
         public Transform CameraAnchor => _cameraAnchor;
         public Vector3 Velocity { get; private set; }
         public bool PresenceColliderEnabled => _presenceCollider != null && _presenceCollider.enabled;
+        public bool IsVehicleSeated => _hasLastSeatPose;
 
         public static CoopSecondPlayerController Attach(
             GameObject root,

@@ -2,14 +2,15 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.14, wire protocol 4.
+> Current iteration: Plugin 0.4.19, wire protocol 4.
 
-> Plugin 0.3.0 → 0.4.14 · wire protocol 3 → 4.
+> Plugin 0.3.0 → 0.4.19 · wire protocol 3 → 4.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
 
 ### Co-op Cabin
 
 - Scene transition reliability: fixed dark-cabin scene matching to use the real `CabinSceneDark` key from decompiled `SceneNameKeys`, so Cabin-dark readiness, retry backoff, manager flags, and NPC brain adapters no longer miss the scene because of the older `CabinDarkScene` alias.
+- Prediction: client-side AI/NPC visual smoothing now extrapolates briefly from buffered host samples, bounded by the existing remote-player prediction settings, so Mike and other host-authored actors move with less visible packet-step snapping while host packets remain authoritative.
 
 - NPC brains: host-authoritative `NpcBrainState` sync for Mike variants (MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController), hiker/window (CabinHiker + HikerCabinController + HostFixingSink), Nora, and cat — registry-based actor IDs, client-side local brain suppression, snapshot buffering, stale-sequence drops, throttled diagnostics.
 - Hiker window: state enums + go/moving/reachedPos/followingHost flags + sinisterAudioTrigger/closetLight/hikerConvoTrigger active states. Lock window gated on `CurrentSequence` (HikerSequence / HostAtDoor / HostHittingDoor) instead of `gameObject.activeSelf` to stop client clumping.
@@ -59,10 +60,12 @@
 ### Co-op avatars
 
 - Pizzeria avatar stability: Auto/GameModel no longer chooses story-critical `MikePizzeria` as the normal remote-player body; explicit `woodbury_pizzeria_mike` still works for diagnostics, while automatic fallback prefers non-Mike candidates or keeps an invisible nametag anchor.
+- Grounding: remote-player clone placement now corrects against the visible renderer bottom every frame, so bad camera/proxy packets cannot leave the avatar floating above floors, stairs, or vehicle-seat anchors.
 - Scene-model avatar cleanup: cloned in-scene avatars now strip utility/collider/push-capsule visuals in addition to story carry props, preventing the giant white capsule/egg from rendering during Cabin eating/post-eating while keeping the actual human scene model visible.
 - Source / fallback path: Auto → GameModel → AssetBundle → Capsule. Auto prefers safe non-Mike scene humans; Capsule explicit-only; Auto/GameModel stays invisible rather than rendering procedural egg unless capsule explicitly configured. Render-only AssetBundle avatars with no AnimatorController rejected; wrapped avatars grounded to renderer bounds. Cabin House/Host sequence objects rejected from Auto/GameModel fallback.
 - Nametags + display names: in-world HOST/CLIENT nametags for remote proxies; fallback role labels deduplicated; themed nametags hidden until a visible gameplay avatar is present. Host/client display names exchanged through Hello/HelloAck; launcher-selected names supported.
 - Animation + grounding: scene-model animators force an idle clip when stationary instead of freezing in a cloned walk pose, and cloned hand-held story props (fish/plates/trays/casserole/dishes) are stripped from remote player avatars. Seated proxy raised positions preserved instead of forcing couch-sitting bodies to floor. Remote player animation driven from replicated transform motion. Buffered client-side AI interpolation for smoother Mike/NPC motion. Low-rate NPC brain corrections no longer fight Mike's high-frequency smoothing.
+- Remote player body pose: transform senders now prefer active Pizzeria and Office seated/camera-holder body proxies in addition to Cabin proxy bodies. Receiver grounding now prefers NavMesh/walkable floor before incidental raycast hits, rejects table/couch/bed/prop hits as grounding surfaces, and seated-looking remote views hold a sitting clip when available or idle when not.
 - AssetBundle tooling: manifest IDs, bundle/id/scale/y-offset config, exact fallback logging, launcher `-RemotePlayerAvatarId` support, Unity 2021.3 avatar bundle project + `Build-AvatarBundle.ps1` + humanoid rig/animation import + basic locomotion AnimatorController + render-only Quaternius bundle install.
 
 ### Co-op lifecycle / protocol
@@ -71,7 +74,7 @@
 - Explicit `SessionState` machine + `Hello`/`HelloAck` negotiation + session/generation-aware `SceneChange`/`SceneReady` + `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`. UDP apply gated until `Live`. Bounded `SceneChange` retry + structured pre-Live drop logs.
 - Scene-readiness probes for RoadTripLoop, CabinSceneDark, OfficeLayout, ParkingLotScene wait for the real scene managers instead of treating them as managerless. Client `SceneReady` waits up to 15s for scene-specific managers (CabinGameManager, PizzeriaGameManager, RoadTripGameManager) before falling back to `ReadyPartial`. Snapshot state buffered/applied before `Live`.
 - Host snapshot emission bracketed; normal world/story/door/holdable/AI deltas gated until `SnapshotAck` moves to `Live`; blind 5-second full-state spam removed in favor of emergency/manual resync paths.
-- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.14.
+- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.19.
 
 ### Co-op UI
 
@@ -80,6 +83,8 @@
 - Overlay: `Session: <state> sid=<id> gen=<n>` line plus snapshot ack/retry or pending/missing counts. Compacted into styled two-column-sized panel; sync labels shortened. Always-on bottom-center `F2F WOODBURY CO:OP` brand mark. Expanded host/client connect logs (bind endpoint, session id, remote endpoint, retry reason, disconnect events).
 - Dialogue: remote dialogue routed through the game's native subtitle UI when available; client UI conversation suppressed; drift detection retained. Dialogue camera locks forcibly released during Mike conversations.
 - Host UI mirroring: Pizzeria + RoadTrip + Office UI managers (intro/fade canvases, dialogue cameras, phone pause/allow/canvas state, RoadTrip transition music, Office peeing UI).
+- Phone/text mirroring: host-authored phone message snapshots now ride through `UiMirrorState` snapshots/live deltas, applying message batch visibility, pending-reply flags, sender/notification labels, and network status on the client without calling local notification gameplay methods.
+- Death/hiding outcome mirror: Cabin `DeathManager` chase/haunt/caught/dead state, jumpscare light, and post-effect component enabled flags now mirror through host-authored Cabin state so the client follows the same end-state when the hiding/chaser flow catches a player.
 
 ### Tooling / diagnostics
 

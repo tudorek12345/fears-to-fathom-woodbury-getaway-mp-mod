@@ -207,6 +207,68 @@ namespace WoodburySpectatorSync.Coop
         private const float CameraFallbackEyeHeight = 1.65f;
         private const float SceneModelFallbackGroundYOffset = -0.06f;
         private const float BodyGroundProjectionMaxOffset = 0.35f;
+        private const float CameraBodyProjectionMaxHorizontalDistance = 1.15f;
+        private const float SeatedEyeHeightMin = 0.7f;
+        private const float SeatedEyeHeightMax = 1.45f;
+        private const float VisualGroundSkin = 0.015f;
+        private const float VisualGroundClampDownThreshold = 0.08f;
+        private const float VisualGroundLiftThreshold = -0.18f;
+        private const float VisualGroundMaxDrop = 6.0f;
+        private const float VisualGroundMaxLift = -1.25f;
+        private const float VisualBottomOffsetMin = -2.35f;
+        private const float VisualBottomOffsetMax = 1.35f;
+
+        private static readonly string[] GroundSurfaceKeywords =
+        {
+            "floor",
+            "ground",
+            "terrain",
+            "carpet",
+            "rug",
+            "stairs",
+            "stair",
+            "step",
+            "porch",
+            "road",
+            "asphalt",
+            "pavement",
+            "concrete",
+            "basement",
+            "cellar"
+        };
+
+        private static readonly string[] ElevatedPropSurfaceKeywords =
+        {
+            "table",
+            "desk",
+            "counter",
+            "couch",
+            "sofa",
+            "chair",
+            "armchair",
+            "bed",
+            "mattress",
+            "pillow",
+            "cushion",
+            "cabinet",
+            "drawer",
+            "dresser",
+            "shelf",
+            "stove",
+            "oven",
+            "fridge",
+            "sink",
+            "ouija",
+            "jenga",
+            "board",
+            "plate",
+            "tray",
+            "dish",
+            "casserole",
+            "fish",
+            "pizza",
+            "box"
+        };
 
         private readonly GameObject _root;
         private readonly CharacterController _characterController;
@@ -235,8 +297,11 @@ namespace WoodburySpectatorSync.Coop
         private long _nextGroundClampLogMs;
         private RemotePlayerNameTag _nameTag;
         private string _idleAnimationStateName;
+        private string _seatedAnimationStateName;
         private bool _lastAnimatorMoving;
+        private bool _lastSeatedVisual;
         private float _lastIdlePoseTime;
+        private float _lastSeatedPoseTime;
         private int _hiddenStoryCarryPropCount;
         private int _hiddenUtilityVisualCount;
 
@@ -415,6 +480,7 @@ namespace WoodburySpectatorSync.Coop
             _animRig = ResolveRigMap(source.RigProfile);
             _animatorHasMotionControlParams = HasMotionControlParams();
             _idleAnimationStateName = ResolveIdleAnimationStateName(_animator);
+            _seatedAnimationStateName = ResolveSeatedAnimationStateName(_animator);
             InitializeAnimatorPlayback();
 
             LogAvatarDiagnostics(source, usedFallbackBody, logger, diagnosticsSink);
@@ -466,16 +532,23 @@ namespace WoodburySpectatorSync.Coop
             var bodyPosition = ResolveBodyRootPosition(state);
             var bodyRotation = ResolveUprightBodyRotation(state);
             SmoothBodyTransform(ref bodyPosition, ref bodyRotation);
-            ClampVisualPositionToSurface(ref bodyPosition, state);
+            var seatedVisual = InferSeatedVisual(state, bodyPosition);
+            ClampVisualPositionToSurface(ref bodyPosition, state, seatedVisual);
             if (_secondPlayerController != null)
             {
                 _secondPlayerController.ApplyNetworkState(state, ref bodyPosition, ref bodyRotation);
+                if (_secondPlayerController.IsVehicleSeated)
+                {
+                    seatedVisual = true;
+                }
             }
             else
             {
                 _root.transform.SetPositionAndRotation(bodyPosition, bodyRotation);
             }
-            DriveAnimatorFromTransform(bodyPosition, bodyRotation);
+
+            _lastSeatedVisual = seatedVisual;
+            DriveAnimatorFromTransform(bodyPosition, bodyRotation, _lastSeatedVisual);
 
             if (_cameraTransform != null)
             {
@@ -567,23 +640,29 @@ namespace WoodburySpectatorSync.Coop
             bodyPosition += predictedOffset;
         }
 
-        private void ClampVisualPositionToSurface(ref Vector3 bodyPosition, PlayerTransformState state)
+        private void ClampVisualPositionToSurface(ref Vector3 bodyPosition, PlayerTransformState state, bool seatedVisual)
         {
             if (_root == null) return;
             if (!TryFindStableSurface(bodyPosition, state, out var surfaceY)) return;
 
-            var delta = bodyPosition.y - surfaceY;
-            var shouldClampDown = delta > 0.2f && delta < 4.5f;
-            var shouldLiftSlightly = delta < -0.25f && delta > -0.85f;
+            var targetRootY = surfaceY;
+            if (TryResolveVisualGroundedRootY(surfaceY, out var visualRootY))
+            {
+                targetRootY = visualRootY;
+            }
+
+            var delta = bodyPosition.y - targetRootY;
+            var shouldClampDown = delta > VisualGroundClampDownThreshold && delta < VisualGroundMaxDrop;
+            var shouldLiftSlightly = delta < VisualGroundLiftThreshold && delta > VisualGroundMaxLift;
             if (!shouldClampDown && !shouldLiftSlightly)
             {
                 return;
             }
 
-            bodyPosition.y = surfaceY;
+            bodyPosition.y = targetRootY;
             if (_hasSmoothedRoot)
             {
-                _smoothedRootPosition.y = surfaceY;
+                _smoothedRootPosition.y = targetRootY;
             }
 
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -591,14 +670,53 @@ namespace WoodburySpectatorSync.Coop
             {
                 _nextGroundClampLogMs = nowMs + 8000;
                 Debug.Log("Remote player visual grounded delta=" + delta.ToString("0.###") +
-                          " y=" + surfaceY.ToString("0.###") +
+                          " surfaceY=" + surfaceY.ToString("0.###") +
+                          " rootY=" + targetRootY.ToString("0.###") +
+                          " seated=" + (seatedVisual ? "yes" : "no") +
                           " scene=" + SceneManager.GetActiveScene().name);
             }
+        }
+
+        private bool TryResolveVisualGroundedRootY(float surfaceY, out float rootY)
+        {
+            rootY = surfaceY;
+            if (_root == null) return false;
+
+            var renderers = _root.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0) return false;
+
+            var minY = float.PositiveInfinity;
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                if (LooksLikeUtilityAvatarObject(renderer.transform)) continue;
+                minY = Mathf.Min(minY, renderer.bounds.min.y);
+            }
+
+            if (float.IsPositiveInfinity(minY)) return false;
+
+            var bottomOffset = minY - _root.transform.position.y;
+            if (bottomOffset < VisualBottomOffsetMin || bottomOffset > VisualBottomOffsetMax)
+            {
+                return false;
+            }
+
+            rootY = surfaceY - bottomOffset + VisualGroundSkin;
+            return true;
         }
 
         private bool TryFindStableSurface(Vector3 bodyPosition, PlayerTransformState state, out float surfaceY)
         {
             surfaceY = bodyPosition.y;
+            NavMeshHit navHit;
+            if (NavMesh.SamplePosition(bodyPosition, out navHit, 1.8f, NavMesh.AllAreas) &&
+                IsReasonableSurfaceY(bodyPosition, state, navHit.position.y))
+            {
+                surfaceY = navHit.position.y;
+                return true;
+            }
+
             var originY = bodyPosition.y + 1.25f;
             if (state.CameraPosition != Vector3.zero)
             {
@@ -613,25 +731,162 @@ namespace WoodburySpectatorSync.Coop
             }
 
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            return TryChooseStableGroundHit(hits, bodyPosition, state, true, out surfaceY, IsOwnRemoteTransform);
+        }
+
+        private bool InferSeatedVisual(PlayerTransformState state, Vector3 bodyPosition)
+        {
+            if (state.CameraPosition == Vector3.zero)
+            {
+                return false;
+            }
+
+            if (!TryFindStableSurface(bodyPosition, state, out var surfaceY))
+            {
+                return false;
+            }
+
+            var eyeHeight = state.CameraPosition.y - surfaceY;
+            if (eyeHeight < SeatedEyeHeightMin || eyeHeight > SeatedEyeHeightMax)
+            {
+                return false;
+            }
+
+            if (_hasMotionSample)
+            {
+                var planarDelta = new Vector2(bodyPosition.x - _lastRootPosition.x, bodyPosition.z - _lastRootPosition.z).magnitude;
+                var deltaTime = Mathf.Max(0.001f, Time.realtimeSinceStartup - _lastSampleTime);
+                if (planarDelta / deltaTime > 1.15f)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsReasonableSurfaceY(Vector3 bodyPosition, PlayerTransformState state, float y)
+        {
+            var bodyDelta = bodyPosition.y - y;
+            if (bodyDelta < -0.95f || bodyDelta > 4.5f)
+            {
+                return false;
+            }
+
+            if (state.CameraPosition != Vector3.zero)
+            {
+                var eyeHeight = state.CameraPosition.y - y;
+                if (eyeHeight < 0.45f || eyeHeight > 3.25f)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryChooseStableGroundHit(
+            RaycastHit[] hits,
+            Vector3 bodyPosition,
+            PlayerTransformState state,
+            bool hasState,
+            out float surfaceY,
+            Func<Transform, bool> rejectTransform = null)
+        {
+            surfaceY = bodyPosition.y;
+            if (hits == null || hits.Length == 0)
+            {
+                return false;
+            }
+
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            var fallbackY = float.NaN;
+            var hasFallback = false;
             for (var i = 0; i < hits.Length; i++)
             {
                 var hit = hits[i];
                 if (hit.collider == null) continue;
-                if (hit.normal.y < 0.35f) continue;
-                if (IsOwnRemoteTransform(hit.collider.transform)) continue;
+                if (hit.normal.y < 0.45f) continue;
+                if (rejectTransform != null && rejectTransform(hit.collider.transform)) continue;
 
                 var y = hit.point.y;
-                if (state.CameraPosition != Vector3.zero)
+                if (hasState && !IsReasonableSurfaceY(bodyPosition, state, y))
                 {
-                    var eyeHeight = state.CameraPosition.y - y;
-                    if (eyeHeight < 0.45f || eyeHeight > 3.25f)
-                    {
-                        continue;
-                    }
+                    continue;
                 }
 
-                surfaceY = y;
+                var transform = hit.collider.transform;
+                if (IsLikelyElevatedPropSurface(transform))
+                {
+                    continue;
+                }
+
+                if (IsLikelyGroundSurface(transform))
+                {
+                    surfaceY = y;
+                    return true;
+                }
+
+                if (!hasFallback)
+                {
+                    fallbackY = y;
+                    hasFallback = true;
+                }
+            }
+
+            if (!hasFallback)
+            {
+                return false;
+            }
+
+            surfaceY = fallbackY;
+            return true;
+        }
+
+        private static bool IsCameraNearBody(Vector3 bodyPosition, Vector3 cameraPosition)
+        {
+            var horizontalDelta = new Vector2(bodyPosition.x - cameraPosition.x, bodyPosition.z - cameraPosition.z).magnitude;
+            return horizontalDelta <= CameraBodyProjectionMaxHorizontalDistance;
+        }
+
+        private static bool IsLikelyGroundSurface(Transform transform)
+        {
+            if (transform == null) return false;
+            var collider = transform.GetComponent<Collider>();
+            if (collider != null && string.Equals(collider.GetType().Name, "TerrainCollider", StringComparison.Ordinal))
+            {
                 return true;
+            }
+
+            var text = GetSurfaceIdentity(transform);
+            return ContainsAnyKeyword(text, GroundSurfaceKeywords);
+        }
+
+        private static bool IsLikelyElevatedPropSurface(Transform transform)
+        {
+            if (transform == null) return false;
+            var text = GetSurfaceIdentity(transform);
+            return ContainsAnyKeyword(text, ElevatedPropSurfaceKeywords);
+        }
+
+        private static string GetSurfaceIdentity(Transform transform)
+        {
+            if (transform == null) return string.Empty;
+            return (GetTransformPath(transform) + "/" + transform.name).ToLowerInvariant();
+        }
+
+        private static bool ContainsAnyKeyword(string text, string[] keywords)
+        {
+            if (string.IsNullOrEmpty(text) || keywords == null) return false;
+            for (var i = 0; i < keywords.Length; i++)
+            {
+                var keyword = keywords[i];
+                if (!string.IsNullOrEmpty(keyword) &&
+                    text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
             }
 
             return false;
@@ -643,11 +898,25 @@ namespace WoodburySpectatorSync.Coop
             return transform == _root.transform || transform.IsChildOf(_root.transform);
         }
 
-        private void DriveAnimatorFromTransform(Vector3 newPosition, Quaternion newRotation)
+        private void DriveAnimatorFromTransform(Vector3 newPosition, Quaternion newRotation, bool seatedVisual)
         {
             if (_animator == null) return;
 
             var now = Time.realtimeSinceStartup;
+            if (seatedVisual)
+            {
+                DriveAnimatorSeatedPose();
+                _lastRootPosition = newPosition;
+                _lastSampleTime = now;
+                _hasMotionSample = true;
+                return;
+            }
+
+            if (_animatorHasMotionControlParams && _animator.speed <= 0.01f)
+            {
+                _animator.speed = 1f;
+            }
+
             if (!_hasMotionSample)
             {
                 _lastRootPosition = newPosition;
@@ -680,6 +949,11 @@ namespace WoodburySpectatorSync.Coop
         public void ApplyInput(PlayerInputState input)
         {
             if (_animator == null) return;
+            if (_lastSeatedVisual)
+            {
+                DriveAnimatorSeatedPose();
+                return;
+            }
 
             var planarSpeed = new Vector2(input.MoveX, input.MoveY).magnitude;
             var moving = Mathf.Abs(input.MoveX) > 0.01f || Mathf.Abs(input.MoveY) > 0.01f;
@@ -740,6 +1014,37 @@ namespace WoodburySpectatorSync.Coop
             _animator.Play(_idleAnimationStateName, 0, 0f);
             _animator.Update(0f);
             _lastIdlePoseTime = now;
+        }
+
+        private void DriveAnimatorSeatedPose()
+        {
+            if (_animator == null) return;
+
+            SetFloatFromRig(_animRig.StrafeFloatNames, 0f);
+            SetFloatFromRig(_animRig.ForwardFloatNames, 0f);
+            SetFloatFromRig(_animRig.SpeedFloatNames, 0f);
+            SetBoolFromRig(_animRig.MovingBoolNames, false);
+            SetBoolFromRig(_animRig.SprintBoolNames, false);
+            SetBoolFromRig(_animRig.CrouchBoolNames, false);
+            SetBoolFromRig(_animRig.JumpBoolNames, false);
+
+            var now = Time.realtimeSinceStartup;
+            if (!string.IsNullOrEmpty(_seatedAnimationStateName))
+            {
+                if (now - _lastSeatedPoseTime >= 0.75f)
+                {
+                    _animator.Play(_seatedAnimationStateName, 0, 0f);
+                    _animator.Update(0f);
+                    _lastSeatedPoseTime = now;
+                }
+            }
+            else
+            {
+                ForceIdlePoseIfAvailable();
+            }
+
+            _animator.speed = 0f;
+            _lastAnimatorMoving = false;
         }
 
         private void SetFloatFromRig(string[] names, float value)
@@ -1910,11 +2215,47 @@ namespace WoodburySpectatorSync.Coop
             return fallback;
         }
 
+        private static string ResolveSeatedAnimationStateName(Animator animator)
+        {
+            if (animator == null || animator.runtimeAnimatorController == null)
+            {
+                return string.Empty;
+            }
+
+            var clips = animator.runtimeAnimatorController.animationClips;
+            if (clips == null || clips.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            for (var i = 0; i < clips.Length; i++)
+            {
+                var clip = clips[i];
+                if (clip == null || string.IsNullOrWhiteSpace(clip.name)) continue;
+
+                var name = clip.name.Trim();
+                if (name.IndexOf("sitting", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("sit", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("seat", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("chair", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("couch", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("sofa", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("drive", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("truck", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return name;
+                }
+            }
+
+            return string.Empty;
+        }
+
         private static Vector3 ResolveBodyRootPosition(PlayerTransformState state)
         {
             var position = state.Position;
             var cameraPosition = state.CameraPosition;
             var cameraHasPosition = cameraPosition != Vector3.zero;
+            var cameraNearBody = cameraHasPosition && IsCameraNearBody(position, cameraPosition);
 
             if (TryProjectToWalkableGround(position, out var groundedFromBody))
             {
@@ -1925,7 +2266,7 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            if (cameraHasPosition)
+            if (cameraNearBody)
             {
                 var cameraBodyEstimate = new Vector3(position.x, cameraPosition.y - CameraFallbackEyeHeight, position.z);
                 if (TryProjectToWalkableGround(cameraBodyEstimate, out var groundedFromCamera))
@@ -1934,7 +2275,7 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            if (cameraPosition == Vector3.zero)
+            if (!cameraHasPosition || !cameraNearBody)
             {
                 return position;
             }
@@ -1987,11 +2328,11 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
-            RaycastHit hit;
             var rayOrigin = position + Vector3.up * 1.25f;
-            if (Physics.Raycast(rayOrigin, Vector3.down, out hit, 4.0f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            var hits = Physics.RaycastAll(rayOrigin, Vector3.down, 4.0f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            if (TryChooseStableGroundHit(hits, position, default, false, out var surfaceY))
             {
-                grounded = new Vector3(position.x, hit.point.y, position.z);
+                grounded = new Vector3(position.x, surfaceY, position.z);
                 return true;
             }
 

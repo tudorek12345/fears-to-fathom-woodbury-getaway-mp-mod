@@ -1,6 +1,6 @@
 # Fears to Fathom: Woodbury Getaway Co-op Mod
 
-Free, unofficial co-op multiplayer mod for **Fears to Fathom: Woodbury Getaway**. Host runs the real game; a second player joins, and the scripted scares happen to both of you in sync.
+unofficial co-op multiplayer mod for **Fears to Fathom: Woodbury Getaway**. Host runs the real game; a second player joins, and the scripted scares happen to both of you in sync.
 
 <!-- AUTO:STATUS-BEGIN -->
 [![co-op built](site/badges/coverage.svg)](https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/) [Live status & roadmap ->](https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/)

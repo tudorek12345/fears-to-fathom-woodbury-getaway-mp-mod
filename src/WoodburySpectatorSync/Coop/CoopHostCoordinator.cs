@@ -119,6 +119,9 @@ namespace WoodburySpectatorSync.Coop
         private const string CabinUnderstairsFlagPrefix = CabinGameFlagPrefix + "Understairs.";
         private const string CabinUnderstairsActivePrefix = CabinUnderstairsFlagPrefix + "Active.";
         private const string CabinHostHidingFlagPrefix = CabinGameFlagPrefix + "HostHiding.";
+        private const string CabinDeathFlagPrefix = CabinGameFlagPrefix + "Death.";
+        private const string CabinDeathActivePrefix = CabinDeathFlagPrefix + "Active.";
+        private const string CabinDeathEnabledPrefix = CabinDeathFlagPrefix + "Enabled.";
         private const string CabinHikerFlagPrefix = CabinGameFlagPrefix + "CabinHiker.";
         private const string CabinHikerControllerFlagPrefix = CabinGameFlagPrefix + "HikerController.";
         private const string CabinHostFixingSinkFlagPrefix = CabinGameFlagPrefix + "HostFixingSink.";
@@ -168,6 +171,9 @@ namespace WoodburySpectatorSync.Coop
         private int _uiMirrorSeq;
         private float _nextSubTextPollTime;
         private string _lastSubText = string.Empty;
+        private int _lastPhoneMirrorHash;
+        private long _nextPhoneMirrorSendMs;
+        private long _nextPhoneMirrorLogMs;
         private int _dialogueConversationId = -1;
         private int _dialogueEntryId = -1;
         private int _dialogueChoiceIndex = -1;
@@ -656,6 +662,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             PollSubText();
+            PollPhoneMirror(nowMs);
 
             if (nowMs >= _nextWorldSendMs)
             {
@@ -1623,6 +1630,7 @@ namespace WoodburySpectatorSync.Coop
             SendCabinAmbientFlags(cabinNowMs);
             SendCabinTrafficFlags(cabinNowMs);
             SendCabinPostEatingFlags(cabinNowMs);
+            SendCabinDeathFlags(cabinNowMs);
             SendCabinHikerFlags(cabinNowMs);
         }
 
@@ -1775,6 +1783,49 @@ namespace WoodburySpectatorSync.Coop
             }
 
             MaybeLogCabinHidingState(mike, shed, understairs, hostHiding);
+        }
+
+        private void SendCabinDeathFlags(long nowMs)
+        {
+            var death = DeathManager.instance;
+            if (death == null)
+            {
+                death = UnityEngine.Object.FindObjectOfType<DeathManager>();
+            }
+
+            if (death == null)
+            {
+                return;
+            }
+
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathFlagPrefix + "Active", death.gameObject.activeSelf ? 1 : 0, nowMs);
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathFlagPrefix + "hostIsChasing", death.hostIsChasing ? 1 : 0, nowMs);
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathFlagPrefix + "hostIsHaunting", death.hostIsHaunting ? 1 : 0, nowMs);
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathFlagPrefix + "waitForFarScare", death.waitForFarScare ? 1 : 0, nowMs);
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathFlagPrefix + "playerCaught", death.playerCaught ? 1 : 0, nowMs);
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathFlagPrefix + "isDead", death.isDead ? 1 : 0, nowMs);
+            if (death.jumpscareLight != null)
+            {
+                EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathActivePrefix + "jumpscareLight", death.jumpscareLight.activeSelf ? 1 : 0, nowMs);
+            }
+
+            EmitDeathBehaviourFlag(death.anomaly, "anomaly", nowMs);
+            EmitDeathBehaviourFlag(death.blurFocus, "blurFocus", nowMs);
+            EmitDeathBehaviourFlag(death.distortionDream, "distortionDream", nowMs);
+            EmitDeathBehaviourFlag(death.realVHS, "realVHS", nowMs);
+            EmitDeathBehaviourFlag(death.filmGrain, "filmGrain", nowMs);
+            EmitDeathBehaviourFlag(death.bloodPlus, "bloodPlus", nowMs);
+            EmitDeathBehaviourFlag(death.cameraShake, "cameraShake", nowMs);
+        }
+
+        private void EmitDeathBehaviourFlag(Behaviour behaviour, string key, long nowMs)
+        {
+            if (behaviour == null || string.IsNullOrEmpty(key))
+            {
+                return;
+            }
+
+            EmitStoryFlagIfChanged(_cabinGameFlags, CabinDeathEnabledPrefix + key, behaviour.enabled ? 1 : 0, nowMs);
         }
 
         private void SendCabinHikerFlags(long nowMs)
@@ -3502,6 +3553,10 @@ namespace WoodburySpectatorSync.Coop
             counts.Ai = (int)Math.Max(0, _server.HostStateEnqueued - before);
 
             before = _server.HostStateEnqueued;
+            SendPhoneMirror(force: true);
+            counts.Dialogue = (int)Math.Max(0, _server.HostStateEnqueued - before);
+
+            before = _server.HostStateEnqueued;
             SendNpcBrainSnapshot();
             counts.Custom = (int)Math.Max(0, _server.HostStateEnqueued - before);
 
@@ -4325,6 +4380,67 @@ namespace WoodburySpectatorSync.Coop
             var duration = Mathf.Clamp(1.5f + text.Length * 0.05f, 2f, 8f);
             _server.Enqueue(new DialogueLineMessage(string.Empty, text, duration, 2));
             SendUiMirrorDialogue(string.Empty, text, duration, 2, visible: true);
+        }
+
+        private void PollPhoneMirror(long nowMs)
+        {
+            if (nowMs < _nextPhoneMirrorSendMs)
+            {
+                return;
+            }
+
+            _nextPhoneMirrorSendMs = nowMs + 500;
+            SendPhoneMirror(force: false);
+        }
+
+        private bool SendPhoneMirror(bool force)
+        {
+            if (!_clientSceneReady)
+            {
+                return false;
+            }
+
+            string payload;
+            int hash;
+            PhoneMirrorSync.Summary summary;
+            if (!PhoneMirrorSync.TryBuildPayload(SceneManager.GetActiveScene().name, out payload, out hash, out summary))
+            {
+                return false;
+            }
+
+            if (!force && hash == _lastPhoneMirrorHash)
+            {
+                return false;
+            }
+
+            _lastPhoneMirrorHash = hash;
+            _uiMirrorSeq++;
+            _server.Enqueue(new UiMirrorStateMessage(new UiMirrorState
+            {
+                SessionId = _server.ActiveSessionId,
+                Generation = _sceneHandshake.Generation,
+                UiSeq = _uiMirrorSeq,
+                UnixTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                SceneName = SceneManager.GetActiveScene().name,
+                UiKind = PhoneMirrorSync.UiKind,
+                Speaker = summary.ToString(),
+                Text = payload,
+                ChoiceIndex = -1,
+                Visible = true,
+                Duration = 1.5f,
+                Flags = 0
+            }));
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (force || nowMs >= _nextPhoneMirrorLogMs)
+            {
+                var line = "PhoneMirror host send " + summary + " hash=" + hash + " force=" + (force ? "yes" : "no");
+                _logger.LogInfo(line);
+                _sessionLogWrite?.Invoke(line);
+                _nextPhoneMirrorLogMs = nowMs + 5000;
+            }
+
+            return true;
         }
     }
 }
