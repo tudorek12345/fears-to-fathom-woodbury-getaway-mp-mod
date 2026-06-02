@@ -41,6 +41,7 @@ namespace WoodburySpectatorSync.Coop
             EmitBobble(fullPrefix + BobblePrefix, GetFieldValue<BobbleHeadMikeCar>(manager, "bobbleHeadMikeCar"), emit, ref hash);
             EmitObject(fullPrefix + ObjectPrefix + "schoolBus.", GetFieldObject(manager, "schoolBus"), emit, ref hash);
             EmitAudio(fullPrefix + ObjectPrefix + "horrorSound.", GetFieldValue<AudioSource>(manager, "horrorSound"), emit, ref hash);
+            EmitAudio(fullPrefix + ObjectPrefix + "musicToFade.", GetFieldValue<AudioSource>(manager, "musicToFade"), emit, ref hash);
             EmitTriggerSubs(fullPrefix + TriggerSubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerSub>(), emit, ref hash);
             EmitDisplaySubs(fullPrefix + DisplaySubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>(), emit, ref hash);
             EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, UnityEngine.Object.FindObjectsOfType<OnTrigger>(), emit, ref hash);
@@ -139,6 +140,14 @@ namespace WoodburySpectatorSync.Coop
                 return TryApplyAudioFlag(
                     GetFieldValue<AudioSource>(manager, "horrorSound"),
                     fieldName.Substring((ObjectPrefix + "horrorSound.").Length),
+                    value);
+            }
+
+            if (fieldName.StartsWith(ObjectPrefix + "musicToFade.", StringComparison.Ordinal))
+            {
+                return TryApplyAudioFlag(
+                    GetFieldValue<AudioSource>(manager, "musicToFade"),
+                    fieldName.Substring((ObjectPrefix + "musicToFade.").Length),
                     value);
             }
 
@@ -319,6 +328,19 @@ namespace WoodburySpectatorSync.Coop
             Emit(prefix + "RandomBumpTimerMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "randomTimerForBump") * 1000f), emit, ref hash);
             Emit(prefix + "PlayerCanSendMessage", GetFieldValue<bool>(manager, "playerCanSendMessage") ? 1 : 0, emit, ref hash);
             Emit(prefix + "CarStartPoint10", Mathf.RoundToInt(manager.carStartPoint * 10f), emit, ref hash);
+            Emit(prefix + "SpeedResetMs", Mathf.RoundToInt(manager.speedResetAfterSeconds * 1000f), emit, ref hash);
+            Emit(prefix + "MikeFirstConvoStartMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "mikeFirstConvoStartDuration") * 1000f), emit, ref hash);
+            Emit(prefix + "MinBumpMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "minBumpRadom") * 1000f), emit, ref hash);
+            Emit(prefix + "MaxBumpMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "maxBumpRadom") * 1000f), emit, ref hash);
+            Emit(prefix + "FirstConvoResume", GetFieldValue<int>(manager, "convoResumePointFirstConvo"), emit, ref hash);
+            Emit(prefix + "FinalConvoResume", GetFieldValue<int>(manager, "convoResumePointFinalConvo"), emit, ref hash);
+            Emit(prefix + "AmbienceFadeOutMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "ambienceVolumeFadeOutDuration") * 1000f), emit, ref hash);
+            Emit(prefix + "AmbienceTargetVolume100", Mathf.RoundToInt(GetFieldValue<float>(manager, "ambienceTargetVolume") * 100f), emit, ref hash);
+            Emit(prefix + "SfxMusicFadeInMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "sfxMusicVolumeFadeInDuration") * 1000f), emit, ref hash);
+            Emit(prefix + "SfxMusicFadeInTarget100", Mathf.RoundToInt(GetFieldValue<float>(manager, "sfxMusicFadeInTargetVolume") * 100f), emit, ref hash);
+            Emit(prefix + "SfxMusicFadeOutMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "sfxMusicVolumeFadeOutDuration") * 1000f), emit, ref hash);
+            Emit(prefix + "SfxMusicFadeOutTarget100", Mathf.RoundToInt(GetFieldValue<float>(manager, "sfxMusicFadeOutTargetVolume") * 100f), emit, ref hash);
+            Emit(prefix + "SceneFadeOutMs", Mathf.RoundToInt(GetFieldValue<float>(manager, "sceneFadeOutDuration") * 1000f), emit, ref hash);
         }
 
         private static void EmitBobble(string prefix, BobbleHeadMikeCar bobble, Action<string, int> emit, ref int hash)
@@ -614,6 +636,19 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "RandomBumpTimerMs", StringComparison.Ordinal)) { SetFieldValue(manager, "randomTimerForBump", value / 1000f); return true; }
             if (string.Equals(name, "PlayerCanSendMessage", StringComparison.Ordinal)) { SetFieldValue(manager, "playerCanSendMessage", value != 0); return true; }
             if (string.Equals(name, "CarStartPoint10", StringComparison.Ordinal)) { manager.carStartPoint = value / 10f; return true; }
+            if (string.Equals(name, "SpeedResetMs", StringComparison.Ordinal)) { manager.speedResetAfterSeconds = value / 1000f; return true; }
+            if (string.Equals(name, "MikeFirstConvoStartMs", StringComparison.Ordinal)) { SetFieldValue(manager, "mikeFirstConvoStartDuration", value / 1000f); return true; }
+            if (string.Equals(name, "MinBumpMs", StringComparison.Ordinal)) { SetFieldValue(manager, "minBumpRadom", value / 1000f); return true; }
+            if (string.Equals(name, "MaxBumpMs", StringComparison.Ordinal)) { SetFieldValue(manager, "maxBumpRadom", value / 1000f); return true; }
+            if (string.Equals(name, "FirstConvoResume", StringComparison.Ordinal)) { SetFieldValue(manager, "convoResumePointFirstConvo", value); return true; }
+            if (string.Equals(name, "FinalConvoResume", StringComparison.Ordinal)) { SetFieldValue(manager, "convoResumePointFinalConvo", value); return true; }
+            if (string.Equals(name, "AmbienceFadeOutMs", StringComparison.Ordinal)) { SetFieldValue(manager, "ambienceVolumeFadeOutDuration", value / 1000f); return true; }
+            if (string.Equals(name, "AmbienceTargetVolume100", StringComparison.Ordinal)) { SetFieldValue(manager, "ambienceTargetVolume", value / 100f); return true; }
+            if (string.Equals(name, "SfxMusicFadeInMs", StringComparison.Ordinal)) { SetFieldValue(manager, "sfxMusicVolumeFadeInDuration", value / 1000f); return true; }
+            if (string.Equals(name, "SfxMusicFadeInTarget100", StringComparison.Ordinal)) { SetFieldValue(manager, "sfxMusicFadeInTargetVolume", value / 100f); return true; }
+            if (string.Equals(name, "SfxMusicFadeOutMs", StringComparison.Ordinal)) { SetFieldValue(manager, "sfxMusicVolumeFadeOutDuration", value / 1000f); return true; }
+            if (string.Equals(name, "SfxMusicFadeOutTarget100", StringComparison.Ordinal)) { SetFieldValue(manager, "sfxMusicFadeOutTargetVolume", value / 100f); return true; }
+            if (string.Equals(name, "SceneFadeOutMs", StringComparison.Ordinal)) { SetFieldValue(manager, "sceneFadeOutDuration", value / 1000f); return true; }
             return true;
         }
 

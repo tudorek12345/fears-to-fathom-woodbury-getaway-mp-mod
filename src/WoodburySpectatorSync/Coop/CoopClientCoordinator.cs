@@ -54,6 +54,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly CabinNpcRegistry _cabinNpcRegistry;
         private readonly GenericNpcRegistry _pizzeriaNpcRegistry;
         private readonly GenericNpcRegistry _roadTripNpcRegistry;
+        private readonly GenericNpcRegistry _officeNpcRegistry;
+        private readonly GenericNpcRegistry _parkingLotNpcRegistry;
         private readonly Dictionary<string, DoorState> _pendingDoorStates = new Dictionary<string, DoorState>();
         private readonly Dictionary<string, HoldableState> _pendingHoldableStates = new Dictionary<string, HoldableState>();
         private readonly Dictionary<string, AiTransformState> _pendingAiStates = new Dictionary<string, AiTransformState>();
@@ -398,6 +400,8 @@ namespace WoodburySpectatorSync.Coop
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "client");
             _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "client");
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "client");
+            _officeNpcRegistry = SceneSyncRegistries.CreateOfficeNpcRegistry(logger, sessionLogWrite, "client");
+            _parkingLotNpcRegistry = SceneSyncRegistries.CreateParkingLotNpcRegistry(logger, sessionLogWrite, "client");
             _interactor = new CoopClientInteractor(client);
             _hostAvatar = new RemoteAvatar("CoopHostAvatar", new Color(1f, 0.2f, 0.2f, 0.8f));
 
@@ -471,7 +475,7 @@ namespace WoodburySpectatorSync.Coop
         {
             get
             {
-                if (SceneManager.GetActiveScene().name == "CabinScene" && _cabinNpcRegistry != null)
+                if (IsCabinSceneName(SceneManager.GetActiveScene().name) && _cabinNpcRegistry != null)
                 {
                     return _cabinNpcRegistry.BuildMikeTargetSummary();
                 }
@@ -491,6 +495,15 @@ namespace WoodburySpectatorSync.Coop
                 if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
                     return _roadTripNpcRegistry != null ? _roadTripNpcRegistry.BuildOverlaySummary("NPC") : "NPC: -";
+                }
+                if (sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return _officeNpcRegistry != null ? _officeNpcRegistry.BuildOverlaySummary("NPC") : "NPC: -";
+                }
+                if (sceneName.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    sceneName.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return _parkingLotNpcRegistry != null ? _parkingLotNpcRegistry.BuildOverlaySummary("NPC") : "NPC: -";
                 }
                 return _cabinNpcRegistry != null ? _cabinNpcRegistry.BuildOverlaySummary(hostSide: false) : "NPC: -";
             }
@@ -666,6 +679,13 @@ namespace WoodburySpectatorSync.Coop
                    string.Equals(sceneName, "Disclaimer", StringComparison.OrdinalIgnoreCase) ||
                    sceneName.IndexOf("Menu", StringComparison.OrdinalIgnoreCase) >= 0 ||
                    sceneName.IndexOf("Disclaimer", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsCabinSceneName(string sceneName)
+        {
+            return string.Equals(sceneName, "CabinScene", StringComparison.Ordinal) ||
+                   string.Equals(sceneName, "CabinSceneDark", StringComparison.Ordinal) ||
+                   string.Equals(sceneName, "CabinDarkScene", StringComparison.Ordinal);
         }
 
         private static void KeepClientMenuInputUsable()
@@ -1291,7 +1311,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.IsNullOrEmpty(sceneName)) return;
             var activeSceneName = SceneManager.GetActiveScene().name;
-            if (sceneName == "CabinScene" || sceneName == "CabinDarkScene")
+            if (IsCabinSceneName(sceneName))
             {
                 _pendingStartSeq = sceneName == "CabinScene" ? startSeq : -1;
                 PrepareCabinStartPrefs(sceneName, startSeq, fromMenu);
@@ -1791,6 +1811,16 @@ namespace WoodburySpectatorSync.Coop
                 _roadTripNpcRegistry.Refresh(sceneName);
                 applied = _roadTripNpcRegistry.ApplyState(state, snapshot);
             }
+            else if (state.NpcId.StartsWith("Office/", StringComparison.Ordinal))
+            {
+                _officeNpcRegistry.Refresh(sceneName);
+                applied = _officeNpcRegistry.ApplyState(state, snapshot);
+            }
+            else if (state.NpcId.StartsWith("ParkingLot/", StringComparison.Ordinal))
+            {
+                _parkingLotNpcRegistry.Refresh(sceneName);
+                applied = _parkingLotNpcRegistry.ApplyState(state, snapshot);
+            }
 
             if (!applied)
             {
@@ -1957,7 +1987,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var fieldName = key.Substring(CabinHouseFlagPrefix.Length);
-            if (SceneManager.GetActiveScene().name != "CabinScene")
+            if (!IsCabinSceneName(SceneManager.GetActiveScene().name))
             {
                 if (allowDefer)
                 {
@@ -2043,7 +2073,7 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
-            if (SceneManager.GetActiveScene().name != "CabinScene")
+            if (!IsCabinSceneName(SceneManager.GetActiveScene().name))
             {
                 if (allowDefer)
                 {
@@ -2684,7 +2714,7 @@ namespace WoodburySpectatorSync.Coop
 
         private bool TryEnsureCabinGameManager()
         {
-            if (SceneManager.GetActiveScene().name != "CabinScene") return false;
+            if (!IsCabinSceneName(SceneManager.GetActiveScene().name)) return false;
             if (_cabinGameManager == null)
             {
                 _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
@@ -3016,8 +3046,7 @@ namespace WoodburySpectatorSync.Coop
             _sceneAdapters.Clear();
             _sceneAdapters.Add(new DelegateClientSceneAdapter(
                 "Cabin",
-                scene => string.Equals(scene, "CabinScene", StringComparison.Ordinal) ||
-                         string.Equals(scene, "CabinDarkScene", StringComparison.Ordinal),
+                IsCabinSceneName,
                 onSceneEnter: () =>
                 {
                     _cabinHouseManager = null;
@@ -5771,7 +5800,7 @@ namespace WoodburySpectatorSync.Coop
         private void EnsureCabinGameManager()
         {
             if (_cabinGameManager != null) return;
-            if (SceneManager.GetActiveScene().name != "CabinScene") return;
+            if (!IsCabinSceneName(SceneManager.GetActiveScene().name)) return;
 
             _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
             if (_cabinGameManager != null)
@@ -6153,6 +6182,8 @@ namespace WoodburySpectatorSync.Coop
             _pendingCabinGameFlags.Clear();
             _pendingPizzeriaFlags.Clear();
             _pendingRoadTripFlags.Clear();
+            _pendingOfficeFlags.Clear();
+            _pendingParkingLotFlags.Clear();
             _cabinHouseManager = null;
             _cabinGameManager = null;
             _pizzeriaGameManager = null;
@@ -6161,6 +6192,8 @@ namespace WoodburySpectatorSync.Coop
             _roadTripGameManager = null;
             _roadTripMikeInCar = null;
             _roadTripTruck = null;
+            _officeLayoutGameManager = null;
+            _parkingLotGameManager = null;
             _cabinHouseFieldCache.Clear();
             _cabinGameFieldCache.Clear();
             _cabinPostEatingFieldCache.Clear();
@@ -6174,6 +6207,8 @@ namespace WoodburySpectatorSync.Coop
             _roadTripFieldCache.Clear();
             _roadTripMikeFieldCache.Clear();
             _roadTripTruckFieldCache.Clear();
+            _officeFieldCache.Clear();
+            _parkingLotFieldCache.Clear();
             _aiFallbackTargets.Clear();
             _aiMissingLogged.Clear();
             _aiFallbackLogged.Clear();
@@ -6196,6 +6231,8 @@ namespace WoodburySpectatorSync.Coop
             _pendingCabinGameFirstSeen.Clear();
             _pendingPizzeriaFirstSeen.Clear();
             _pendingRoadTripFirstSeen.Clear();
+            _pendingOfficeFirstSeen.Clear();
+            _pendingParkingLotFirstSeen.Clear();
             _nextPendingRetryLogTime = 0f;
             _lastCabinHidingDebug = "-";
             _nextCabinHidingLogTime = 0f;
@@ -6604,6 +6641,15 @@ namespace WoodburySpectatorSync.Coop
             else if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 _roadTripNpcRegistry.SuppressLocalBrain();
+            }
+            else if (sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _officeNpcRegistry.SuppressLocalBrain();
+            }
+            else if (sceneName.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     sceneName.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _parkingLotNpcRegistry.SuppressLocalBrain();
             }
         }
 

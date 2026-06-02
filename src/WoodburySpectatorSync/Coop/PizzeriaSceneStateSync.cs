@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace WoodburySpectatorSync.Coop
 {
@@ -17,6 +18,7 @@ namespace WoodburySpectatorSync.Coop
         private const string UiPrefix = KeyPrefix + "UI.";
         private const string PlayerPrefix = KeyPrefix + "Player.";
         private const string DrivingPrefix = KeyPrefix + "Driving.";
+        private const string MikeDetailPrefix = KeyPrefix + "MikeDetail.";
         private const string ChairPrefix = KeyPrefix + "Chair.";
         private const string BoundaryPrefix = KeyPrefix + "Boundary.";
         private const string OutOfZonePrefix = KeyPrefix + "OutOfZone";
@@ -33,17 +35,42 @@ namespace WoodburySpectatorSync.Coop
 
         private static readonly Dictionary<string, FieldInfo> FieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         private static long _nextSuppressLogMs;
+        private static long _nextHostMikeLogMs;
+        private static long _nextClientMikeLogMs;
+        private static string _lastHostMikeLogSignature = string.Empty;
+        private static string _lastClientMikeLogSignature = string.Empty;
 
-        public static int EmitHostFlags(string fullPrefix, PizzeriaGameManager manager, Action<string, int> emit)
+        private enum PizzeriaMikePhase
+        {
+            Unknown = 0,
+            DrivingIntro = 1,
+            ParkedOutside = 2,
+            TableSitting = 3,
+            Eating = 4,
+            GetPizza = 5,
+            TrashCan = 6,
+            ReturningToCar = 7,
+            WaitingInCar = 8
+        }
+
+        public static int EmitHostFlags(
+            string fullPrefix,
+            PizzeriaGameManager manager,
+            Action<string, int> emit,
+            ManualLogSource logger = null,
+            Action<string> sessionLogWrite = null)
         {
             if (emit == null) return 0;
 
             var hash = 71;
+            var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+            var mike = ResolvePizzeriaMike(manager);
             EmitGame(fullPrefix + GamePrefix, manager, emit, ref hash);
             EmitPhone(fullPrefix + PhonePrefix, GetFieldValue<Phone>(manager, "phoneUI"), emit, ref hash);
             EmitUi(fullPrefix + UiPrefix, UnityEngine.Object.FindObjectOfType<PizzerriaUIManager>(), emit, ref hash);
             EmitPlayer(fullPrefix + PlayerPrefix, UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>(), emit, ref hash);
-            EmitDriving(fullPrefix + DrivingPrefix, GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving"), emit, ref hash);
+            EmitDriving(fullPrefix + DrivingPrefix, driving, emit, ref hash);
+            EmitPizzeriaMike(fullPrefix + MikeDetailPrefix, manager, mike, driving, emit, ref hash, logger, sessionLogWrite);
             EmitChair(fullPrefix + ChairPrefix, manager != null ? manager.pizzeriaChair : UnityEngine.Object.FindObjectOfType<PizzeriaChair>(), emit, ref hash);
             EmitBoundaries(fullPrefix + BoundaryPrefix, UnityEngine.Object.FindObjectsOfType<BoundaryCollidersTogglePizzeria>(), emit, ref hash);
             EmitOutOfZones(fullPrefix + OutOfZonePrefix, UnityEngine.Object.FindObjectsOfType<OutOfPlayZonePizzeria>(), emit, ref hash);
@@ -92,6 +119,7 @@ namespace WoodburySpectatorSync.Coop
             var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
             var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
             AddTransform(driving, transforms);
+            AddTransform(ResolvePizzeriaMike(manager), transforms);
         }
 
         public static bool TryApplyFlag(string fieldName, int value, ManualLogSource logger)
@@ -141,6 +169,19 @@ namespace WoodburySpectatorSync.Coop
                     GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>(),
                     fieldName.Substring(DrivingPrefix.Length),
                     value);
+            }
+
+            if (fieldName.StartsWith(MikeDetailPrefix, StringComparison.Ordinal))
+            {
+                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+                return TryApplyPizzeriaMikeFlag(
+                    manager,
+                    ResolvePizzeriaMike(manager),
+                    driving,
+                    fieldName.Substring(MikeDetailPrefix.Length),
+                    value,
+                    logger);
             }
 
             if (fieldName.StartsWith(ChairPrefix, StringComparison.Ordinal))
@@ -337,6 +378,7 @@ namespace WoodburySpectatorSync.Coop
             var dialogueCamera = GetFieldValue<Camera>(player, "dialogueCamera");
             var mainCamera = GetFieldValue<Camera>(player, "mainCamera");
             var lookAtObject = GetFieldValue<Transform>(player, "lookAtObject");
+            var lookHere = GetFieldValue<Transform>(player, "lookHere");
             Emit(prefix + "DrivingFreeze", drivingCam != null && drivingCam.FreezeCam ? 1 : 0, emit, ref hash);
             Emit(prefix + "GlobalFovEnabled", fovZoom != null && fovZoom.enabled ? 1 : 0, emit, ref hash);
             Emit(prefix + "GlobalFovDisable", fovZoom != null && fovZoom.disableFov ? 1 : 0, emit, ref hash);
@@ -346,6 +388,8 @@ namespace WoodburySpectatorSync.Coop
             Emit(prefix + "ZoomIntoTransform", GetFieldValue<bool>(player, "zoomIntoTransform") ? 1 : 0, emit, ref hash);
             Emit(prefix + "ReturnToDefaultZoom", GetFieldValue<bool>(player, "returnToDefaultZoom") ? 1 : 0, emit, ref hash);
             Emit(prefix + "LookTargetHash", lookAtObject != null ? StableStringHash(NetPath.GetPath(lookAtObject)) : 0, emit, ref hash);
+            Emit(prefix + "LookTargetKind", GetPizzeriaLookTargetKind(player, lookAtObject), emit, ref hash);
+            Emit(prefix + "LookHereKind", GetPizzeriaLookHereKind(player, lookHere), emit, ref hash);
             Emit(prefix + "MainCameraFov10", mainCamera != null ? Mathf.RoundToInt(mainCamera.fieldOfView * 10f) : 0, emit, ref hash);
         }
 
@@ -538,6 +582,71 @@ namespace WoodburySpectatorSync.Coop
             EmitAudio(prefix + "HandBreak.", driving.handBreakAS, emit, ref hash);
         }
 
+        private static void EmitPizzeriaMike(
+            string prefix,
+            PizzeriaGameManager manager,
+            MikePizzeria mike,
+            MikeDrivingInPizzeriaScene driving,
+            Action<string, int> emit,
+            ref int hash,
+            ManualLogSource logger,
+            Action<string> sessionLogWrite)
+        {
+            if (mike == null)
+            {
+                Emit(prefix + "Exists", 0, emit, ref hash);
+                return;
+            }
+
+            var phase = ResolvePizzeriaMikePhase(manager, mike, driving);
+            var animator = mike.animator ?? mike.GetComponentInChildren<Animator>(true);
+            var nav = mike.navMeshAgent ?? mike.GetComponentInChildren<NavMeshAgent>(true);
+
+            Emit(prefix + "Exists", 1, emit, ref hash);
+            Emit(prefix + "Phase", (int)phase, emit, ref hash);
+            Emit(prefix + "RootActive", mike.gameObject.activeSelf ? 1 : 0, emit, ref hash);
+            Emit(prefix + "ActiveInHierarchy", mike.gameObject.activeInHierarchy ? 1 : 0, emit, ref hash);
+            Emit(prefix + "Layer", mike.gameObject.layer, emit, ref hash);
+            Emit(prefix + "Visible", CountVisibleRenderers(mike.gameObject) > 0 ? 1 : 0, emit, ref hash);
+            Emit(prefix + "RendererCount", CountRenderers(mike.gameObject), emit, ref hash);
+            Emit(prefix + "VisibleRendererCount", CountVisibleRenderers(mike.gameObject), emit, ref hash);
+            Emit(prefix + "ParentMode", ResolvePizzeriaMikeParentMode(mike), emit, ref hash);
+            Emit(prefix + "State", (int)mike.state, emit, ref hash);
+            Emit(prefix + "Moving", mike.moving ? 1 : 0, emit, ref hash);
+            Emit(prefix + "GoGetPizza", GetFieldValue<bool>(mike, "goGetPizza") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "GoTrashCan", GetFieldValue<bool>(mike, "goTrashCan") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "PizzaInHand", GetFieldValue<bool>(mike, "pizzaInHand") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "EatingPizza", mike.eatingPizza ? 1 : 0, emit, ref hash);
+            Emit(prefix + "MikeGotPizzaInHand", mike.mikeGotThePizzaInHand ? 1 : 0, emit, ref hash);
+            Emit(prefix + "CapsuleEnabled", mike.capsuleCollider != null && mike.capsuleCollider.enabled ? 1 : 0, emit, ref hash);
+            Emit(prefix + "NavEnabled", nav != null && nav.enabled ? 1 : 0, emit, ref hash);
+            Emit(prefix + "NavStopped", nav != null && nav.enabled && nav.isStopped ? 1 : 0, emit, ref hash);
+            Emit(prefix + "AnimatorEnabled", animator != null && animator.enabled ? 1 : 0, emit, ref hash);
+            Emit(prefix + "AnimatorSpeed1000", animator != null ? Mathf.RoundToInt(animator.speed * 1000f) : 0, emit, ref hash);
+            Emit(prefix + "AnimatorParamState", animator != null ? GetAnimatorInt(animator, "State") : 0, emit, ref hash);
+            Emit(prefix + "ArmRigPizzaWeight1000", Mathf.RoundToInt(GetRigWeight(GetFieldObject(mike, "armRigPizza")) * 1000f), emit, ref hash);
+            Emit(prefix + "WorldX", Mathf.RoundToInt(mike.transform.position.x * 1000f), emit, ref hash);
+            Emit(prefix + "WorldY", Mathf.RoundToInt(mike.transform.position.y * 1000f), emit, ref hash);
+            Emit(prefix + "WorldZ", Mathf.RoundToInt(mike.transform.position.z * 1000f), emit, ref hash);
+            Emit(prefix + "Yaw10", Mathf.RoundToInt(mike.transform.eulerAngles.y * 10f), emit, ref hash);
+            Emit(prefix + "PizzaBoxActive", IsObjectActive(mike.pizzaBox) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "PizzaBoxOnTableActive", IsObjectActive(mike.pizzaBoxOnTable) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "PizzaBoxOnCounterActive", IsObjectActive(mike.pizzaBoxOnCounter) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "PizzaSliceActive", IsObjectActive(mike.pizzaSlice) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "PhoneActive", IsObjectActive(mike.phone) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "DoorColliderActive", IsObjectActive(mike.doorCollider) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "OrderConvoTriggerActive", IsObjectActive(mike.orderConvoTrigger) ? 1 : 0, emit, ref hash);
+
+            MaybeLogPizzeriaMikeDiagnostics(
+                "host",
+                phase,
+                manager,
+                mike,
+                driving,
+                logger,
+                sessionLogWrite);
+        }
+
         private static void EmitObjectArray(string key, GameObject[] objects, Action<string, int> emit, ref int hash)
         {
             Emit(key, BuildActiveMask(objects), emit, ref hash);
@@ -688,8 +797,66 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "ZoomIntoTransform", StringComparison.Ordinal)) { SetFieldValue(player, "zoomIntoTransform", value != 0); return true; }
             if (string.Equals(name, "ReturnToDefaultZoom", StringComparison.Ordinal)) { SetFieldValue(player, "returnToDefaultZoom", value != 0); return true; }
             if (string.Equals(name, "LookTargetHash", StringComparison.Ordinal)) return true;
+            if (string.Equals(name, "LookTargetKind", StringComparison.Ordinal)) { SetPizzeriaLookTargetKind(player, value); return true; }
+            if (string.Equals(name, "LookHereKind", StringComparison.Ordinal)) { SetPizzeriaLookHereKind(player, value); return true; }
             if (string.Equals(name, "MainCameraFov10", StringComparison.Ordinal)) { if (mainCamera != null) mainCamera.fieldOfView = value / 10f; return true; }
             return true;
+        }
+
+        private static int GetPizzeriaLookTargetKind(PizzeriaPlayerController player, Transform target)
+        {
+            if (player == null || target == null) return 0;
+            if (ReferenceEquals(target, GetFieldValue<Transform>(player, "mikeTransform"))) return 1;
+            if (ReferenceEquals(target, GetFieldValue<Transform>(player, "pizzeriaTransform"))) return 2;
+            return StableStringHash(NetPath.GetPath(target));
+        }
+
+        private static void SetPizzeriaLookTargetKind(PizzeriaPlayerController player, int value)
+        {
+            if (player == null) return;
+
+            Transform target = null;
+            if (value == 1) target = GetFieldValue<Transform>(player, "mikeTransform");
+            else if (value == 2) target = GetFieldValue<Transform>(player, "pizzeriaTransform");
+
+            if (target != null || value == 0)
+            {
+                SetFieldValue(player, "lookAtObject", target);
+            }
+        }
+
+        private static int GetPizzeriaLookHereKind(PizzeriaPlayerController player, Transform target)
+        {
+            if (player == null || target == null) return 0;
+            if (ReferenceEquals(target, player.lookHereCashier)) return 1;
+            if (ReferenceEquals(target, player.lookHereMike)) return 2;
+            if (ReferenceEquals(target, player.lookHereHatGuy)) return 3;
+            if (ReferenceEquals(target, player.lookHereGreyShirt)) return 4;
+            if (ReferenceEquals(target, player.lookHereYoungMan)) return 5;
+            if (ReferenceEquals(target, player.lookHereBlackWoman)) return 6;
+            if (ReferenceEquals(target, player.lookHereHobo)) return 7;
+            if (ReferenceEquals(target, player.lookHereHiker)) return 8;
+            return StableStringHash(NetPath.GetPath(target));
+        }
+
+        private static void SetPizzeriaLookHereKind(PizzeriaPlayerController player, int value)
+        {
+            if (player == null) return;
+
+            Transform target = null;
+            if (value == 1) target = player.lookHereCashier;
+            else if (value == 2) target = player.lookHereMike;
+            else if (value == 3) target = player.lookHereHatGuy;
+            else if (value == 4) target = player.lookHereGreyShirt;
+            else if (value == 5) target = player.lookHereYoungMan;
+            else if (value == 6) target = player.lookHereBlackWoman;
+            else if (value == 7) target = player.lookHereHobo;
+            else if (value == 8) target = player.lookHereHiker;
+
+            if (target != null || value == 0)
+            {
+                player.lookHere = target;
+            }
         }
 
         private static bool TryApplyDrivingFlag(MikeDrivingInPizzeriaScene driving, string name, int value)
@@ -713,6 +880,71 @@ namespace WoodburySpectatorSync.Coop
             if (name.StartsWith("Engine.", StringComparison.Ordinal)) return TryApplyAudioFlag(GetFieldValue<AudioSource>(driving, "engineSound"), name.Substring("Engine.".Length), value);
             if (name.StartsWith("Key.", StringComparison.Ordinal)) return TryApplyAudioFlag(driving.keyAS, name.Substring("Key.".Length), value);
             if (name.StartsWith("HandBreak.", StringComparison.Ordinal)) return TryApplyAudioFlag(driving.handBreakAS, name.Substring("HandBreak.".Length), value);
+            return true;
+        }
+
+        private static bool TryApplyPizzeriaMikeFlag(
+            PizzeriaGameManager manager,
+            MikePizzeria mike,
+            MikeDrivingInPizzeriaScene driving,
+            string name,
+            int value,
+            ManualLogSource logger)
+        {
+            if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
+            if (mike == null) return false;
+
+            if (string.Equals(name, "Phase", StringComparison.Ordinal))
+            {
+                ApplyPizzeriaMikePhase(manager, mike, driving, (PizzeriaMikePhase)value, logger);
+                return true;
+            }
+
+            if (string.Equals(name, "RootActive", StringComparison.Ordinal))
+            {
+                if (value != 0 || !ShouldForcePizzeriaMikeVisible(manager, mike))
+                {
+                    mike.gameObject.SetActive(value != 0);
+                }
+                return true;
+            }
+
+            if (string.Equals(name, "ActiveInHierarchy", StringComparison.Ordinal) ||
+                string.Equals(name, "RendererCount", StringComparison.Ordinal) ||
+                string.Equals(name, "VisibleRendererCount", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (string.Equals(name, "Layer", StringComparison.Ordinal)) { mike.gameObject.layer = value; return true; }
+            if (string.Equals(name, "Visible", StringComparison.Ordinal)) { ApplyPizzeriaMikeVisibility(manager, mike, value != 0); return true; }
+            if (string.Equals(name, "ParentMode", StringComparison.Ordinal)) { ApplyPizzeriaMikeParentMode(mike, value); return true; }
+            if (string.Equals(name, "State", StringComparison.Ordinal)) { mike.state = (MikePizzeria.State)value; return true; }
+            if (string.Equals(name, "Moving", StringComparison.Ordinal)) { mike.moving = value != 0; return true; }
+            if (string.Equals(name, "GoGetPizza", StringComparison.Ordinal)) { SetFieldValue(mike, "goGetPizza", value != 0); return true; }
+            if (string.Equals(name, "GoTrashCan", StringComparison.Ordinal)) { SetFieldValue(mike, "goTrashCan", value != 0); return true; }
+            if (string.Equals(name, "PizzaInHand", StringComparison.Ordinal)) { SetFieldValue(mike, "pizzaInHand", value != 0); return true; }
+            if (string.Equals(name, "EatingPizza", StringComparison.Ordinal)) { mike.eatingPizza = value != 0; return true; }
+            if (string.Equals(name, "MikeGotPizzaInHand", StringComparison.Ordinal)) { mike.mikeGotThePizzaInHand = value != 0; return true; }
+            if (string.Equals(name, "CapsuleEnabled", StringComparison.Ordinal)) { if (mike.capsuleCollider != null) mike.capsuleCollider.enabled = value != 0; return true; }
+            if (string.Equals(name, "NavEnabled", StringComparison.Ordinal)) { if (mike.navMeshAgent != null) mike.navMeshAgent.enabled = value != 0; return true; }
+            if (string.Equals(name, "NavStopped", StringComparison.Ordinal)) { if (mike.navMeshAgent != null && mike.navMeshAgent.enabled) mike.navMeshAgent.isStopped = value != 0; return true; }
+            if (string.Equals(name, "AnimatorEnabled", StringComparison.Ordinal)) { if (mike.animator != null) mike.animator.enabled = true; return true; }
+            if (string.Equals(name, "AnimatorSpeed1000", StringComparison.Ordinal)) { if (mike.animator != null) mike.animator.speed = Mathf.Max(0f, value / 1000f); return true; }
+            if (string.Equals(name, "AnimatorParamState", StringComparison.Ordinal)) { SetAnimatorInt(mike.animator, "State", value); return true; }
+            if (string.Equals(name, "ArmRigPizzaWeight1000", StringComparison.Ordinal)) { SetRigWeight(GetFieldObject(mike, "armRigPizza"), value / 1000f); return true; }
+            if (string.Equals(name, "WorldX", StringComparison.Ordinal)) { SetAxisPosition(mike.transform, 0, value / 1000f); return true; }
+            if (string.Equals(name, "WorldY", StringComparison.Ordinal)) { SetAxisPosition(mike.transform, 1, value / 1000f); return true; }
+            if (string.Equals(name, "WorldZ", StringComparison.Ordinal)) { SetAxisPosition(mike.transform, 2, value / 1000f); return true; }
+            if (string.Equals(name, "Yaw10", StringComparison.Ordinal)) { SetYaw(mike.transform, value / 10f); return true; }
+            if (string.Equals(name, "PizzaBoxActive", StringComparison.Ordinal)) { SetObjectActive(mike.pizzaBox, value != 0); return true; }
+            if (string.Equals(name, "PizzaBoxOnTableActive", StringComparison.Ordinal)) { SetObjectActive(mike.pizzaBoxOnTable, value != 0); return true; }
+            if (string.Equals(name, "PizzaBoxOnCounterActive", StringComparison.Ordinal)) { SetObjectActive(mike.pizzaBoxOnCounter, value != 0); return true; }
+            if (string.Equals(name, "PizzaSliceActive", StringComparison.Ordinal)) { SetObjectActive(mike.pizzaSlice, value != 0); return true; }
+            if (string.Equals(name, "PhoneActive", StringComparison.Ordinal)) { SetObjectActive(mike.phone, value != 0); return true; }
+            if (string.Equals(name, "DoorColliderActive", StringComparison.Ordinal)) { SetObjectActive(mike.doorCollider, value != 0); return true; }
+            if (string.Equals(name, "OrderConvoTriggerActive", StringComparison.Ordinal)) { SetObjectActive(mike.orderConvoTrigger, value != 0); return true; }
+
             return true;
         }
 

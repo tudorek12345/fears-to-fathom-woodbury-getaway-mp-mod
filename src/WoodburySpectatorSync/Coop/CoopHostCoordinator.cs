@@ -37,6 +37,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly CabinNpcRegistry _cabinNpcRegistry;
         private readonly GenericNpcRegistry _pizzeriaNpcRegistry;
         private readonly GenericNpcRegistry _roadTripNpcRegistry;
+        private readonly GenericNpcRegistry _officeNpcRegistry;
+        private readonly GenericNpcRegistry _parkingLotNpcRegistry;
         private readonly Dictionary<string, int> _npcSeqById = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _npcLastStateHashById = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _npcLastSendMsById = new Dictionary<string, long>(StringComparer.Ordinal);
@@ -73,6 +75,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly MethodInfo _doorScriptOpen;
         private readonly MethodInfo _doorScriptClose;
         private readonly FieldInfo _playerFirstPersonField;
+        private readonly FieldInfo _playerPausedField;
         private readonly FieldInfo _cabinMikeControllerField;
         private readonly FieldInfo _cabinMikeRizzlerControllerField;
         private readonly List<FieldInfo> _cabinHouseBoolFields = new List<FieldInfo>();
@@ -189,6 +192,19 @@ namespace WoodburySpectatorSync.Coop
         private int _lastCabinAmbientHash;
         private long _nextCabinAmbientLogMs;
         private float _nextCabinHidingLogTime;
+        private bool _hostWaitActive;
+        private bool _hostWaitPlayerPauseCaptured;
+        private bool _hostWaitOriginalPlayerPaused;
+        private float _hostWaitPreviousTimeScale = 1f;
+        private long _hostWaitEnteredMs;
+        private long _hostWaitNextStillLogMs;
+        private long _hostWaitNextSnapshotRetryMs;
+        private string _hostWaitReason = "-";
+        private string _hostWaitScene = "-";
+        private string _hostWaitSummary = "HostWait: no";
+
+        private const long HostWaitStillLogIntervalMs = 5000;
+        private const long HostWaitSnapshotRetryMs = 15000;
 
         private readonly string[] _storyKeys = new[]
         {
@@ -441,6 +457,8 @@ namespace WoodburySpectatorSync.Coop
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "host");
             _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "host");
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "host");
+            _officeNpcRegistry = SceneSyncRegistries.CreateOfficeNpcRegistry(logger, sessionLogWrite, "host");
+            _parkingLotNpcRegistry = SceneSyncRegistries.CreateParkingLotNpcRegistry(logger, sessionLogWrite, "host");
             _clientAvatar = new RemoteAvatar("CoopClientAvatar", new Color(0.2f, 0.7f, 1f, 0.8f));
 
             var doorType = typeof(NOTLonely_Door.DoorScript);
@@ -448,6 +466,7 @@ namespace WoodburySpectatorSync.Coop
             _doorScriptOpen = doorType.GetMethod("OpenDoor", BindingFlags.Instance | BindingFlags.NonPublic);
             _doorScriptClose = doorType.GetMethod("CloseDoor", BindingFlags.Instance | BindingFlags.NonPublic);
             _playerFirstPersonField = typeof(PlayerController).GetField("firstPersonController", BindingFlags.Instance | BindingFlags.NonPublic);
+            _playerPausedField = typeof(PlayerController).GetField("isPaused", BindingFlags.Instance | BindingFlags.NonPublic);
             _cabinMikeControllerField = typeof(CabinGameManager).GetField("mikeController", BindingFlags.Instance | BindingFlags.NonPublic);
             _cabinMikeRizzlerControllerField = typeof(CabinGameManager).GetField("mikeRizzlerController", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -491,9 +510,14 @@ namespace WoodburySpectatorSync.Coop
         public string LastCabinMikeSyncDebug => _lastCabinMikeSyncDebug;
         public string NpcOverlaySummary => _npcOverlaySummary;
         public string BoardGameOverlaySummary => _boardGameOverlaySummary;
+        public string HostWaitSummary => _hostWaitSummary;
+        public bool ShouldShowHostWaitIndicator => ShouldShowHostWaitIndicatorInternal();
+        public string HostWaitIndicatorTitle => BuildHostWaitIndicatorTitle();
+        public string HostWaitIndicatorDetail => BuildHostWaitIndicatorDetail();
 
         public void Shutdown()
         {
+            ReleaseHostWait(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), "shutdown");
             SceneManager.activeSceneChanged -= OnSceneChanged;
             UnbindDialogueEvents();
             UnbindDialogueUiSelection();
@@ -509,6 +533,7 @@ namespace WoodburySpectatorSync.Coop
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (!_server.IsRunning)
             {
+                ReleaseHostWait(nowMs, "server-stopped");
                 if (_lifecycle.State != SessionState.Disconnected)
                 {
                     _lifecycle.ForceDisconnect("server-stopped", nowMs);
@@ -563,6 +588,7 @@ namespace WoodburySpectatorSync.Coop
                 _lastHostTransformSendMs = 0;
                 _sceneHandshake.ResetReady();
                 _lifecycle.ForceDisconnect("client-disconnected", nowMs);
+                ReleaseHostWait(nowMs, "client-disconnected");
                 if (_remotePlayer != null)
                 {
                     _remotePlayer.SetActive(false);
@@ -574,31 +600,42 @@ namespace WoodburySpectatorSync.Coop
             DrainIncoming();
             BindDialogueUiSelection();
 
-            // Bounded SceneChange retry; only resend while we're actually awaiting SceneReady in SceneSyncing.
+            // Bounded SceneChange retry; host-wait mode holds the host and continues slow heartbeats.
             if (_server.IsClientConnected && _lifecycle.State == SessionState.SceneSyncing &&
                 _sceneHandshake.AwaitingReady &&
                 nowMs - _sceneHandshake.LastSceneRequestMs >= GetSceneChangeRetryBackoffMs(_sceneHandshake.LastSentAttemptCount + 1))
             {
                 if (_sceneHandshake.LastSentAttemptCount >= SceneHandshakeState.MaxAttempts)
                 {
-                    _logger.LogWarning("Co-op session host: SceneChange exhausted reason=no-scene-ready scene=" +
-                        _sceneHandshake.SceneName + " gen=" + _sceneGeneration +
-                        " sid=" + _server.ActiveSessionId);
-                    _awaitingSceneReady = false;
-                    _sceneHandshake.ResetReady();
-                    _lifecycle.TryTransition(
-                        SessionState.Reconnecting,
-                        "no-scene-ready",
-                        _sceneHandshake.SceneName,
-                        _sceneGeneration,
-                        _server.ActiveSessionId,
-                        nowMs);
+                    if (IsHostWaitEnabled())
+                    {
+                        LogHostWaitStill(nowMs, "scene-ready");
+                        SendSceneChange(countAttempt: false);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Co-op session host: SceneChange exhausted reason=no-scene-ready scene=" +
+                            _sceneHandshake.SceneName + " gen=" + _sceneGeneration +
+                            " sid=" + _server.ActiveSessionId);
+                        _awaitingSceneReady = false;
+                        _sceneHandshake.ResetReady();
+                        _lifecycle.TryTransition(
+                            SessionState.Reconnecting,
+                            "no-scene-ready",
+                            _sceneHandshake.SceneName,
+                            _sceneGeneration,
+                            _server.ActiveSessionId,
+                            nowMs);
+                    }
                 }
                 else
                 {
                     SendSceneChange();
                 }
             }
+
+            RetrySnapshotAckWait(nowMs);
+            UpdateHostWaitGate(nowMs);
 
             if (_server.IsClientConnected && nowMs >= _nextPlayerSendMs)
             {
@@ -646,6 +683,317 @@ namespace WoodburySpectatorSync.Coop
                 EmitSnapshot(force: true);
                 _lastDriftRecoveryMs = nowMs;
             }
+        }
+
+        private void UpdateHostWaitGate(long nowMs)
+        {
+            string reason;
+            var shouldPause = ShouldPauseHostForClient(out reason);
+            if (shouldPause)
+            {
+                EnterOrMaintainHostWait(nowMs, reason);
+            }
+            else
+            {
+                ReleaseHostWait(nowMs, "not-waiting");
+            }
+
+            RefreshHostWaitSummary(nowMs);
+        }
+
+        private bool IsHostWaitEnabled()
+        {
+            return _settings != null &&
+                   _settings.CoopHostWaitForClient != null &&
+                   _settings.CoopHostWaitForClient.Value;
+        }
+
+        private bool IsHostWaitIndicatorEnabled()
+        {
+            return _settings != null &&
+                   _settings.CoopHostWaitIndicator != null &&
+                   _settings.CoopHostWaitIndicator.Value;
+        }
+
+        private bool ShouldPauseHostForClient(out string reason)
+        {
+            reason = "-";
+            if (!IsHostWaitEnabled() ||
+                _server == null ||
+                !_server.IsRunning ||
+                !_server.IsClientConnected ||
+                _lifecycle == null ||
+                _lifecycle.State == SessionState.Disconnected ||
+                _lifecycle.State == SessionState.Connecting ||
+                _lifecycle.State == SessionState.Hello ||
+                _lifecycle.IsLive)
+            {
+                return false;
+            }
+
+            if (_sceneHandshake.AwaitingReady || _lifecycle.State == SessionState.SceneSyncing)
+            {
+                reason = "scene-ready";
+                return true;
+            }
+
+            if (_lifecycle.State == SessionState.SceneReady ||
+                _lifecycle.State == SessionState.SnapshotApplying ||
+                (_sceneHandshake.LastSnapshotEndGeneration == _sceneHandshake.Generation &&
+                 !_sceneHandshake.IsSnapshotAcknowledged()))
+            {
+                reason = "snapshot-ack";
+                return true;
+            }
+
+            if (_lifecycle.State == SessionState.Reconnecting)
+            {
+                reason = "reconnect";
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool ShouldShowHostWaitIndicatorInternal()
+        {
+            if (!IsHostWaitIndicatorEnabled() || _server == null || !_server.IsRunning) return false;
+            if (!_server.IsClientConnected) return true;
+            if (_hostWaitActive) return true;
+            if (_lifecycle == null) return false;
+            return _lifecycle.State == SessionState.Hello ||
+                   _lifecycle.State == SessionState.Connecting ||
+                   (_lifecycle.IsAtLeast(SessionState.Connected) && !_lifecycle.IsLive);
+        }
+
+        private void EnterOrMaintainHostWait(long nowMs, string reason)
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (!_hostWaitActive)
+            {
+                _hostWaitActive = true;
+                _hostWaitReason = string.IsNullOrEmpty(reason) ? "-" : reason;
+                _hostWaitScene = string.IsNullOrEmpty(sceneName) ? "-" : sceneName;
+                _hostWaitEnteredMs = nowMs;
+                _hostWaitNextStillLogMs = nowMs + HostWaitStillLogIntervalMs;
+                _hostWaitPreviousTimeScale = Time.timeScale;
+                _hostWaitPlayerPauseCaptured = false;
+                Time.timeScale = 0f;
+                ApplyHostPlayerPause();
+                LogHostWait("enter", _hostWaitReason, nowMs, "timeScale=" + _hostWaitPreviousTimeScale.ToString("0.###"));
+                return;
+            }
+
+            _hostWaitReason = string.IsNullOrEmpty(reason) ? _hostWaitReason : reason;
+            _hostWaitScene = string.IsNullOrEmpty(sceneName) ? _hostWaitScene : sceneName;
+            if (Mathf.Abs(Time.timeScale) > 0.0001f)
+            {
+                Time.timeScale = 0f;
+            }
+            ApplyHostPlayerPause();
+            LogHostWaitStill(nowMs, _hostWaitReason);
+        }
+
+        private void ReleaseHostWait(long nowMs, string reason)
+        {
+            if (!_hostWaitActive)
+            {
+                RefreshHostWaitSummary(nowMs);
+                return;
+            }
+
+            var heldMs = Math.Max(0, nowMs - _hostWaitEnteredMs);
+            Time.timeScale = _hostWaitPreviousTimeScale;
+            RestoreHostPlayerPause();
+            LogHostWait("leave", string.IsNullOrEmpty(reason) ? "released" : reason, nowMs,
+                "heldMs=" + heldMs + " restoredTimeScale=" + _hostWaitPreviousTimeScale.ToString("0.###"));
+
+            _hostWaitActive = false;
+            _hostWaitPlayerPauseCaptured = false;
+            _hostWaitOriginalPlayerPaused = false;
+            _hostWaitReason = "-";
+            _hostWaitScene = "-";
+            _hostWaitEnteredMs = 0;
+            _hostWaitNextStillLogMs = 0;
+            _hostWaitNextSnapshotRetryMs = 0;
+            RefreshHostWaitSummary(nowMs);
+        }
+
+        private void ApplyHostPlayerPause()
+        {
+            var player = PlayerController.GetInstance();
+            if (player == null) return;
+
+            if (!_hostWaitPlayerPauseCaptured)
+            {
+                _hostWaitOriginalPlayerPaused = player.IsPlayerPaused();
+                _hostWaitPlayerPauseCaptured = true;
+            }
+
+            SetPlayerPaused(player, true);
+        }
+
+        private void RestoreHostPlayerPause()
+        {
+            if (!_hostWaitPlayerPauseCaptured) return;
+            var player = PlayerController.GetInstance();
+            if (player == null) return;
+            SetPlayerPaused(player, _hostWaitOriginalPlayerPaused);
+        }
+
+        private void SetPlayerPaused(PlayerController player, bool paused)
+        {
+            if (player == null) return;
+            try
+            {
+                if (_playerPausedField != null)
+                {
+                    _playerPausedField.SetValue(player, paused);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_settings.VerboseLogging.Value)
+                {
+                    _logger.LogWarning("Co-op host wait: failed to set player pause=" + paused + " reason=" + ex.Message);
+                }
+            }
+        }
+
+        private void RetrySnapshotAckWait(long nowMs)
+        {
+            if (!IsHostWaitEnabled() ||
+                !_server.IsClientConnected ||
+                _lifecycle.State != SessionState.SnapshotApplying ||
+                _sceneHandshake.IsSnapshotAcknowledged() ||
+                _sceneHandshake.LastSnapshotEndGeneration != _sceneHandshake.Generation)
+            {
+                _hostWaitNextSnapshotRetryMs = 0;
+                return;
+            }
+
+            if (_hostWaitNextSnapshotRetryMs <= 0)
+            {
+                _hostWaitNextSnapshotRetryMs = nowMs + HostWaitSnapshotRetryMs;
+                return;
+            }
+
+            if (nowMs < _hostWaitNextSnapshotRetryMs) return;
+
+            _logger.LogWarning("Co-op host wait: snapshot ack timeout; re-emitting snapshot scene=" +
+                SceneManager.GetActiveScene().name +
+                " gen=" + _sceneHandshake.Generation +
+                " sid=" + _server.ActiveSessionId);
+            _sessionLogWrite?.Invoke("Co-op host wait: snapshot ack timeout; re-emitting snapshot scene=" +
+                SceneManager.GetActiveScene().name +
+                " gen=" + _sceneHandshake.Generation +
+                " sid=" + _server.ActiveSessionId);
+            EmitSnapshot(force: true);
+            SendPlayerTransform();
+            _hostWaitNextSnapshotRetryMs = nowMs + HostWaitSnapshotRetryMs;
+        }
+
+        private void LogHostWaitStill(long nowMs, string reason)
+        {
+            if (nowMs < _hostWaitNextStillLogMs) return;
+            _hostWaitNextStillLogMs = nowMs + HostWaitStillLogIntervalMs;
+            LogHostWait("still", string.IsNullOrEmpty(reason) ? _hostWaitReason : reason, nowMs, string.Empty);
+        }
+
+        private void LogHostWait(string action, string reason, long nowMs, string extra)
+        {
+            var heldMs = _hostWaitEnteredMs > 0 ? Math.Max(0, nowMs - _hostWaitEnteredMs) : 0;
+            var line = "Co-op host wait: " + action +
+                " reason=" + (string.IsNullOrEmpty(reason) ? "-" : reason) +
+                " state=" + (_lifecycle != null ? _lifecycle.State.ToString() : "-") +
+                " scene=" + (string.IsNullOrEmpty(_hostWaitScene) ? SceneManager.GetActiveScene().name : _hostWaitScene) +
+                " gen=" + _sceneGeneration +
+                " sid=" + (_server != null ? _server.ActiveSessionId : 0) +
+                " retry=" + _sceneHandshake.LastSentAttemptCount +
+                " age=" + FormatSeconds(heldMs);
+            if (!string.IsNullOrEmpty(extra))
+            {
+                line += " " + extra;
+            }
+
+            _logger.LogInfo(line);
+            _sessionLogWrite?.Invoke(line);
+        }
+
+        private void RefreshHostWaitSummary(long nowMs)
+        {
+            if (!IsHostWaitEnabled())
+            {
+                _hostWaitSummary = "HostWait: off";
+                return;
+            }
+
+            if (_server == null || !_server.IsRunning)
+            {
+                _hostWaitSummary = "HostWait: no";
+                return;
+            }
+
+            if (!_server.IsClientConnected)
+            {
+                _hostWaitSummary = "HostWait: join reason=client";
+                return;
+            }
+
+            if (!_hostWaitActive)
+            {
+                _hostWaitSummary = "HostWait: no";
+                return;
+            }
+
+            _hostWaitSummary = "HostWait: yes reason=" + _hostWaitReason +
+                " scene=" + _hostWaitScene +
+                " age=" + FormatSeconds(Math.Max(0, nowMs - _hostWaitEnteredMs));
+        }
+
+        private string BuildHostWaitIndicatorTitle()
+        {
+            if (_server == null || !_server.IsRunning) return string.Empty;
+            if (!_server.IsClientConnected) return "Waiting for client to join...";
+            if (_lifecycle != null && _lifecycle.State == SessionState.Hello) return "Negotiating co-op session...";
+            if (_lifecycle != null && _lifecycle.State == SessionState.Reconnecting) return "Waiting for client to reconnect...";
+
+            var reason = _hostWaitReason;
+            if (string.Equals(reason, "scene-ready", StringComparison.Ordinal))
+            {
+                return "Waiting for client to load " + SceneManager.GetActiveScene().name + "...";
+            }
+
+            if (string.Equals(reason, "snapshot-ack", StringComparison.Ordinal))
+            {
+                return "Syncing world state...";
+            }
+
+            return "Waiting for client...";
+        }
+
+        private string BuildHostWaitIndicatorDetail()
+        {
+            if (_server == null || !_server.IsRunning) return string.Empty;
+            if (!_server.IsClientConnected)
+            {
+                return "Start or connect the co-op client. The host is still usable until a client is accepted.";
+            }
+
+            var age = _hostWaitActive && _hostWaitEnteredMs > 0
+                ? FormatSeconds(Math.Max(0, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _hostWaitEnteredMs))
+                : "0.0s";
+            return "state=" + (_lifecycle != null ? _lifecycle.State.ToString() : "-") +
+                   " scene=" + SceneManager.GetActiveScene().name +
+                   " gen=" + _sceneGeneration +
+                   " sid=" + _server.ActiveSessionId +
+                   " retry=" + _sceneHandshake.LastSentAttemptCount +
+                   " age=" + age;
+        }
+
+        private static string FormatSeconds(long milliseconds)
+        {
+            return (milliseconds / 1000.0).ToString("0.0") + "s";
         }
 
         public void SetClientAvatar(PlayerTransformState state)
@@ -865,6 +1213,7 @@ namespace WoodburySpectatorSync.Coop
                 ack.Generation,
                 ack.SessionId,
                 nowMs);
+            _hostWaitNextSnapshotRetryMs = 0;
             _nextWorldSendMs = nowMs;
             _nextStorySendMs = nowMs;
             _lastDriftRecoveryMs = nowMs;
@@ -2435,6 +2784,17 @@ namespace WoodburySpectatorSync.Coop
                 return SendGenericNpcBrainStates(_roadTripNpcRegistry, sceneName, force, snapshot);
             }
 
+            if (sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return SendGenericNpcBrainStates(_officeNpcRegistry, sceneName, force, snapshot);
+            }
+
+            if (sceneName.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                sceneName.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return SendGenericNpcBrainStates(_parkingLotNpcRegistry, sceneName, force, snapshot);
+            }
+
             if (sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 _npcOverlaySummary = "NPC: -";
@@ -3196,6 +3556,7 @@ namespace WoodburySpectatorSync.Coop
             _lastSceneReadyMs = 0;
             _hasPendingClientTransform = false;
             _sceneHandshake.Begin(_sceneGeneration, _lastSceneName, _server.IsClientConnected, nowMs);
+            _hostWaitNextSnapshotRetryMs = 0;
 
             // Only transition into SceneSyncing once we have a connected client past Hello/HelloAck.
             if (_server.IsClientConnected && _lifecycle.IsAtLeast(SessionState.Connected) &&
@@ -3224,10 +3585,11 @@ namespace WoodburySpectatorSync.Coop
         private static bool IsCabinSceneName(string sceneName)
         {
             return string.Equals(sceneName, "CabinScene", StringComparison.Ordinal) ||
+                   string.Equals(sceneName, "CabinSceneDark", StringComparison.Ordinal) ||
                    string.Equals(sceneName, "CabinDarkScene", StringComparison.Ordinal);
         }
 
-        private void SendSceneChange()
+        private void SendSceneChange(bool countAttempt = true)
         {
             var scene = SceneManager.GetActiveScene();
             _lastSceneName = scene.name;
@@ -3241,14 +3603,16 @@ namespace WoodburySpectatorSync.Coop
             var fromMenu = PlayerPrefs.HasKey(PlayerPrefKeys.FROM_MENU)
                 ? PlayerPrefs.GetInt(PlayerPrefKeys.FROM_MENU)
                 : -1;
-            var attempt = _sceneHandshake.IncrementAttempt();
+            var attempt = countAttempt
+                ? _sceneHandshake.IncrementAttempt()
+                : Math.Max(1, _sceneHandshake.LastSentAttemptCount);
             var sessionId = _server.ActiveSessionId;
             _server.Enqueue(new SceneChangeMessage(_lastSceneName, scene.buildIndex, startSeq, fromMenu, sessionId, _sceneGeneration));
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             _lastSceneRequestMs = nowMs;
             _sceneHandshake.MarkSceneRequest(nowMs);
             _awaitingSceneReady = _sceneHandshake.AwaitingReady;
-            if (attempt > 1)
+            if (countAttempt && attempt > 1)
             {
                 var backoffMs = GetSceneChangeRetryBackoffMs(attempt);
                 _logger.LogInfo("Co-op session host: SceneChange retry attempt=" + attempt +
@@ -3482,6 +3846,8 @@ namespace WoodburySpectatorSync.Coop
             _cabinGameFlags.Clear();
             _pizzeriaFlags.Clear();
             _roadTripFlags.Clear();
+            _officeFlags.Clear();
+            _parkingLotFlags.Clear();
             _cabinHouseManager = null;
             _cabinGameManager = null;
             _pizzeriaGameManager = null;
@@ -3490,7 +3856,11 @@ namespace WoodburySpectatorSync.Coop
             _roadTripGameManager = null;
             _roadTripMikeInCar = null;
             _roadTripTruck = null;
+            _officeLayoutGameManager = null;
+            _parkingLotGameManager = null;
             _cabinHouseActiveFieldCache.Clear();
+            _officeFieldCache.Clear();
+            _parkingLotFieldCache.Clear();
             _lastDialogueText = string.Empty;
             _lastDialogueSpeaker = string.Empty;
             _lastDialogueSentTime = 0f;
@@ -3620,8 +3990,7 @@ namespace WoodburySpectatorSync.Coop
             _sceneAdapters.Clear();
             _sceneAdapters.Add(new DelegateHostSceneAdapter(
                 "Cabin",
-                scene => string.Equals(scene, "CabinScene", StringComparison.Ordinal) ||
-                         string.Equals(scene, "CabinDarkScene", StringComparison.Ordinal),
+                IsCabinSceneName,
                 onSceneEnter: () =>
                 {
                     _cabinHouseManager = null;
@@ -3632,6 +4001,10 @@ namespace WoodburySpectatorSync.Coop
                     if (string.Equals(SceneManager.GetActiveScene().name, "CabinScene", StringComparison.Ordinal))
                     {
                         SendCabinHouseFlags();
+                    }
+
+                    if (IsCabinSceneName(SceneManager.GetActiveScene().name))
+                    {
                         SendCabinGameFlags();
                     }
                 }));

@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.8")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.10")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -26,6 +26,7 @@ namespace WoodburySpectatorSync
         private Overlay _overlay;
         private CoopMainMenuPanel _coopMenuPanel;
         private CoopBrandMark _brandMark;
+        private WaitingSpinnerOverlay _waitingSpinnerOverlay;
         private RemoteDialogueOverlay _remoteDialogueOverlay;
         private SessionLog _sessionLog;
         private CoopServer _coopServer;
@@ -60,6 +61,7 @@ namespace WoodburySpectatorSync
             _overlay = new Overlay(_settings);
             _coopMenuPanel = new CoopMainMenuPanel(_settings);
             _brandMark = new CoopBrandMark();
+            _waitingSpinnerOverlay = new WaitingSpinnerOverlay();
             _remoteDialogueOverlay = new RemoteDialogueOverlay();
             _sessionLog = ShouldEnableSessionLog(_settings)
                 ? new SessionLog(Logger, _settings.ModeSetting.Value.ToString())
@@ -239,6 +241,7 @@ namespace WoodburySpectatorSync
                 }
             }
 
+            DrawHostWaitIndicator();
             _brandMark?.Draw();
             _coopMenuPanel?.Draw(
                 _coopServer,
@@ -269,6 +272,19 @@ namespace WoodburySpectatorSync
             var overlayText = _overlay.DrawText(_cachedOverlayText, _cachedOverlayLineCount);
             MaybeLogOverlay(overlayText);
             return overlayText;
+        }
+
+        private void DrawHostWaitIndicator()
+        {
+            if (_settings == null ||
+                _settings.ModeSetting.Value != Mode.CoopHost ||
+                _coopHost == null ||
+                !_coopHost.ShouldShowHostWaitIndicator)
+            {
+                return;
+            }
+
+            _waitingSpinnerOverlay?.Draw(_coopHost.HostWaitIndicatorTitle, _coopHost.HostWaitIndicatorDetail);
         }
 
         private void HandleHotkeys()
@@ -454,6 +470,7 @@ namespace WoodburySpectatorSync
                     " gen=" + _coopHost.SessionGeneration +
                     " snapAck=" + _coopHost.LastSnapshotAckGeneration +
                     " retry=" + _coopHost.SceneChangeRetryCount,
+                    _coopHost.HostWaitSummary,
                     "Peer: scene=" + (string.IsNullOrEmpty(_coopHost.ClientSceneName) ? "-" : _coopHost.ClientSceneName) +
                     " ready=" + (_coopHost.ClientSceneReady ? "yes" : "no") +
                     " awaiting=" + (_coopHost.AwaitingSceneReady ? "yes" : "no"),

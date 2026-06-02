@@ -225,6 +225,11 @@ namespace WoodburySpectatorSync.Coop
         private float _lastSmoothSampleTime;
         private bool _hasSmoothedRoot;
         private RemotePlayerNameTag _nameTag;
+        private string _idleAnimationStateName;
+        private bool _lastAnimatorMoving;
+        private float _lastIdlePoseTime;
+        private int _hiddenStoryCarryPropCount;
+        private int _hiddenUtilityVisualCount;
 
         public Transform Root => _root != null ? _root.transform : null;
         public Transform CameraTransform => _cameraTransform;
@@ -357,6 +362,7 @@ namespace WoodburySpectatorSync.Coop
 
             _animRig = ResolveRigMap(source.RigProfile);
             _animatorHasMotionControlParams = HasMotionControlParams();
+            _idleAnimationStateName = ResolveIdleAnimationStateName(_animator);
             InitializeAnimatorPlayback();
 
             LogAvatarDiagnostics(source, usedFallbackBody, logger, diagnosticsSink);
@@ -504,6 +510,7 @@ namespace WoodburySpectatorSync.Coop
 
             _animator.Rebind();
             _animator.Update(0f);
+            ForceIdlePoseIfAvailable();
             _animator.speed = 0f;
         }
 
@@ -513,11 +520,29 @@ namespace WoodburySpectatorSync.Coop
 
             if (!moving || planarSpeed < 0.05f)
             {
+                ForceIdlePoseIfAvailable();
                 _animator.speed = 0f;
+                _lastAnimatorMoving = false;
                 return;
             }
 
+            _lastAnimatorMoving = true;
             _animator.speed = Mathf.Clamp(planarSpeed / 1.25f, 0.35f, 1.35f);
+        }
+
+        private void ForceIdlePoseIfAvailable()
+        {
+            if (_animator == null || string.IsNullOrEmpty(_idleAnimationStateName)) return;
+
+            var now = Time.realtimeSinceStartup;
+            if (!_lastAnimatorMoving && now - _lastIdlePoseTime < 0.75f)
+            {
+                return;
+            }
+
+            _animator.Play(_idleAnimationStateName, 0, 0f);
+            _animator.Update(0f);
+            _lastIdlePoseTime = now;
         }
 
         private void SetFloatFromRig(string[] names, float value)
@@ -1149,6 +1174,11 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            if (HasOnlyUtilityAvatarRenderers(candidate))
+            {
+                return false;
+            }
+
             if (!trustedActor && !HasUsableAnimator(candidate, out _))
             {
                 return false;
@@ -1392,6 +1422,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             HideStoryCarryProps();
+            HideUtilityAvatarObjects();
             DisableColliders();
         }
 
@@ -1404,24 +1435,148 @@ namespace WoodburySpectatorSync.Coop
             {
                 var child = transforms[i];
                 if (child == null || child == _root.transform) continue;
-                if (!LooksLikeStoryCarryProp(child.name)) continue;
+                if (!LooksLikeStoryCarryProp(child.name, GetTransformPath(child))) continue;
 
+                _hiddenStoryCarryPropCount++;
                 child.gameObject.SetActive(false);
             }
         }
 
-        private static bool LooksLikeStoryCarryProp(string name)
+        private void HideUtilityAvatarObjects()
         {
-            if (string.IsNullOrWhiteSpace(name)) return false;
+            if (_root == null) return;
 
-            return name.IndexOf("Casserole", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("FishPlate", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Fish Plate", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Plate", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Marinade", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Veggie", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Vegetable", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   name.IndexOf("Tray", StringComparison.OrdinalIgnoreCase) >= 0;
+            var transforms = _root.GetComponentsInChildren<Transform>(true);
+            for (var i = 0; i < transforms.Length; i++)
+            {
+                var child = transforms[i];
+                if (child == null || child == _root.transform) continue;
+                if (!LooksLikeUtilityAvatarObject(child)) continue;
+
+                DisableRenderers(child.gameObject);
+                child.gameObject.SetActive(false);
+                _hiddenUtilityVisualCount++;
+            }
+        }
+
+        private static bool LooksLikeStoryCarryProp(string name, string path)
+        {
+            if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(path)) return false;
+
+            var text = ((path ?? string.Empty) + "/" + (name ?? string.Empty)).ToLowerInvariant();
+            if (text.IndexOf("casserole", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("fishplate", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("fish plate", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("dinnerplate", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("dinner plate", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("marinade", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("veggie", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("vegetable", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("tray", StringComparison.Ordinal) >= 0)
+            {
+                return true;
+            }
+
+            var attachedToHand = text.IndexOf("hand", StringComparison.Ordinal) >= 0 ||
+                                 text.IndexOf("hold", StringComparison.Ordinal) >= 0 ||
+                                 text.IndexOf("attach", StringComparison.Ordinal) >= 0 ||
+                                 text.IndexOf("weapon", StringComparison.Ordinal) >= 0 ||
+                                 text.IndexOf("item", StringComparison.Ordinal) >= 0;
+
+            return attachedToHand &&
+                   (text.IndexOf("plate", StringComparison.Ordinal) >= 0 ||
+                    text.IndexOf("fish", StringComparison.Ordinal) >= 0 ||
+                    text.IndexOf("food", StringComparison.Ordinal) >= 0 ||
+                    text.IndexOf("dish", StringComparison.Ordinal) >= 0 ||
+                    text.IndexOf("bowl", StringComparison.Ordinal) >= 0 ||
+                    text.IndexOf("fork", StringComparison.Ordinal) >= 0 ||
+                    text.IndexOf("knife", StringComparison.Ordinal) >= 0 ||
+                    text.IndexOf("spoon", StringComparison.Ordinal) >= 0);
+        }
+
+        private static bool HasOnlyUtilityAvatarRenderers(GameObject candidate)
+        {
+            if (candidate == null) return false;
+
+            var renderers = candidate.GetComponentsInChildren<Renderer>(true);
+            var rendererCount = 0;
+            var utilityCount = 0;
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null) continue;
+                rendererCount++;
+                if (LooksLikeUtilityAvatarObject(renderer.transform))
+                {
+                    utilityCount++;
+                }
+            }
+
+            return rendererCount > 0 && utilityCount >= rendererCount;
+        }
+
+        private static bool LooksLikeUtilityAvatarObject(Transform transform)
+        {
+            if (transform == null || transform.gameObject == null) return false;
+
+            var name = transform.name ?? string.Empty;
+            var path = GetTransformPath(transform);
+            var text = ((path ?? string.Empty) + "/" + name).ToLowerInvariant();
+
+            if (text.IndexOf("antiplayerpush", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("anti player push", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("anti_player_push", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("pushcapsule", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("push capsule", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("hitbox", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("hurtbox", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("collider", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("collision", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("trigger", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("bounds", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("blocking", StringComparison.Ordinal) >= 0 ||
+                text.IndexOf("occluder", StringComparison.Ordinal) >= 0)
+            {
+                return HasRendererOrCollider(transform.gameObject);
+            }
+
+            var renderer = transform.GetComponent<Renderer>();
+            if (renderer == null) return false;
+            if (transform.GetComponentInChildren<SkinnedMeshRenderer>(true) != null) return false;
+
+            var hasCollider = transform.GetComponent<Collider>() != null ||
+                              transform.GetComponentInChildren<Collider>(true) != null;
+            if (!hasCollider) return false;
+
+            var leaf = name.Trim().ToLowerInvariant();
+            return leaf == "capsule" ||
+                   leaf == "body capsule" ||
+                   leaf == "player capsule" ||
+                   leaf.IndexOf("capsule collider", StringComparison.Ordinal) >= 0 ||
+                   leaf.IndexOf("collision capsule", StringComparison.Ordinal) >= 0 ||
+                   leaf.IndexOf("push capsule", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool HasRendererOrCollider(GameObject target)
+        {
+            if (target == null) return false;
+            return target.GetComponent<Renderer>() != null ||
+                   target.GetComponentInChildren<Renderer>(true) != null ||
+                   target.GetComponent<Collider>() != null ||
+                   target.GetComponentInChildren<Collider>(true) != null;
+        }
+
+        private static void DisableRenderers(GameObject target)
+        {
+            if (target == null) return;
+
+            var renderers = target.GetComponentsInChildren<Renderer>(true);
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer == null) continue;
+                renderer.enabled = false;
+            }
         }
 
         private void LogAvatarDiagnostics(SourceDescriptor source, bool usedFallbackBody, ManualLogSource logger, Action<string> diagnosticsSink)
@@ -1449,6 +1604,8 @@ namespace WoodburySpectatorSync.Coop
                 " visibleRenderers=" + visibleRenderers +
                 " animators=" + animators.Length +
                 " enabledColliders=" + enabledColliders +
+                " hiddenStoryProps=" + _hiddenStoryCarryPropCount +
+                " hiddenUtilityVisuals=" + _hiddenUtilityVisualCount +
                 " bounds=" + FormatBounds(_root);
             LogInfo(logger, diagnosticsSink, message);
         }
@@ -1524,6 +1681,42 @@ namespace WoodburySpectatorSync.Coop
 
             reason = "Animator has no controller";
             return false;
+        }
+
+        private static string ResolveIdleAnimationStateName(Animator animator)
+        {
+            if (animator == null || animator.runtimeAnimatorController == null)
+            {
+                return string.Empty;
+            }
+
+            var clips = animator.runtimeAnimatorController.animationClips;
+            if (clips == null || clips.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var fallback = string.Empty;
+            for (var i = 0; i < clips.Length; i++)
+            {
+                var clip = clips[i];
+                if (clip == null || string.IsNullOrWhiteSpace(clip.name)) continue;
+
+                var name = clip.name.Trim();
+                if (fallback.Length == 0)
+                {
+                    fallback = name;
+                }
+
+                if (name.IndexOf("idle", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("stand", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("breath", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return name;
+                }
+            }
+
+            return fallback;
         }
 
         private static Vector3 ResolveBodyRootPosition(PlayerTransformState state)

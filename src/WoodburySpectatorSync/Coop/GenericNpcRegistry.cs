@@ -382,6 +382,14 @@ namespace WoodburySpectatorSync.Coop
                 var name = behaviour.GetType().Name;
                 if (name.IndexOf("Mike", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     name.IndexOf("Hiker", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Hobo", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Chef", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Deer", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Janitor", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Worker", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Cop", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("Stranger", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    name.IndexOf("IdleMovement", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     name.IndexOf("NPC", StringComparison.OrdinalIgnoreCase) >= 0 ||
                     name.IndexOf("FoldingGuy", StringComparison.OrdinalIgnoreCase) >= 0)
                 {
@@ -490,6 +498,17 @@ namespace WoodburySpectatorSync.Coop
                 {
                     var gm = UnityEngine.Object.FindObjectOfType<RoadTripGameManager>();
                     return gm != null ? ReadFirstFieldText(gm, "currentPlayerState", "currentState", "phoneUIState") : "RoadTrip";
+                }
+                if (sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var gm = UnityEngine.Object.FindObjectOfType<OfficeLayoutGameManager>();
+                    return gm != null ? ReadFirstFieldText(gm, "currentPlayerState", "currentState") : "Office";
+                }
+                if (sceneName.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    sceneName.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var gm = UnityEngine.Object.FindObjectOfType<ParkingLotGameManager>();
+                    return gm != null ? ReadFirstFieldText(gm, "currentPlayerState", "currentState") : "ParkingLot";
                 }
             }
             catch (Exception)

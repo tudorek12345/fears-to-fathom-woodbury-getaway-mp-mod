@@ -2,10 +2,14 @@
 
 ## Unreleased
 
-> Plugin 0.3.0 → 0.4.8 · wire protocol 3 → 4.
+> Current iteration: Plugin 0.4.10, wire protocol 4.
+
+> Plugin 0.3.0 → 0.4.10 · wire protocol 3 → 4.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
 
 ### Co-op Cabin
+
+- Scene transition reliability: fixed dark-cabin scene matching to use the real `CabinSceneDark` key from decompiled `SceneNameKeys`, so Cabin-dark readiness, retry backoff, manager flags, and NPC brain adapters no longer miss the scene because of the older `CabinDarkScene` alias.
 
 - NPC brains: host-authoritative `NpcBrainState` sync for Mike variants (MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController), hiker/window (CabinHiker + HikerCabinController + HostFixingSink), Nora, and cat — registry-based actor IDs, client-side local brain suppression, snapshot buffering, stale-sequence drops, throttled diagnostics.
 - Hiker window: state enums + go/moving/reachedPos/followingHost flags + sinisterAudioTrigger/closetLight/hikerConvoTrigger active states. Lock window gated on `CurrentSequence` (HikerSequence / HostAtDoor / HostHittingDoor) instead of `gameObject.activeSelf` to stop client clumping.
@@ -13,7 +17,7 @@
 - Cooking/eating: casserole/oven prop sync via story flags + transform correction, Mike cook/eating visuals, plate masks, eating rig weights, living-room TV clip identity + playback time. Pre-Eating leak visuals suppressed on clients.
 - Ambient: light switches (basement/closet/outside), bedroom TV playback, flashlight light, sink/dishwashing visuals, seated-eating player/plate visuals.
 - Opening RV/truck driving intro: RV state, lights, brake/turn values, bobblehead speed, radio (clip + playback time), bag/door/light actives, truck visual transforms.
-- Randomized traffic pool synced + AiTransform correction so pools no longer diverge silently.
+- Randomized traffic pool synced + AiTransform correction so pools no longer diverge silently. Pizzeria/RoadTrip traffic cars now mirror host car active/spline/speed/timer metadata while client-side car loop brains stay disabled.
 - Seated proxies: remote player transform sending follows active seated bodies (couch, Ouija table, board-game seats, bed) instead of dropping with the disabled first-person controller.
 - Post-eating/hiding: MikePostEating, shed/understairs hiding flags, key active triggers, toolshed crash breadcrumbs. Mike target selection prefers `Mike Post Eating` during hiding while game still reports broad `Eating` sequence.
 - Mike animation event replication (`CabinGM.MikeAnim.StateHash/Loop/Phase10/Transition/NextStateHash`).
@@ -21,46 +25,53 @@
 ### Co-op Pizzeria
 
 - `MikeDrivingInPizzeriaScene` opening drive: vehicle/path state, engine/key/handbrake audio, headlights/panel/bobblehead, transform correction, client-side driving brain suppression.
-- Manager + story progression: current player mode, first-conversation timers, pizza/burp gates, phone UI, text-reply unlocks, soda-can seating, doors, light triggers, phone canvas/network, truck triggers, keys UI + one-shot audio.
-- Camera/control: driving freeze, sitting/global FOV zoom, dialogue camera, zoom transitions, main-camera FOV, look-target diagnostics, trash/truck layer switching, editor-start music. Player seat/drive/camera prop state, pizza-on-table visibility, boundary collider masks, out-of-play-zone trigger state.
+- Manager + story progression: current player mode, first-conversation timers, pizza/burp gates, phone UI, text-reply unlocks, soda-can seating, doors, light triggers, phone canvas/network, truck triggers, keys UI + one-shot audio. Pizzeria NPC brain registry now includes Chef and Hobo in addition to Mike, hiker, folding worker, and table NPCs.
+- Camera/control: driving freeze, sitting/global FOV zoom, dialogue camera, zoom transitions, main-camera FOV, semantic look-target/look-here IDs for Mike/cashier/hiker/NPC dialogue framing, trash/truck layer switching, editor-start music. Player seat/drive/camera prop state, pizza-on-table visibility, boundary collider masks, out-of-play-zone trigger state.
 - Props / media: pizza box/slice/lid + folding-worker prop (with local folding brain suppression), TV/radio media (advert/news clip selection + playback time + radio track), DontDestroyRoadTripMusic fade/playback handoff from RoadTrip.
 - Specialised interactables: PizzeriaTVAudioProximity (range + inside-pizzeria volume), PizzeriaChair (interactability/layer through pickup/sitting/eating/burp/get-up), generic triggers (`OnTriggerSub` / `OnTriggerDisplaySub` / `OnTrigger` / `TriggerEventInvoker`), traffic trigger active/enabled + pool state.
 
 ### Co-op RoadTrip
 
 - Camera + manager timers: dialogue camera activation, car camera rotation/freeze, FOV flags, auto-conversation timers, phone state, road-bump timers, text-reply unlocks. Camera look-target sync for Mike/bus/deer cinematic focus.
-- Vehicles + bobblehead: typed `PathVehicleState` smoothing for MikeInCar + MikeTruckInLoopScene/GoingToNora/InParking. Bobblehead active/layer-switched + animator state/speed + transform correction. Car radio playback, school bus active, horror audio, RoadTripTruck brake/deer-run + truck/deer audio + deer animation + deer/school-bus transform correction. Mike-in-car hidden conversation flags.
-- Triggers + traffic: generic triggers (`OnTriggerSub` / `OnTriggerDisplaySub` / `OnTrigger` / `TriggerEventInvoker`), traffic pool/active-state + AiTransform correction + one-shot/speed/spline trigger settings.
+- Vehicles + bobblehead: typed `PathVehicleState` smoothing for MikeInCar + MikeTruckInLoopScene/GoingToNora/InParking. Bobblehead active/layer-switched + animator state/speed + transform correction. Car radio playback, school bus active, horror/audio music sources, RoadTrip final-conversation fade/timing fields, RoadTripTruck brake/deer-run + truck/deer audio + deer animation + deer/school-bus transform correction. RedDeer local input brain is registry-synced/suppressed when present. Mike-in-car hidden conversation flags.
+- Triggers + traffic: generic triggers (`OnTriggerSub` / `OnTriggerDisplaySub` / `OnTrigger` / `TriggerEventInvoker`), traffic pool/active-state + AiTransform correction + one-shot/speed/spline trigger settings. Car loop spline/speed/timer metadata is host-authored to reduce client-local vehicle drift.
 
 ### Co-op Office
 
 - Scene + player state: OfficeLayoutGameManager scene/player mode, first-person enablement, end-scene yellow intro/audio, coffee-sip hand animation, phone/restroom triggers, throw permission, camera FOV.
 - Yellow intro + worker monitors: `YellowIntroManager` timer/index/text-visibility mask with local intro suppression. `OfficeWorkerMonitor` video sync (clip identity + playback time + material/renderer) with monitor brain suppression.
-- Subcontrollers + appliances: TableManager / ComputerManager / CoffeeMachineManager / OfficePhone / TypeMasterManager / TypingShooterComputerManager. OfficeRadio (track/time/button). OfficeFridge + OfficeMicrowave (door/light/audio). OfficeToiletManager (stall/pee/lid/seat). OfficeJanitor (jumpscare/cleaning). OfficeWorker conversation visual + audio. OfficeLayoutUIManager + peeing UI. Transform correction for actors + movable appliance/toilet parts.
+- Subcontrollers + appliances: TableManager / ComputerManager / CoffeeMachineManager / OfficePhone / TypeMasterManager / TypingShooterComputerManager. ComputerManager now mirrors private browser/sheets/type-master window state, transition flags, search typing progress, window order/rect transforms, and icon highlight masks. OfficeRadio (track/time/button). OfficeFridge + OfficeMicrowave (door/light/audio). OfficeToiletManager (stall/pee/lid/seat). OfficeJanitor (jumpscare/cleaning). OfficeWorker conversation visual + audio. OfficeLayoutUIManager + peeing UI. Transform correction for actors + movable appliance/toilet parts.
+- NPC brains: OfficeJanitor and OfficeWorker now use generic host-authored `NpcBrainState` snapshot/delta sync, including client-side local brain suppression, animator state, visibility, and smoothed transform correction.
+- Transition reliability: Office manager refs, field caches, and pending flags are cleared on every scene change so stale Office state cannot leak into later scenes.
 - Boundaries + triggers + vending: `OnTriggerOfficeBoundsSub` reminder triggers, generic trigger suite, shared `VendingMachineManager` (cameras, triggers, slot/sliding colliders, soda-can state, audio, player-camera FOV) with client-side vending brain suppression.
 
 ### Co-op ParkingLot
 
-- Game/player state: ParkingLotGameManager call timing, intro state, phone ringing, talking/hugging mode, throw permission, first-person, camera FOV. UI/intro/phone flags. Stranger / Mike / suitcase / truck / car subcontroller state with actor + vehicle transform correction.
+- Game/player state: ParkingLotGameManager call timing, intro state, phone ringing, talking/hugging mode, throw permission, first-person, camera FOV. UI/intro/phone flags, including WhiteIntroManager active/text visibility masks. Stranger / Mike / suitcase / truck / car subcontroller state with actor + vehicle transform correction.
+- NPC brains: ElevatorStranger, MikeParkingLot, and WalkingCopController now use generic host-authored `NpcBrainState` snapshot/delta sync, including client-side local brain suppression, animator state, visibility, and smoothed transform correction.
+- Transition reliability: ParkingLot manager refs, field caches, and pending flags are cleared on every scene change so stale ParkingLot state cannot leak into later scenes.
 - Walking cop + elevator: `WalkingCopController` NavMesh brain suppression + animator/target mirroring + transform correction. `ParkingLotElevatorManager` travel/door/audio/anti-throw state + elevator door transforms + truck tailgate transform correction. Anti-throw zones.
 - Generic triggers (`OnTriggerSub` / `OnTriggerDisplaySub` / `OnTrigger` / `TriggerEventInvoker`) suppressing client-local trigger brains while mirroring active/entered/triggered/one-shot state.
 
 ### Co-op avatars
 
+- Scene-model avatar cleanup: cloned in-scene avatars now strip utility/collider/push-capsule visuals in addition to story carry props, preventing the giant white capsule/egg from rendering during Cabin eating/post-eating while keeping the actual human scene model visible.
 - Source / fallback path: Auto → GameModel → AssetBundle → Capsule. Auto prefers safe non-Mike scene humans; Capsule explicit-only; Auto/GameModel stays invisible rather than rendering procedural egg unless capsule explicitly configured. Render-only AssetBundle avatars with no AnimatorController rejected; wrapped avatars grounded to renderer bounds. Cabin House/Host sequence objects rejected from Auto/GameModel fallback.
 - Nametags + display names: in-world HOST/CLIENT nametags for remote proxies; fallback role labels deduplicated; themed nametags hidden until a visible gameplay avatar is present. Host/client display names exchanged through Hello/HelloAck; launcher-selected names supported.
-- Animation + grounding: scene-model animators frozen when their controller can't be driven by known movement params. Seated proxy raised positions preserved instead of forcing couch-sitting bodies to floor. Remote player animation driven from replicated transform motion. Buffered client-side AI interpolation for smoother Mike/NPC motion. Low-rate NPC brain corrections no longer fight Mike's high-frequency smoothing.
+- Animation + grounding: scene-model animators force an idle clip when stationary instead of freezing in a cloned walk pose, and cloned hand-held story props (fish/plates/trays/casserole/dishes) are stripped from remote player avatars. Seated proxy raised positions preserved instead of forcing couch-sitting bodies to floor. Remote player animation driven from replicated transform motion. Buffered client-side AI interpolation for smoother Mike/NPC motion. Low-rate NPC brain corrections no longer fight Mike's high-frequency smoothing.
 - AssetBundle tooling: manifest IDs, bundle/id/scale/y-offset config, exact fallback logging, launcher `-RemotePlayerAvatarId` support, Unity 2021.3 avatar bundle project + `Build-AvatarBundle.ps1` + humanoid rig/animation import + basic locomotion AnimatorController + render-only Quaternius bundle install.
 
 ### Co-op lifecycle / protocol
 
+- Host wait gate: co-op host can pause gameplay while a connected client loads scenes or applies snapshots, with slow SceneChange/snapshot catch-up retries and a `HostWait` overlay diagnostic so the host does not progress into a desynced scene.
 - Explicit `SessionState` machine + `Hello`/`HelloAck` negotiation + session/generation-aware `SceneChange`/`SceneReady` + `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`. UDP apply gated until `Live`. Bounded `SceneChange` retry + structured pre-Live drop logs.
 - Scene-readiness probes for RoadTripLoop, CabinSceneDark, OfficeLayout, ParkingLotScene wait for the real scene managers instead of treating them as managerless. Client `SceneReady` waits up to 15s for scene-specific managers (CabinGameManager, PizzeriaGameManager, RoadTripGameManager) before falling back to `ReadyPartial`. Snapshot state buffered/applied before `Live`.
 - Host snapshot emission bracketed; normal world/story/door/holdable/AI deltas gated until `SnapshotAck` moves to `Live`; blind 5-second full-state spam removed in favor of emergency/manual resync paths.
-- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.8.
+- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.10.
 
 ### Co-op UI
 
+- Host waiting spinner: small themed IMGUI indicator for waiting-to-join, scene-load, snapshot-sync, and reconnect waits; driven by realtime so it keeps animating while host gameplay is paused.
 - F11 main-menu co-op setup panel: mode selection, host/client connect, LAN endpoint settings, display name, avatar source/id tuning, overlay toggle, SceneDiscoveryDump toggle — no longer need to edit `BepInEx/config/com.woodbury.spectatorsync.cfg` by hand.
 - Overlay: `Session: <state> sid=<id> gen=<n>` line plus snapshot ack/retry or pending/missing counts. Compacted into styled two-column-sized panel; sync labels shortened. Always-on bottom-center `F2F WOODBURY CO:OP` brand mark. Expanded host/client connect logs (bind endpoint, session id, remote endpoint, retry reason, disconnect events).
 - Dialogue: remote dialogue routed through the game's native subtitle UI when available; client UI conversation suppressed; drift detection retained. Dialogue camera locks forcibly released during Mike conversations.
@@ -68,7 +79,7 @@
 
 ### Tooling / diagnostics
 
-- `scripts/Compare-SceneDiscoveryDump.ps1` diffs host/client SceneDiscoveryDump logs by scene/component/field and produces parseable `SceneDumpDiff` lines for identifying remaining unsynced state. F10 manual `SceneDiscoveryDump` hotkey gated by `[Debug] SceneDiscoveryDump`.
+- `scripts/Compare-SceneDiscoveryDump.ps1` diffs host/client SceneDiscoveryDump logs by scene/component/field and produces parseable `SceneDumpDiff` lines for identifying remaining unsynced state. F10 manual `SceneDiscoveryDump` hotkey gated by `[Debug] SceneDiscoveryDump`; the diagnostic is enabled by default for current iteration runs.
 - `Run-CoopSmoke.ps1` end-to-end smoke flow + `Launch-CoopPair.ps1` per-instance Unity log files + instance-cap safety + default windowed launch args. Default to manual co-op startup unless `-AutoStartHost` / `-AutoConnectClient`.
 - Session log filenames include mode + ms timestamp + pid so same-PC host/client runs don't collide. Throttled overlay/status logging. Mike-sync-target log throttled on `Transform.GetInstanceID()`. Client "runtime state held local" log bucketed per-reason. Shutdown retry noise quieted after intentional disconnects.
 - Avatar diagnostics: source, fallback reason, renderer count, bounds, animator count, enabled-collider count in BepInEx + session logs.

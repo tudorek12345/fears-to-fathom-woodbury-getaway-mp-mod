@@ -133,6 +133,18 @@ namespace WoodburySpectatorSync.Coop
                         if (car == null) continue;
                         if (car.gameObject.activeSelf) activeMask |= 1 << i;
                         Emit(prefix + "I" + i + ".PrefabHash", StableNameHash(GetBaseCarName(car.name)), emit, ref hash);
+                        Emit(prefix + "I" + i + ".RootActive", car.gameObject.activeSelf ? 1 : 0, emit, ref hash);
+                        Emit(prefix + "I" + i + ".CarActive", car.carIsActive ? 1 : 0, emit, ref hash);
+                        Emit(prefix + "I" + i + ".Enabled", car.enabled ? 1 : 0, emit, ref hash);
+                        Emit(prefix + "I" + i + ".DisableTimerMs", Mathf.RoundToInt(car.disableTimer * 1000f), emit, ref hash);
+                        Emit(prefix + "I" + i + ".TimerMs", Mathf.RoundToInt(GetFieldValue<float>(car, "timer") * 1000f), emit, ref hash);
+                        Emit(prefix + "I" + i + ".Speed100", Mathf.RoundToInt(GetFieldValue<float>(car, "speed") * 100f), emit, ref hash);
+                        Emit(prefix + "I" + i + ".CurrentSpeed100", Mathf.RoundToInt(GetFieldValue<float>(car, "currentSpeed") * 100f), emit, ref hash);
+                        Emit(prefix + "I" + i + ".StartingPoint100", Mathf.RoundToInt(GetFieldValue<float>(car, "startingPoint") * 100f), emit, ref hash);
+                        Emit(prefix + "I" + i + ".CurrentPoint100", Mathf.RoundToInt(GetFieldValue<float>(car, "currentPoint") * 100f), emit, ref hash);
+                        Emit(prefix + "I" + i + ".DisableZRotation", car.disableZRotation ? 1 : 0, emit, ref hash);
+                        Emit(prefix + "I" + i + ".DisableOnEnd", car.disableOnReachingThisSplineDistance ? 1 : 0, emit, ref hash);
+                        Emit(prefix + "I" + i + ".EndSpline100", Mathf.RoundToInt(car.endOfSplineDistance * 100f), emit, ref hash);
                     }
                 }
 
@@ -251,6 +263,103 @@ namespace WoodburySpectatorSync.Coop
                 {
                     return EnsurePoolSlotPrefab(controller, slot, value, logger);
                 }
+
+                var instances = GetFieldValue<CarInALoop[]>(controller, "carInstances");
+                if (instances == null || slot < 0 || slot >= instances.Length) return false;
+                var car = instances[slot];
+                if (car == null) return false;
+
+                return ApplyCarSlotFlag(car, slotField, value);
+            }
+
+            return true;
+        }
+
+        private static bool ApplyCarSlotFlag(CarInALoop car, string name, int value)
+        {
+            if (car == null || string.IsNullOrEmpty(name)) return false;
+
+            if (string.Equals(name, "RootActive", StringComparison.Ordinal))
+            {
+                car.gameObject.SetActive(value != 0);
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "CarActive", StringComparison.Ordinal))
+            {
+                car.carIsActive = value != 0;
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "Enabled", StringComparison.Ordinal))
+            {
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "DisableTimerMs", StringComparison.Ordinal))
+            {
+                car.disableTimer = value / 1000f;
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "TimerMs", StringComparison.Ordinal))
+            {
+                SetFieldValue(car, "timer", value / 1000f);
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "Speed100", StringComparison.Ordinal))
+            {
+                SetFieldValue(car, "speed", value / 100f);
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "CurrentSpeed100", StringComparison.Ordinal))
+            {
+                SetFieldValue(car, "currentSpeed", value / 100f);
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "StartingPoint100", StringComparison.Ordinal))
+            {
+                SetFieldValue(car, "startingPoint", value / 100f);
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "CurrentPoint100", StringComparison.Ordinal))
+            {
+                SetFieldValue(car, "currentPoint", value / 100f);
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "DisableZRotation", StringComparison.Ordinal))
+            {
+                car.disableZRotation = value != 0;
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "DisableOnEnd", StringComparison.Ordinal))
+            {
+                car.disableOnReachingThisSplineDistance = value != 0;
+                car.enabled = false;
+                return true;
+            }
+
+            if (string.Equals(name, "EndSpline100", StringComparison.Ordinal))
+            {
+                car.endOfSplineDistance = value / 100f;
+                car.enabled = false;
+                return true;
             }
 
             return true;
@@ -306,6 +415,7 @@ namespace WoodburySpectatorSync.Coop
                 var active = (mask & (1 << i)) != 0;
                 car.gameObject.SetActive(active);
                 car.carIsActive = false;
+                car.enabled = false;
             }
         }
 
@@ -318,6 +428,7 @@ namespace WoodburySpectatorSync.Coop
             if (current != null && StableNameHash(GetBaseCarName(current.name)) == expectedHash)
             {
                 current.carIsActive = false;
+                current.enabled = false;
                 return true;
             }
 
@@ -344,6 +455,7 @@ namespace WoodburySpectatorSync.Coop
 
             replacement.gameObject.SetActive(false);
             replacement.carIsActive = false;
+            replacement.enabled = false;
             ConfigureReplacement(controller, replacement);
 
             if (current != null)

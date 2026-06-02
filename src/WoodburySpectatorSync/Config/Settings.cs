@@ -41,6 +41,8 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<bool> CoopAutoStartHost;
         public ConfigEntry<bool> CoopAutoConnectClient;
         public ConfigEntry<string> CoopDisplayName;
+        public ConfigEntry<bool> CoopHostWaitForClient;
+        public ConfigEntry<bool> CoopHostWaitIndicator;
         public ConfigEntry<bool> CoopForceCabinStart;
         public ConfigEntry<string> CoopCabinStartSequence;
         public ConfigEntry<string> CoopRemotePlayerPrefabPath;
@@ -76,6 +78,8 @@ namespace WoodburySpectatorSync.Config
             settings.CoopAutoStartHost = config.Bind("Coop", "AutoStartHost", false, "Auto-start co-op host server on launch");
             settings.CoopAutoConnectClient = config.Bind("Coop", "AutoConnectClient", false, "Auto-connect co-op client on launch");
             settings.CoopDisplayName = config.Bind("Coop", "DisplayName", string.Empty, "Optional co-op nametag display name. Leave empty to use Steam name when available.");
+            settings.CoopHostWaitForClient = config.Bind("Coop", "HostWaitForClient", true, "Pause co-op host gameplay while a connected client loads a scene or applies a snapshot.");
+            settings.CoopHostWaitIndicator = config.Bind("UI", "HostWaitIndicator", true, "Show a small host-side waiting spinner while waiting for a co-op client.");
             settings.CoopForceCabinStart = config.Bind("Coop", "ForceCabinStartSequence", true, "Force the client to start at a cabin testing sequence (skips driving intro)");
             settings.CoopCabinStartSequence = config.Bind("Coop", "CabinStartSequence", "StartAfterShower", "CabinSceneSequences enum name (StartAfterShower, StartInKitchenAfterOvenStart, StartHiding)");
             settings.CoopRemotePlayerPrefabPath = config.Bind("Coop", "RemotePlayerPrefabPath", string.Empty, "Optional dedicated remote player source path (NetPath or Resources path). If empty, fallback uses local FPC clone.");

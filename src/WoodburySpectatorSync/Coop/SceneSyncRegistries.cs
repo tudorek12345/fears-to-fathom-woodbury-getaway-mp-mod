@@ -13,6 +13,8 @@ namespace WoodburySpectatorSync.Coop
             {
                 new GenericNpcEntry("Pizzeria/Mike/Main", "MikePizzeria", "MikePizzeria"),
                 new GenericNpcEntry("Pizzeria/Hiker/Main", "PizzeriaHiker", "PizzeriaHiker"),
+                new GenericNpcEntry("Pizzeria/Hobo/Main", "Hobo", "Hobo"),
+                new GenericNpcEntry("Pizzeria/Chef/Main", "Chef", "Chef"),
                 new GenericNpcEntry("Pizzeria/NPC/FoldingGuy", "PizzeriaFoldingGuy", "PizzeriaFoldingGuy"),
                 new GenericNpcEntry("Pizzeria/NPC/Main", "PizzeriaNPC", "PizzeriaNPC", multiple: true),
                 new GenericNpcEntry("Pizzeria/NPC/Other", "PizzeriaNPCOther", "PizzeriaNPCOther", multiple: true)
@@ -26,7 +28,27 @@ namespace WoodburySpectatorSync.Coop
                 new GenericNpcEntry("RoadTrip/Mike/InCar", "MikeInCar", "MikeInCar"),
                 new GenericNpcEntry("RoadTrip/Vehicle/MikeTruckLoop", "MikeTruckInLoopScene", "MikeTruckInLoopScene"),
                 new GenericNpcEntry("RoadTrip/Vehicle/MikeTruckNora", "MikeTruckGoingToNora", "MikeTruckGoingToNora"),
-                new GenericNpcEntry("RoadTrip/Vehicle/MikeTruckParking", "MikeTruckInParking", "MikeTruckInParking")
+                new GenericNpcEntry("RoadTrip/Vehicle/MikeTruckParking", "MikeTruckInParking", "MikeTruckInParking"),
+                new GenericNpcEntry("RoadTrip/Deer/Main", "RedDeer", "RedDeer")
+            });
+        }
+
+        public static GenericNpcRegistry CreateOfficeNpcRegistry(ManualLogSource logger, Action<string> sessionLogWrite, string side)
+        {
+            return new GenericNpcRegistry(logger, sessionLogWrite, side, "Office", new[]
+            {
+                new GenericNpcEntry("Office/Janitor/Main", "OfficeJanitor", "OfficeJanitor"),
+                new GenericNpcEntry("Office/Worker/Main", "OfficeWorker", "OfficeWorker", multiple: true)
+            });
+        }
+
+        public static GenericNpcRegistry CreateParkingLotNpcRegistry(ManualLogSource logger, Action<string> sessionLogWrite, string side)
+        {
+            return new GenericNpcRegistry(logger, sessionLogWrite, side, "Parking", new[]
+            {
+                new GenericNpcEntry("ParkingLot/Stranger/Elevator", "ElevatorStranger", "ElevatorStranger"),
+                new GenericNpcEntry("ParkingLot/Mike/Main", "MikeParkingLot", "MikeParkingLot"),
+                new GenericNpcEntry("ParkingLot/Cop/Walking", "WalkingCop", "WalkingCopController")
             });
         }
     }

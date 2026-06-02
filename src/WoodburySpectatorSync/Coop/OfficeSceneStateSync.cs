@@ -399,10 +399,27 @@ namespace WoodburySpectatorSync.Coop
             Emit(prefix + "CanExit", computer.canExit ? 1 : 0, emit, ref hash);
             Emit(prefix + "TypeMasterOpen", computer.istypeMasterWindowOpen ? 1 : 0, emit, ref hash);
             Emit(prefix + "JustExited", computer.justExitedComputer ? 1 : 0, emit, ref hash);
+            Emit(prefix + "BrowserOpen", GetFieldValue<bool>(computer, "isBrowserWindowOpen") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "BrowserTransition", GetFieldValue<bool>(computer, "isBrowserInTransition") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "SearchDone", GetFieldValue<bool>(computer, "searchTextDone") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "SearchPageOn", GetFieldValue<bool>(computer, "searchPageOn") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "SearchCabinDone", GetFieldValue<bool>(computer, "searchTextDoneCabin") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "SearchInputLen", GetTextLength(GetFieldObject(computer, "inputField")), emit, ref hash);
+            Emit(prefix + "SearchCabinInputLen", GetTextLength(GetFieldObject(computer, "inputFieldCabin")), emit, ref hash);
+            Emit(prefix + "SheetsOpen", GetFieldValue<bool>(computer, "isSheetsWindowOpen") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "SheetsTransition", GetFieldValue<bool>(computer, "isSheetsInTransition") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "TypeMasterTransition", GetFieldValue<bool>(computer, "istypeMasterWindowInTransition") ? 1 : 0, emit, ref hash);
+            Emit(prefix + "IconsCount", GetFieldValue<int>(computer, "iconsCount"), emit, ref hash);
             Emit(prefix + "ParentObject", IsObjectActive(computer.parentObject) ? 1 : 0, emit, ref hash);
             Emit(prefix + "BrowserWindow", IsObjectActive(computer.browserWindow) ? 1 : 0, emit, ref hash);
             Emit(prefix + "SheetWindow", IsObjectActive(computer.sheetWindow) ? 1 : 0, emit, ref hash);
             Emit(prefix + "TypeMasterWindow", IsObjectActive(computer.typeMasterWindow) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "BrowserSibling", GetSiblingIndex(computer.browserWindow), emit, ref hash);
+            Emit(prefix + "SheetSibling", GetSiblingIndex(computer.sheetWindow), emit, ref hash);
+            Emit(prefix + "TypeMasterSibling", GetSiblingIndex(computer.typeMasterWindow), emit, ref hash);
+            EmitRect(prefix + "BrowserRect.", computer.browserWindowRect, emit, ref hash);
+            EmitRect(prefix + "SheetRect.", computer.sheetWindowRect, emit, ref hash);
+            EmitRect(prefix + "TypeMasterRect.", computer.typeMasterWindowRect, emit, ref hash);
             Emit(prefix + "SearchPage", IsObjectActive(computer.searchPage) ? 1 : 0, emit, ref hash);
             Emit(prefix + "AirbnbPage", IsObjectActive(computer.AirbnbPage) ? 1 : 0, emit, ref hash);
             Emit(prefix + "HomePage", IsObjectActive(computer.homePage) ? 1 : 0, emit, ref hash);
@@ -410,6 +427,31 @@ namespace WoodburySpectatorSync.Coop
             Emit(prefix + "MainCabinPage", IsObjectActive(computer.mainCabinPage) ? 1 : 0, emit, ref hash);
             Emit(prefix + "ConfirmPopup", IsObjectActive(computer.confirmationPopup) ? 1 : 0, emit, ref hash);
             Emit(prefix + "LoadingIcon", IsObjectActive(computer.loadingIcon) ? 1 : 0, emit, ref hash);
+            EmitIconMasks(prefix, computer, emit, ref hash);
+        }
+
+        private static void EmitIconMasks(string prefix, ComputerManager computer, Action<string, int> emit, ref int hash)
+        {
+            var icons = GetFieldValue<List<ComputerIcon>>(computer, "icons");
+            var shadowMask = 0;
+            var outlineMask = 0;
+            var rootMask = 0;
+            if (icons != null)
+            {
+                for (var i = 0; i < icons.Count && i < 30; i++)
+                {
+                    var icon = icons[i];
+                    if (icon == null) continue;
+                    if (icon.gameObject != null && icon.gameObject.activeSelf) rootMask |= 1 << i;
+                    if (icon.whiteShadowGO != null && icon.whiteShadowGO.activeSelf) shadowMask |= 1 << i;
+                    if (icon.whiteOutlineGO != null && icon.whiteOutlineGO.activeSelf) outlineMask |= 1 << i;
+                }
+            }
+
+            Emit(prefix + "IconCount", icons != null ? icons.Count : 0, emit, ref hash);
+            Emit(prefix + "IconRootMask", rootMask, emit, ref hash);
+            Emit(prefix + "IconShadowMask", shadowMask, emit, ref hash);
+            Emit(prefix + "IconOutlineMask", outlineMask, emit, ref hash);
         }
 
         private static void EmitCoffee(string prefix, CoffeeMachineManager coffee, Action<string, int> emit, ref int hash)
@@ -917,10 +959,27 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "CanExit", StringComparison.Ordinal)) { computer.canExit = value != 0; return true; }
             if (string.Equals(name, "TypeMasterOpen", StringComparison.Ordinal)) { computer.istypeMasterWindowOpen = value != 0; return true; }
             if (string.Equals(name, "JustExited", StringComparison.Ordinal)) { computer.justExitedComputer = value != 0; return true; }
+            if (string.Equals(name, "BrowserOpen", StringComparison.Ordinal)) { SetFieldValue(computer, "isBrowserWindowOpen", value != 0); return true; }
+            if (string.Equals(name, "BrowserTransition", StringComparison.Ordinal)) { SetFieldValue(computer, "isBrowserInTransition", value != 0); return true; }
+            if (string.Equals(name, "SearchDone", StringComparison.Ordinal)) { SetFieldValue(computer, "searchTextDone", value != 0); return true; }
+            if (string.Equals(name, "SearchPageOn", StringComparison.Ordinal)) { SetFieldValue(computer, "searchPageOn", value != 0); return true; }
+            if (string.Equals(name, "SearchCabinDone", StringComparison.Ordinal)) { SetFieldValue(computer, "searchTextDoneCabin", value != 0); return true; }
+            if (string.Equals(name, "SearchInputLen", StringComparison.Ordinal)) { ApplyKnownTextPrefix(GetFieldObject(computer, "inputField"), GetFieldObject(computer, "searchBarText"), GetFieldValue<string>(computer, "searchString"), value, GetFieldValue<bool>(computer, "searchTextDone")); return true; }
+            if (string.Equals(name, "SearchCabinInputLen", StringComparison.Ordinal)) { ApplyKnownTextPrefix(GetFieldObject(computer, "inputFieldCabin"), GetFieldObject(computer, "searchBarTextCabin"), GetFieldValue<string>(computer, "searchStringCabin"), value, GetFieldValue<bool>(computer, "searchTextDoneCabin")); return true; }
+            if (string.Equals(name, "SheetsOpen", StringComparison.Ordinal)) { SetFieldValue(computer, "isSheetsWindowOpen", value != 0); return true; }
+            if (string.Equals(name, "SheetsTransition", StringComparison.Ordinal)) { SetFieldValue(computer, "isSheetsInTransition", value != 0); return true; }
+            if (string.Equals(name, "TypeMasterTransition", StringComparison.Ordinal)) { SetFieldValue(computer, "istypeMasterWindowInTransition", value != 0); return true; }
+            if (string.Equals(name, "IconsCount", StringComparison.Ordinal)) { SetFieldValue(computer, "iconsCount", value); return true; }
             if (string.Equals(name, "ParentObject", StringComparison.Ordinal)) { SetObjectActive(computer.parentObject, value != 0); return true; }
             if (string.Equals(name, "BrowserWindow", StringComparison.Ordinal)) { SetObjectActive(computer.browserWindow, value != 0); return true; }
             if (string.Equals(name, "SheetWindow", StringComparison.Ordinal)) { SetObjectActive(computer.sheetWindow, value != 0); return true; }
             if (string.Equals(name, "TypeMasterWindow", StringComparison.Ordinal)) { SetObjectActive(computer.typeMasterWindow, value != 0); return true; }
+            if (string.Equals(name, "BrowserSibling", StringComparison.Ordinal)) { SetSiblingIndex(computer.browserWindow, value); return true; }
+            if (string.Equals(name, "SheetSibling", StringComparison.Ordinal)) { SetSiblingIndex(computer.sheetWindow, value); return true; }
+            if (string.Equals(name, "TypeMasterSibling", StringComparison.Ordinal)) { SetSiblingIndex(computer.typeMasterWindow, value); return true; }
+            if (TryApplyRect(name, "BrowserRect.", computer.browserWindowRect, value)) return true;
+            if (TryApplyRect(name, "SheetRect.", computer.sheetWindowRect, value)) return true;
+            if (TryApplyRect(name, "TypeMasterRect.", computer.typeMasterWindowRect, value)) return true;
             if (string.Equals(name, "SearchPage", StringComparison.Ordinal)) { SetObjectActive(computer.searchPage, value != 0); return true; }
             if (string.Equals(name, "AirbnbPage", StringComparison.Ordinal)) { SetObjectActive(computer.AirbnbPage, value != 0); return true; }
             if (string.Equals(name, "HomePage", StringComparison.Ordinal)) { SetObjectActive(computer.homePage, value != 0); return true; }
@@ -928,6 +987,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "MainCabinPage", StringComparison.Ordinal)) { SetObjectActive(computer.mainCabinPage, value != 0); return true; }
             if (string.Equals(name, "ConfirmPopup", StringComparison.Ordinal)) { SetObjectActive(computer.confirmationPopup, value != 0); return true; }
             if (string.Equals(name, "LoadingIcon", StringComparison.Ordinal)) { SetObjectActive(computer.loadingIcon, value != 0); return true; }
+            if (TryApplyIconMask(name, computer, value)) return true;
             MaybeLogUnknown(logger, "Office computer", name);
             return true;
         }
@@ -1598,6 +1658,110 @@ namespace WoodburySpectatorSync.Coop
         private static float Dequantize01(int value)
         {
             return Mathf.Clamp01(value / 1000f);
+        }
+
+        private static void EmitRect(string prefix, RectTransform rect, Action<string, int> emit, ref int hash)
+        {
+            if (rect == null)
+            {
+                Emit(prefix + "Exists", 0, emit, ref hash);
+                return;
+            }
+
+            Emit(prefix + "Exists", 1, emit, ref hash);
+            Emit(prefix + "LocalX", Quantize(rect.localPosition.x), emit, ref hash);
+            Emit(prefix + "LocalY", Quantize(rect.localPosition.y), emit, ref hash);
+            Emit(prefix + "LocalZ", Quantize(rect.localPosition.z), emit, ref hash);
+            Emit(prefix + "ScaleX", Quantize(rect.localScale.x), emit, ref hash);
+            Emit(prefix + "ScaleY", Quantize(rect.localScale.y), emit, ref hash);
+            Emit(prefix + "ScaleZ", Quantize(rect.localScale.z), emit, ref hash);
+        }
+
+        private static bool TryApplyRect(string name, string prefix, RectTransform rect, int value)
+        {
+            if (string.IsNullOrEmpty(name) ||
+                string.IsNullOrEmpty(prefix) ||
+                !name.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (rect == null) return true;
+            var field = name.Substring(prefix.Length);
+            if (string.Equals(field, "Exists", StringComparison.Ordinal)) return true;
+
+            var localPosition = rect.localPosition;
+            var localScale = rect.localScale;
+            if (string.Equals(field, "LocalX", StringComparison.Ordinal)) localPosition.x = Dequantize(value);
+            else if (string.Equals(field, "LocalY", StringComparison.Ordinal)) localPosition.y = Dequantize(value);
+            else if (string.Equals(field, "LocalZ", StringComparison.Ordinal)) localPosition.z = Dequantize(value);
+            else if (string.Equals(field, "ScaleX", StringComparison.Ordinal)) localScale.x = Dequantize(value);
+            else if (string.Equals(field, "ScaleY", StringComparison.Ordinal)) localScale.y = Dequantize(value);
+            else if (string.Equals(field, "ScaleZ", StringComparison.Ordinal)) localScale.z = Dequantize(value);
+            else return true;
+
+            rect.localPosition = localPosition;
+            rect.localScale = localScale;
+            return true;
+        }
+
+        private static int GetSiblingIndex(object target)
+        {
+            var go = GetGameObject(target);
+            if (go == null || go.transform == null) return -1;
+            return go.transform.GetSiblingIndex();
+        }
+
+        private static void SetSiblingIndex(object target, int index)
+        {
+            var go = GetGameObject(target);
+            if (go == null || go.transform == null || go.transform.parent == null) return;
+            var max = Mathf.Max(0, go.transform.parent.childCount - 1);
+            go.transform.SetSiblingIndex(Mathf.Clamp(index, 0, max));
+        }
+
+        private static int GetTextLength(object textOwner)
+        {
+            var value = GetMemberValue(textOwner, "text");
+            return value is string text ? text.Length : 0;
+        }
+
+        private static void ApplyKnownTextPrefix(object inputField, object textField, string fullText, int length, bool completed)
+        {
+            if (string.IsNullOrEmpty(fullText)) fullText = string.Empty;
+            var safeLength = Mathf.Clamp(length, 0, fullText.Length);
+            var value = fullText.Substring(0, safeLength);
+            SetMemberValue(inputField, "text", value);
+            SetMemberValue(textField, "text", value);
+            if (completed || safeLength >= fullText.Length)
+            {
+                SetMemberValue(inputField, "interactable", false);
+            }
+        }
+
+        private static bool TryApplyIconMask(string name, ComputerManager computer, int value)
+        {
+            if (string.Equals(name, "IconCount", StringComparison.Ordinal)) return true;
+            if (!string.Equals(name, "IconRootMask", StringComparison.Ordinal) &&
+                !string.Equals(name, "IconShadowMask", StringComparison.Ordinal) &&
+                !string.Equals(name, "IconOutlineMask", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var icons = GetFieldValue<List<ComputerIcon>>(computer, "icons");
+            if (icons == null) return true;
+            for (var i = 0; i < icons.Count && i < 30; i++)
+            {
+                var icon = icons[i];
+                if (icon == null) continue;
+                var active = (value & (1 << i)) != 0;
+                if (string.Equals(name, "IconRootMask", StringComparison.Ordinal)) SetObjectActive(icon.gameObject, active);
+                else if (string.Equals(name, "IconShadowMask", StringComparison.Ordinal)) SetObjectActive(icon.whiteShadowGO, active);
+                else if (string.Equals(name, "IconOutlineMask", StringComparison.Ordinal)) SetObjectActive(icon.whiteOutlineGO, active);
+            }
+
+            return true;
         }
 
         private static void SortByPath<T>(T[] items) where T : Component

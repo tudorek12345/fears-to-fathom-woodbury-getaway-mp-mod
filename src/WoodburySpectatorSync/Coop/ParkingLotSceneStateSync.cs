@@ -457,12 +457,16 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var introCanvas = GetFieldObject(ui, "introCanvas");
+            var whiteIntro = GetFieldObject(ui, "whiteIntroManager");
             var dialogueCamera = GetFieldObject(ui, "dialogueCamera");
             var phoneUi = ui.phoneUI;
             Emit(prefix + "Exists", 1, emit, ref hash);
             Emit(prefix + "RootActive", ui.gameObject.activeSelf ? 1 : 0, emit, ref hash);
             Emit(prefix + "InConversation", ui.inCoversation ? 1 : 0, emit, ref hash);
             Emit(prefix + "IntroCanvas", IsObjectActive(introCanvas) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "WhiteIntroActive", IsObjectActive(whiteIntro) ? 1 : 0, emit, ref hash);
+            Emit(prefix + "WhiteIntroTextCount", GetTextBehaviourCount(whiteIntro, "textsToShow"), emit, ref hash);
+            Emit(prefix + "WhiteIntroTextMask", BuildTextBehaviourEnabledMask(whiteIntro, "textsToShow"), emit, ref hash);
             Emit(prefix + "DialogueCamera", IsObjectActive(dialogueCamera) ? 1 : 0, emit, ref hash);
             Emit(prefix + "NotifWasOnscreen", GetFieldValue<bool>(ui, "notifWasOnscreen") ? 1 : 0, emit, ref hash);
             Emit(prefix + "PhoneAllowed", phoneUi != null && phoneUi.allowPhone ? 1 : 0, emit, ref hash);
@@ -845,6 +849,9 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { ui.gameObject.SetActive(value != 0); return true; }
             if (string.Equals(name, "InConversation", StringComparison.Ordinal)) { ui.inCoversation = value != 0; return true; }
             if (string.Equals(name, "IntroCanvas", StringComparison.Ordinal)) { SetObjectActive(GetFieldObject(ui, "introCanvas"), value != 0); return true; }
+            if (string.Equals(name, "WhiteIntroActive", StringComparison.Ordinal)) { SetObjectActive(GetFieldObject(ui, "whiteIntroManager"), value != 0); return true; }
+            if (string.Equals(name, "WhiteIntroTextCount", StringComparison.Ordinal)) { return true; }
+            if (string.Equals(name, "WhiteIntroTextMask", StringComparison.Ordinal)) { ApplyTextBehaviourEnabledMask(GetFieldObject(ui, "whiteIntroManager"), "textsToShow", value); return true; }
             if (string.Equals(name, "DialogueCamera", StringComparison.Ordinal)) { SetObjectActive(GetFieldObject(ui, "dialogueCamera"), value != 0); return true; }
             if (string.Equals(name, "NotifWasOnscreen", StringComparison.Ordinal)) { SetFieldValue(ui, "notifWasOnscreen", value != 0); return true; }
             if (string.Equals(name, "PhoneAllowed", StringComparison.Ordinal)) { if (ui.phoneUI != null) ui.phoneUI.allowPhone = value != 0; return true; }
@@ -1211,6 +1218,43 @@ namespace WoodburySpectatorSync.Coop
             }
             catch
             {
+            }
+        }
+
+        private static int GetTextBehaviourCount(object target, string fieldName)
+        {
+            var items = GetFieldValue<Array>(target, fieldName);
+            return items != null ? items.Length : 0;
+        }
+
+        private static int BuildTextBehaviourEnabledMask(object target, string fieldName)
+        {
+            var items = GetFieldValue<Array>(target, fieldName);
+            if (items == null) return 0;
+
+            var mask = 0;
+            for (var i = 0; i < items.Length && i < 30; i++)
+            {
+                if (items.GetValue(i) is Behaviour behaviour && behaviour.enabled)
+                {
+                    mask |= 1 << i;
+                }
+            }
+
+            return mask;
+        }
+
+        private static void ApplyTextBehaviourEnabledMask(object target, string fieldName, int mask)
+        {
+            var items = GetFieldValue<Array>(target, fieldName);
+            if (items == null) return;
+
+            for (var i = 0; i < items.Length && i < 30; i++)
+            {
+                if (items.GetValue(i) is Behaviour behaviour)
+                {
+                    behaviour.enabled = (mask & (1 << i)) != 0;
+                }
             }
         }
 
