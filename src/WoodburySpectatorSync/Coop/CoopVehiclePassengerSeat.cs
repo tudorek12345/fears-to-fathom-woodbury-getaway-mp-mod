@@ -20,6 +20,8 @@ namespace WoodburySpectatorSync.Coop
             public bool Active;
             public Vector3 Position;
             public Quaternion Rotation;
+            public Vector3 Velocity;
+            public float Speed;
             public string VehicleName;
             public string SeatName;
             public bool FallbackPose;
@@ -50,6 +52,8 @@ namespace WoodburySpectatorSync.Coop
 
             var side = ResolveSide(role, requestedSide);
             var root = truck.transform;
+            var velocity = ResolveVehicleVelocity(truck, root);
+            var speed = velocity.magnitude;
             var explicitSeat = FindExplicitSeat(root, side);
             if (explicitSeat != null)
             {
@@ -58,6 +62,8 @@ namespace WoodburySpectatorSync.Coop
                     Active = true,
                     Position = explicitSeat.position,
                     Rotation = ResolveSeatRotation(explicitSeat.rotation),
+                    Velocity = velocity,
+                    Speed = speed,
                     VehicleName = root.name,
                     SeatName = explicitSeat.name,
                     FallbackPose = false
@@ -71,6 +77,8 @@ namespace WoodburySpectatorSync.Coop
                 Active = true,
                 Position = root.TransformPoint(localOffset),
                 Rotation = ResolveSeatRotation(root.rotation),
+                Velocity = velocity,
+                Speed = speed,
                 VehicleName = root.name,
                 SeatName = side == SeatSide.BackLeft ? "back-left" : "back-right",
                 FallbackPose = true
@@ -146,6 +154,23 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return Quaternion.LookRotation(forward.normalized, Vector3.up) * Quaternion.Euler(LookUpPitch, 0f, 0f);
+        }
+
+        private static Vector3 ResolveVehicleVelocity(MikeTruckInLoopScene truck, Transform root)
+        {
+            if (truck == null || root == null)
+            {
+                return Vector3.zero;
+            }
+
+            var speed = 0f;
+            if (!TryReadTruckFloat(truck, "speed", out speed))
+            {
+                return Vector3.zero;
+            }
+
+            speed = Mathf.Clamp(speed, -40f, 40f);
+            return root.forward * speed;
         }
 
         public static bool TryReadTruckFloat(MikeTruckInLoopScene truck, string fieldName, out float value)

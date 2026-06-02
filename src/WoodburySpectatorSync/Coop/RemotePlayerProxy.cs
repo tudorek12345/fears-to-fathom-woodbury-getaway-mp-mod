@@ -225,6 +225,13 @@ namespace WoodburySpectatorSync.Coop
         private Quaternion _smoothedRootRotation = Quaternion.identity;
         private float _lastSmoothSampleTime;
         private bool _hasSmoothedRoot;
+        private readonly bool _predictionEnabled;
+        private readonly float _predictionSeconds;
+        private readonly float _maxPredictionDistance;
+        private Vector3 _predictionVelocity;
+        private Vector3 _lastPredictionSamplePosition;
+        private float _lastPredictionSampleTime;
+        private bool _hasPredictionSample;
         private RemotePlayerNameTag _nameTag;
         private string _idleAnimationStateName;
         private bool _lastAnimatorMoving;
@@ -262,6 +269,15 @@ namespace WoodburySpectatorSync.Coop
                 settings == null ||
                 settings.CoopVehiclePassengerSeatPrompt == null ||
                 settings.CoopVehiclePassengerSeatPrompt.Value,
+                settings == null ||
+                settings.CoopRemotePlayerPrediction == null ||
+                settings.CoopRemotePlayerPrediction.Value,
+                settings != null && settings.CoopRemotePlayerPredictionSeconds != null
+                    ? settings.CoopRemotePlayerPredictionSeconds.Value
+                    : 0.08f,
+                settings != null && settings.CoopRemotePlayerMaxPredictionDistance != null
+                    ? settings.CoopRemotePlayerMaxPredictionDistance.Value
+                    : 0.35f,
                 logger,
                 diagnosticsSink);
         }
@@ -275,7 +291,7 @@ namespace WoodburySpectatorSync.Coop
                 RigProfile = "Auto",
                 SourceKind = "FpcClone",
                 SourceName = source != null ? source.name : string.Empty
-            }, tint, allowCharacterController, false, false, false, null, null)
+            }, tint, allowCharacterController, false, false, false, false, 0f, 0f, null, null)
         {
         }
 
@@ -286,6 +302,9 @@ namespace WoodburySpectatorSync.Coop
             bool enablePresenceCollider,
             bool enableVehiclePassengerSeat,
             bool showVehiclePassengerSeatPrompt,
+            bool predictionEnabled,
+            float predictionSeconds,
+            float maxPredictionDistance,
             ManualLogSource logger,
             Action<string> diagnosticsSink)
         {
@@ -295,6 +314,9 @@ namespace WoodburySpectatorSync.Coop
             }
 
             _allowCharacterController = allowCharacterController;
+            _predictionEnabled = predictionEnabled;
+            _predictionSeconds = Mathf.Clamp(predictionSeconds, 0f, 0.25f);
+            _maxPredictionDistance = Mathf.Clamp(maxPredictionDistance, 0f, 2f);
             if (source.UseSyntheticCapsule || source.UseInvisiblePlaceholder)
             {
                 _root = new GameObject("CoopRemotePlayer");
@@ -355,6 +377,9 @@ namespace WoodburySpectatorSync.Coop
                 enablePresenceCollider,
                 enableVehiclePassengerSeat,
                 showVehiclePassengerSeatPrompt,
+                _predictionEnabled,
+                _predictionSeconds,
+                _maxPredictionDistance,
                 logger,
                 diagnosticsSink);
             if (_cameraTransform == null && _secondPlayerController != null)
@@ -464,6 +489,8 @@ namespace WoodburySpectatorSync.Coop
 
         private void SmoothBodyTransform(ref Vector3 bodyPosition, ref Quaternion bodyRotation)
         {
+            ApplyVisualPrediction(ref bodyPosition);
+
             var now = Time.realtimeSinceStartup;
             if (!_hasSmoothedRoot || Vector3.Distance(_smoothedRootPosition, bodyPosition) > 4f)
             {
@@ -481,6 +508,61 @@ namespace WoodburySpectatorSync.Coop
             _lastSmoothSampleTime = now;
             bodyPosition = _smoothedRootPosition;
             bodyRotation = _smoothedRootRotation;
+        }
+
+        private void ApplyVisualPrediction(ref Vector3 bodyPosition)
+        {
+            var now = Time.realtimeSinceStartup;
+            if (!_hasPredictionSample)
+            {
+                _lastPredictionSamplePosition = bodyPosition;
+                _lastPredictionSampleTime = now;
+                _predictionVelocity = Vector3.zero;
+                _hasPredictionSample = true;
+                return;
+            }
+
+            var sampleDelta = bodyPosition - _lastPredictionSamplePosition;
+            var sampleDistance = sampleDelta.magnitude;
+            if (sampleDistance > 4f)
+            {
+                _lastPredictionSamplePosition = bodyPosition;
+                _lastPredictionSampleTime = now;
+                _predictionVelocity = Vector3.zero;
+                _hasSmoothedRoot = false;
+                return;
+            }
+
+            if (sampleDistance > 0.01f)
+            {
+                var sampleTime = Mathf.Max(0.001f, now - _lastPredictionSampleTime);
+                if (sampleTime < 1f)
+                {
+                    var measuredVelocity = sampleDelta / sampleTime;
+                    _predictionVelocity = Vector3.Lerp(_predictionVelocity, measuredVelocity, 0.45f);
+                }
+
+                _lastPredictionSamplePosition = bodyPosition;
+                _lastPredictionSampleTime = now;
+            }
+            else if (now - _lastPredictionSampleTime > 0.25f)
+            {
+                _predictionVelocity = Vector3.Lerp(_predictionVelocity, Vector3.zero, 0.25f);
+            }
+
+            if (!_predictionEnabled || _predictionSeconds <= 0f || _maxPredictionDistance <= 0f)
+            {
+                return;
+            }
+
+            var predictedOffset = _predictionVelocity * _predictionSeconds;
+            predictedOffset.y = Mathf.Clamp(predictedOffset.y, -0.08f, 0.08f);
+            if (predictedOffset.sqrMagnitude > _maxPredictionDistance * _maxPredictionDistance)
+            {
+                predictedOffset = Vector3.ClampMagnitude(predictedOffset, _maxPredictionDistance);
+            }
+
+            bodyPosition += predictedOffset;
         }
 
         private void DriveAnimatorFromTransform(Vector3 newPosition, Quaternion newRotation)

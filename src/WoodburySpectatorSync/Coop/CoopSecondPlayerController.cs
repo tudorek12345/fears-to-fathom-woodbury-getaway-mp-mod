@@ -26,6 +26,9 @@ namespace WoodburySpectatorSync.Coop
         private bool _logged;
         private bool _vehicleSeatEnabled;
         private bool _vehicleSeatPrompt;
+        private bool _predictionEnabled;
+        private float _predictionSeconds;
+        private float _maxPredictionDistance;
         private bool _seatbeltLocked = true;
         private CoopVehiclePassengerSeat.SeatSide _requestedSeatSide = CoopVehiclePassengerSeat.SeatSide.Auto;
         private CoopVehiclePassengerSeat.SeatPose _lastSeatPose;
@@ -44,6 +47,9 @@ namespace WoodburySpectatorSync.Coop
             bool enablePresenceCollider,
             bool enableVehicleSeat,
             bool showVehicleSeatPrompt,
+            bool predictionEnabled,
+            float predictionSeconds,
+            float maxPredictionDistance,
             ManualLogSource logger,
             Action<string> sessionLogWrite)
         {
@@ -55,7 +61,17 @@ namespace WoodburySpectatorSync.Coop
                 controller = root.AddComponent<CoopSecondPlayerController>();
             }
 
-            controller.Initialize(visualRoot, cameraAnchor, enablePresenceCollider, enableVehicleSeat, showVehicleSeatPrompt, logger, sessionLogWrite);
+            controller.Initialize(
+                visualRoot,
+                cameraAnchor,
+                enablePresenceCollider,
+                enableVehicleSeat,
+                showVehicleSeatPrompt,
+                predictionEnabled,
+                predictionSeconds,
+                maxPredictionDistance,
+                logger,
+                sessionLogWrite);
             return controller;
         }
 
@@ -72,7 +88,7 @@ namespace WoodburySpectatorSync.Coop
             var seated = TryResolveVehicleSeat(out var seatPose);
             if (seated)
             {
-                appliedPosition = seatPose.Position;
+                appliedPosition = PredictSeatPosition(seatPose);
                 appliedRotation = seatPose.Rotation;
                 _lastSeatPose = seatPose;
                 _hasLastSeatPose = true;
@@ -111,6 +127,9 @@ namespace WoodburySpectatorSync.Coop
             bool enablePresenceCollider,
             bool enableVehicleSeat,
             bool showVehicleSeatPrompt,
+            bool predictionEnabled,
+            float predictionSeconds,
+            float maxPredictionDistance,
             ManualLogSource logger,
             Action<string> sessionLogWrite)
         {
@@ -120,6 +139,9 @@ namespace WoodburySpectatorSync.Coop
             _presenceCollider.enabled = enablePresenceCollider;
             _vehicleSeatEnabled = enableVehicleSeat;
             _vehicleSeatPrompt = showVehicleSeatPrompt;
+            _predictionEnabled = predictionEnabled;
+            _predictionSeconds = Mathf.Clamp(predictionSeconds, 0f, 0.25f);
+            _maxPredictionDistance = Mathf.Clamp(maxPredictionDistance, 0f, 2f);
 
             // Keep this off the game's story trigger layers. It is a co-op presence primitive,
             // not a second local gameplay actor.
@@ -136,7 +158,8 @@ namespace WoodburySpectatorSync.Coop
                            " visual=" + (_visualRoot != null ? NetPath.GetPath(_visualRoot) : "-") +
                            " cameraAnchor=" + (_cameraAnchor != null ? NetPath.GetPath(_cameraAnchor) : "-") +
                            " presenceCollider=" + (enablePresenceCollider ? "enabled" : "disabled") +
-                           " vehicleSeat=" + (enableVehicleSeat ? "enabled" : "disabled");
+                           " vehicleSeat=" + (enableVehicleSeat ? "enabled" : "disabled") +
+                           " prediction=" + (_predictionEnabled ? _predictionSeconds.ToString("0.###") + "s" : "off");
                 if (logger != null) logger.LogInfo(line);
                 if (sessionLogWrite != null) sessionLogWrite(line);
             }
@@ -198,6 +221,24 @@ namespace WoodburySpectatorSync.Coop
 
             MaybeLogSeat(seatPose);
             return true;
+        }
+
+        private Vector3 PredictSeatPosition(CoopVehiclePassengerSeat.SeatPose pose)
+        {
+            if (!_predictionEnabled || _predictionSeconds <= 0f || _maxPredictionDistance <= 0f ||
+                pose.Velocity.sqrMagnitude < 0.0001f)
+            {
+                return pose.Position;
+            }
+
+            var predictedOffset = pose.Velocity * _predictionSeconds;
+            predictedOffset.y = Mathf.Clamp(predictedOffset.y, -0.08f, 0.08f);
+            if (predictedOffset.sqrMagnitude > _maxPredictionDistance * _maxPredictionDistance)
+            {
+                predictedOffset = Vector3.ClampMagnitude(predictedOffset, _maxPredictionDistance);
+            }
+
+            return pose.Position + predictedOffset;
         }
 
         private void CycleSeatSide()
