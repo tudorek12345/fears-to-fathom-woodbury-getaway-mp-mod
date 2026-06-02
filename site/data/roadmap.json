@@ -83,6 +83,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "8e671ae",
+      "subject": "0.4.xx"
+    },
+    {
+      "sha": "1027bf9",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "c8f272d",
       "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
     },
@@ -105,14 +113,6 @@
     {
       "sha": "bb65068",
       "subject": "site: fold in new features (passenger seats, Mike handoff, prediction) + rework top title"
-    },
-    {
-      "sha": "f75685d",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "dd37dcd",
-      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
     }
   ]
 }
