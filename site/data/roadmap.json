@@ -83,6 +83,18 @@
   ],
   "recentCommits": [
     {
+      "sha": "c8f272d",
+      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
+    },
+    {
+      "sha": "4a38b0f",
+      "subject": "PhoneMirrorSync, CoopSecondPlayerController"
+    },
+    {
+      "sha": "3d44229",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "820f9e5",
       "subject": "Add proprietary all-rights-reserved license + README ownership notice"
     },
@@ -101,18 +113,6 @@
     {
       "sha": "dd37dcd",
       "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
-    },
-    {
-      "sha": "4f6e559",
-      "subject": "late night CoopSecondPlayerController"
-    },
-    {
-      "sha": "03129a9",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "970a8f9",
-      "subject": "Settings update"
     }
   ]
 }
