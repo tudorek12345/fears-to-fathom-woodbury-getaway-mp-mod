@@ -74,6 +74,7 @@
         "PizzeriaGameManager: current player mode, first-conversation timers, pizza/burp gates, phone UI, text-reply unlocks, soda-can seating",
         "MikePizzeria + PizzeriaHiker + PizzeriaFoldingGuy + PizzeriaNPC (generic NPC registry)",
         "MikeDrivingInPizzeriaScene opening: vehicle/path state, engine/key/handbrake audio, headlights/panel/bobblehead, transform correction",
+        "Mike hands off cleanly across the whole visit — drive in, park, sit at the table, eat, get the pizza, leave (phase-corrected on the client)",
         "Pizza box/slice/lid visibility + box-folding worker prop sync (with local folding brain suppression)",
         "PizzeriaTVAudioProximity (range, inside-pizzeria volume)",
         "PizzeriaChair interactability/layer state during pickup/sitting/eating/burp/get-up",
@@ -112,11 +113,12 @@
         "Deer animation state + deer/school-bus transform correction",
         "Mike-in-car hidden conversation flags + bus/deer trigger actives",
         "Generic triggers: OnTriggerSub / OnTriggerDisplaySub / OnTrigger / TriggerEventInvoker",
-        "Traffic pool/active-state with AiTransform correction + one-shot/speed/spline trigger settings"
+        "Traffic pool/active-state with AiTransform correction + one-shot/speed/spline trigger settings",
+        "Passenger seats: the second player can ride in the back of the truck (F12 to buckle in), riding the host-authored truck path",
+        "Movement prediction: remote players are smoothed/extrapolated between packets so they glide instead of stutter (clamped to real surfaces)"
       ],
       "notSynced": [
-        "Backseat-passenger ride-along (planned)",
-        "Cabin-DrivingToCabin handoff (currently skipped via ForceCabinStartSequence)",
+        "Passenger seats for the Pizzeria + Cabin drives (Road Trip already in)",
         "Save/load parity"
       ]
     },

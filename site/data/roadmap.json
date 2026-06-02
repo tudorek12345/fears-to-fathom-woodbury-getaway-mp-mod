@@ -6,13 +6,13 @@
   "headlineFeatures": [
     {
       "title": "Passenger seat — ride together in vehicles",
-      "summary": "Both players sitting in the same truck or car during the driving parts, instead of one driving and one teleported along. Road Trip, the Pizzeria drive-in, and the Cabin intro drive.",
+      "summary": "Both players in the same vehicle during the driving parts. The Road Trip back seats are already in — press F12 to buckle in. The Pizzeria drive-in and the Cabin intro drive are next.",
       "scenes": [
         "Road Trip",
         "Pizzeria",
         "Cabin"
       ],
-      "status": "Next up"
+      "status": "In progress — Road Trip in"
     },
     {
       "title": "Mid-game save & resume",

@@ -1666,7 +1666,30 @@ body.fx-off * { animation: none !important; }
 
 /* sharper, more utilitarian hero title */
 .hero-title { letter-spacing: -0.5px; }
+.hero-title .co-colon { color: var(--accent); }
 .hero-eyebrow { font-family: var(--font-mono); letter-spacing: 2px; }
+
+/* F2F text logotype (original lettering — not the copyrighted game logo image) */
+.f2f-logotype {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 14px;
+  font-weight: 800;
+  font-size: clamp(20px, 3.4vw, 34px);
+  letter-spacing: 4px;
+  line-height: 1;
+}
+.f2f-logotype span {
+  color: var(--accent);
+  text-shadow: 0.02em 0 0 rgba(159,199,232,0.55), -0.02em 0 0 rgba(255,43,61,0.5);
+}
+.f2f-logotype span:nth-child(2) {
+  color: var(--fg-soft);
+  font-size: 0.62em;
+  letter-spacing: 3px;
+  align-self: center;
+}
 
 /* FX toggle button mirrors the theme toggle */
 .fx-toggle {

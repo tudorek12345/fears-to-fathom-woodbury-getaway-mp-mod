@@ -232,6 +232,7 @@ namespace WoodburySpectatorSync.Coop
         private Vector3 _lastPredictionSamplePosition;
         private float _lastPredictionSampleTime;
         private bool _hasPredictionSample;
+        private long _nextGroundClampLogMs;
         private RemotePlayerNameTag _nameTag;
         private string _idleAnimationStateName;
         private bool _lastAnimatorMoving;
@@ -465,9 +466,10 @@ namespace WoodburySpectatorSync.Coop
             var bodyPosition = ResolveBodyRootPosition(state);
             var bodyRotation = ResolveUprightBodyRotation(state);
             SmoothBodyTransform(ref bodyPosition, ref bodyRotation);
+            ClampVisualPositionToSurface(ref bodyPosition, state);
             if (_secondPlayerController != null)
             {
-                _secondPlayerController.ApplyNetworkState(state, bodyPosition, bodyRotation);
+                _secondPlayerController.ApplyNetworkState(state, ref bodyPosition, ref bodyRotation);
             }
             else
             {
@@ -563,6 +565,82 @@ namespace WoodburySpectatorSync.Coop
             }
 
             bodyPosition += predictedOffset;
+        }
+
+        private void ClampVisualPositionToSurface(ref Vector3 bodyPosition, PlayerTransformState state)
+        {
+            if (_root == null) return;
+            if (!TryFindStableSurface(bodyPosition, state, out var surfaceY)) return;
+
+            var delta = bodyPosition.y - surfaceY;
+            var shouldClampDown = delta > 0.2f && delta < 4.5f;
+            var shouldLiftSlightly = delta < -0.25f && delta > -0.85f;
+            if (!shouldClampDown && !shouldLiftSlightly)
+            {
+                return;
+            }
+
+            bodyPosition.y = surfaceY;
+            if (_hasSmoothedRoot)
+            {
+                _smoothedRootPosition.y = surfaceY;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (nowMs >= _nextGroundClampLogMs)
+            {
+                _nextGroundClampLogMs = nowMs + 8000;
+                Debug.Log("Remote player visual grounded delta=" + delta.ToString("0.###") +
+                          " y=" + surfaceY.ToString("0.###") +
+                          " scene=" + SceneManager.GetActiveScene().name);
+            }
+        }
+
+        private bool TryFindStableSurface(Vector3 bodyPosition, PlayerTransformState state, out float surfaceY)
+        {
+            surfaceY = bodyPosition.y;
+            var originY = bodyPosition.y + 1.25f;
+            if (state.CameraPosition != Vector3.zero)
+            {
+                originY = Mathf.Max(originY, state.CameraPosition.y + 0.15f);
+            }
+
+            var origin = new Vector3(bodyPosition.x, originY, bodyPosition.z);
+            var hits = Physics.RaycastAll(origin, Vector3.down, 6f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            if (hits == null || hits.Length == 0)
+            {
+                return false;
+            }
+
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            for (var i = 0; i < hits.Length; i++)
+            {
+                var hit = hits[i];
+                if (hit.collider == null) continue;
+                if (hit.normal.y < 0.35f) continue;
+                if (IsOwnRemoteTransform(hit.collider.transform)) continue;
+
+                var y = hit.point.y;
+                if (state.CameraPosition != Vector3.zero)
+                {
+                    var eyeHeight = state.CameraPosition.y - y;
+                    if (eyeHeight < 0.45f || eyeHeight > 3.25f)
+                    {
+                        continue;
+                    }
+                }
+
+                surfaceY = y;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsOwnRemoteTransform(Transform transform)
+        {
+            if (transform == null || _root == null) return false;
+            return transform == _root.transform || transform.IsChildOf(_root.transform);
         }
 
         private void DriveAnimatorFromTransform(Vector3 newPosition, Quaternion newRotation)

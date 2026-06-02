@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.13, wire protocol 4.
+> Current iteration: Plugin 0.4.14, wire protocol 4.
 
-> Plugin 0.3.0 → 0.4.13 · wire protocol 3 → 4.
+> Plugin 0.3.0 → 0.4.14 · wire protocol 3 → 4.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
 
 ### Co-op Cabin
@@ -34,7 +34,7 @@
 ### Co-op RoadTrip
 
 - Passenger seats: remote second-player proxies can lock to RoadTrip truck back-left/back-right visual seats with an F12 seatbelt prompt, using the existing host-authored truck `PathVehicleState`/audio sync while keeping story-trigger colliders disabled by default.
-- Prediction: remote player proxies and RoadTrip passenger-seat anchors use conservative visual extrapolation between packets, clamped by `RemotePlayerMaxPredictionDistance`, with host/client packets still authoritative.
+- Prediction/grounding: remote player proxies and RoadTrip passenger-seat anchors use conservative visual extrapolation between packets, clamped by `RemotePlayerMaxPredictionDistance`, with host/client packets still authoritative. Proxy visuals now clamp large vertical drift back to real scene surfaces and RoadTrip fallback seats use a lower rear-seat posture.
 - Camera + manager timers: dialogue camera activation, car camera rotation/freeze, FOV flags, auto-conversation timers, phone state, road-bump timers, text-reply unlocks. Camera look-target sync for Mike/bus/deer cinematic focus.
 - Vehicles + bobblehead: typed `PathVehicleState` smoothing for MikeInCar + MikeTruckInLoopScene/GoingToNora/InParking. Bobblehead active/layer-switched + animator state/speed + transform correction. Car radio playback, school bus active, horror/audio music sources, RoadTrip final-conversation fade/timing fields, RoadTripTruck brake/deer-run + truck/deer audio + deer animation + deer/school-bus transform correction. RedDeer local input brain is registry-synced/suppressed when present. Mike-in-car hidden conversation flags.
 - Triggers + traffic: generic triggers (`OnTriggerSub` / `OnTriggerDisplaySub` / `OnTrigger` / `TriggerEventInvoker`), traffic pool/active-state + AiTransform correction + one-shot/speed/spline trigger settings. Car loop spline/speed/timer metadata is host-authored to reduce client-local vehicle drift.
@@ -71,7 +71,7 @@
 - Explicit `SessionState` machine + `Hello`/`HelloAck` negotiation + session/generation-aware `SceneChange`/`SceneReady` + `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`. UDP apply gated until `Live`. Bounded `SceneChange` retry + structured pre-Live drop logs.
 - Scene-readiness probes for RoadTripLoop, CabinSceneDark, OfficeLayout, ParkingLotScene wait for the real scene managers instead of treating them as managerless. Client `SceneReady` waits up to 15s for scene-specific managers (CabinGameManager, PizzeriaGameManager, RoadTripGameManager) before falling back to `ReadyPartial`. Snapshot state buffered/applied before `Live`.
 - Host snapshot emission bracketed; normal world/story/door/holdable/AI deltas gated until `SnapshotAck` moves to `Live`; blind 5-second full-state spam removed in favor of emergency/manual resync paths.
-- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.13.
+- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.14.
 
 ### Co-op UI
 

@@ -27,9 +27,10 @@ namespace WoodburySpectatorSync.Coop
             public bool FallbackPose;
         }
 
-        private const float SeatHeight = 0.92f;
-        private const float BackSeatZ = -0.72f;
-        private const float BackSeatX = 0.44f;
+        private const float SeatRootHeight = 0.38f;
+        private const float ExplicitSeatRootDrop = 0.52f;
+        private const float BackSeatZ = -0.88f;
+        private const float BackSeatX = 0.38f;
         private const float LookUpPitch = 0f;
 
         private static readonly Dictionary<string, FieldInfo> FieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -60,7 +61,7 @@ namespace WoodburySpectatorSync.Coop
                 pose = new SeatPose
                 {
                     Active = true,
-                    Position = explicitSeat.position,
+                    Position = explicitSeat.position - (explicitSeat.up * ExplicitSeatRootDrop),
                     Rotation = ResolveSeatRotation(explicitSeat.rotation),
                     Velocity = velocity,
                     Speed = speed,
@@ -71,7 +72,7 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
-            var localOffset = new Vector3(side == SeatSide.BackLeft ? -BackSeatX : BackSeatX, SeatHeight, BackSeatZ);
+            var localOffset = new Vector3(side == SeatSide.BackLeft ? -BackSeatX : BackSeatX, SeatRootHeight, BackSeatZ);
             pose = new SeatPose
             {
                 Active = true,

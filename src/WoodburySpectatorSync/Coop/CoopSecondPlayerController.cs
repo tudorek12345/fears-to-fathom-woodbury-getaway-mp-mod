@@ -81,7 +81,7 @@ namespace WoodburySpectatorSync.Coop
             _role = string.IsNullOrWhiteSpace(role) ? string.Empty : role.Trim().ToUpperInvariant();
         }
 
-        public void ApplyNetworkState(PlayerTransformState state, Vector3 bodyPosition, Quaternion bodyRotation)
+        public void ApplyNetworkState(PlayerTransformState state, ref Vector3 bodyPosition, ref Quaternion bodyRotation)
         {
             var appliedPosition = bodyPosition;
             var appliedRotation = bodyRotation;
@@ -97,6 +97,9 @@ namespace WoodburySpectatorSync.Coop
             {
                 _hasLastSeatPose = false;
             }
+
+            bodyPosition = appliedPosition;
+            bodyRotation = appliedRotation;
 
             var now = Time.realtimeSinceStartup;
             if (_hasSample)

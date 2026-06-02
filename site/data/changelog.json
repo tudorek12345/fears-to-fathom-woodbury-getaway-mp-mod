@@ -1,7 +1,7 @@
 {
   "unreleased": {
     "label": "What works in co-op right now",
-    "rangeNote": "Current build 0.4.8 — very early access, growing every week.",
+    "rangeNote": "Very early access — growing every week.",
     "groups": [
       {
         "section": "Cabin",
@@ -15,13 +15,15 @@
         "section": "Pizzeria",
         "bullets": [
           "Mike drives in and the whole order plays out shared — the booth, the pizza, the phone, the truck.",
+          "Mike now hands off cleanly the whole visit through — driving in, parking, sitting, eating, grabbing the pizza, leaving.",
           "The cashier, the hobo, the hiker and the box-folding worker are all synced."
         ]
       },
       {
         "section": "Road Trip",
         "bullets": [
-          "The full highway drive is shared — the radio, the deer, the school bus and the final conversation hit both players at the same time."
+          "The full highway drive is shared — the radio, the deer, the school bus and the final conversation hit both players at the same time.",
+          "You can now ride together: the second player buckles into the back of the truck (press F12). Early, but it's in."
         ]
       },
       {
