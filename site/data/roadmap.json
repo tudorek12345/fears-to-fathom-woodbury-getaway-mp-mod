@@ -83,6 +83,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "820f9e5",
+      "subject": "Add proprietary all-rights-reserved license + README ownership notice"
+    },
+    {
+      "sha": "0e0438e",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "bb65068",
       "subject": "site: fold in new features (passenger seats, Mike handoff, prediction) + rework top title"
     },
@@ -105,14 +113,6 @@
     {
       "sha": "970a8f9",
       "subject": "Settings update"
-    },
-    {
-      "sha": "1ec8b23",
-      "subject": "prediction,office,PizzeriaSceneStateSync fixing"
-    },
-    {
-      "sha": "a3360ca",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }
