@@ -83,6 +83,18 @@
   ],
   "recentCommits": [
     {
+      "sha": "b8305e7",
+      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
+    },
+    {
+      "sha": "cf433e2",
+      "subject": "scene extensions"
+    },
+    {
+      "sha": "a99685f",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "f8ca40b",
       "subject": "site: gamer-friendly changelog, no dates, early-access support, MWCMP co-flagship, serv..."
     },
@@ -101,18 +113,6 @@
     {
       "sha": "5de8822",
       "subject": "site: add Discord (hero button, Get-the-mod card, footer) with conservative sheen anima..."
-    },
-    {
-      "sha": "3a3e589",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "4fb13b1",
-      "subject": "site: distinctive Woodbury found-footage VHS re-skin"
-    },
-    {
-      "sha": "fd1c421",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }
