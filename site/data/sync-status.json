@@ -1,10 +1,10 @@
 {
   "meta": {
-    "plugin": "0.4.13",
+    "plugin": "0.4.14",
     "protocol": 4,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
-    "lastCommit": "dd37dcd \"Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway...\"",
+    "lastCommit": "bb65068 \"site: fold in new features (passenger seats, Mike handoff, prediction) + rework top title\"",
     "lastUpdated": "2026-06-02",
     "overallPercent": 60,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",
