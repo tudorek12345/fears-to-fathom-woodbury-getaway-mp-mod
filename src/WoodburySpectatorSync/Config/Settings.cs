@@ -52,6 +52,9 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<string> CoopRemotePlayerAvatarId;
         public ConfigEntry<float> CoopRemotePlayerAvatarScale;
         public ConfigEntry<float> CoopRemotePlayerAvatarYOffset;
+        public ConfigEntry<bool> CoopRemotePlayerPresenceCollider;
+        public ConfigEntry<bool> CoopVehiclePassengerSeat;
+        public ConfigEntry<bool> CoopVehiclePassengerSeatPrompt;
         public ConfigEntry<bool> SceneDiscoveryDump;
 
         public static Settings Bind(ConfigFile config)
@@ -89,6 +92,9 @@ namespace WoodburySpectatorSync.Config
             settings.CoopRemotePlayerAvatarId = config.Bind("Coop", "RemotePlayerAvatarId", "woodbury_scene_auto", "Avatar id. Use woodbury_scene_auto for in-scene avatars or a bundle manifest id such as quaternius_regular_male for explicit AssetBundle testing.");
             settings.CoopRemotePlayerAvatarScale = config.Bind("Coop", "RemotePlayerAvatarScale", 1f, "Multiplier applied on top of the avatar manifest scale.");
             settings.CoopRemotePlayerAvatarYOffset = config.Bind("Coop", "RemotePlayerAvatarYOffset", 0f, "Extra vertical offset added on top of the avatar manifest offset.");
+            settings.CoopRemotePlayerPresenceCollider = config.Bind("Coop", "RemotePlayerPresenceCollider", false, "Enable a trigger-only co-op presence capsule for remote players. Disabled by default to avoid firing local story triggers.");
+            settings.CoopVehiclePassengerSeat = config.Bind("Coop", "VehiclePassengerSeat", true, "Lock remote co-op avatars to host-authored vehicle passenger seats during RoadTrip truck ride scenes.");
+            settings.CoopVehiclePassengerSeatPrompt = config.Bind("UI", "VehiclePassengerSeatPrompt", true, "Show the small F12 seatbelt/passenger-seat overlay when a co-op vehicle seat is available.");
             settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", true, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
             return settings;
         }

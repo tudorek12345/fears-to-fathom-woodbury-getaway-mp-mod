@@ -212,6 +212,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly CharacterController _characterController;
         private readonly bool _allowCharacterController;
         private readonly Transform _cameraTransform;
+        private readonly CoopSecondPlayerController _secondPlayerController;
         private readonly Animator _animator;
         private readonly HashSet<int> _animFloatParams = new HashSet<int>();
         private readonly HashSet<int> _animBoolParams = new HashSet<int>();
@@ -252,6 +253,15 @@ namespace WoodburySpectatorSync.Coop
                 source,
                 tint,
                 allowCharacterController,
+                settings != null &&
+                settings.CoopRemotePlayerPresenceCollider != null &&
+                settings.CoopRemotePlayerPresenceCollider.Value,
+                settings == null ||
+                settings.CoopVehiclePassengerSeat == null ||
+                settings.CoopVehiclePassengerSeat.Value,
+                settings == null ||
+                settings.CoopVehiclePassengerSeatPrompt == null ||
+                settings.CoopVehiclePassengerSeatPrompt.Value,
                 logger,
                 diagnosticsSink);
         }
@@ -265,7 +275,7 @@ namespace WoodburySpectatorSync.Coop
                 RigProfile = "Auto",
                 SourceKind = "FpcClone",
                 SourceName = source != null ? source.name : string.Empty
-            }, tint, allowCharacterController, null, null)
+            }, tint, allowCharacterController, false, false, false, null, null)
         {
         }
 
@@ -273,6 +283,9 @@ namespace WoodburySpectatorSync.Coop
             SourceDescriptor source,
             Color tint,
             bool allowCharacterController,
+            bool enablePresenceCollider,
+            bool enableVehiclePassengerSeat,
+            bool showVehiclePassengerSeatPrompt,
             ManualLogSource logger,
             Action<string> diagnosticsSink)
         {
@@ -335,6 +348,19 @@ namespace WoodburySpectatorSync.Coop
 
             _characterController = _root.GetComponent<CharacterController>();
             _cameraTransform = cameras.Length > 0 ? cameras[0].transform : null;
+            _secondPlayerController = CoopSecondPlayerController.Attach(
+                _root,
+                _root.transform,
+                _cameraTransform,
+                enablePresenceCollider,
+                enableVehiclePassengerSeat,
+                showVehiclePassengerSeatPrompt,
+                logger,
+                diagnosticsSink);
+            if (_cameraTransform == null && _secondPlayerController != null)
+            {
+                _cameraTransform = _secondPlayerController.CameraAnchor;
+            }
 
             if (!_allowCharacterController)
             {
@@ -396,6 +422,10 @@ namespace WoodburySpectatorSync.Coop
             }
 
             _nameTag.Configure(displayName, role, color);
+            if (_secondPlayerController != null)
+            {
+                _secondPlayerController.ConfigureName(displayName, role);
+            }
         }
 
         public void ApplyTransform(PlayerTransformState state)
@@ -410,7 +440,14 @@ namespace WoodburySpectatorSync.Coop
             var bodyPosition = ResolveBodyRootPosition(state);
             var bodyRotation = ResolveUprightBodyRotation(state);
             SmoothBodyTransform(ref bodyPosition, ref bodyRotation);
-            _root.transform.SetPositionAndRotation(bodyPosition, bodyRotation);
+            if (_secondPlayerController != null)
+            {
+                _secondPlayerController.ApplyNetworkState(state, bodyPosition, bodyRotation);
+            }
+            else
+            {
+                _root.transform.SetPositionAndRotation(bodyPosition, bodyRotation);
+            }
             DriveAnimatorFromTransform(bodyPosition, bodyRotation);
 
             if (_cameraTransform != null)
@@ -988,9 +1025,7 @@ namespace WoodburySpectatorSync.Coop
             {
                 return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
                        TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName) ||
-                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName) ||
-                       TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
-                       TryFindNamedAvatar(new[] { "Mike New" }, out candidate, out sourceName);
+                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName);
             }
 
             if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -1007,7 +1042,6 @@ namespace WoodburySpectatorSync.Coop
 
             return TryFindNonMikeSceneHuman(out candidate, out sourceName) ||
                    TryFindCabinMikeAvatar(out candidate, out sourceName) ||
-                   TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
                    TryFindComponentAvatar<MikeInCar>(out candidate, out sourceName);
         }
 
@@ -1027,14 +1061,11 @@ namespace WoodburySpectatorSync.Coop
             {
                 return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
                        TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName) ||
-                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName) ||
-                       TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
-                       TryFindNamedAvatar(new[] { "Mike New" }, out candidate, out sourceName);
+                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName);
             }
 
             return TryFindNonMikeSceneHuman(out candidate, out sourceName) ||
                    TryFindCabinMikeAvatar(out candidate, out sourceName) ||
-                   TryFindComponentAvatar<MikePizzeria>(out candidate, out sourceName) ||
                    TryFindComponentAvatar<MikeInCar>(out candidate, out sourceName);
         }
 

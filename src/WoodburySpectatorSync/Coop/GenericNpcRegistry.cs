@@ -295,7 +295,7 @@ namespace WoodburySpectatorSync.Coop
                 _smoothedRotations[state.NpcId] = targetRotation;
             }
 
-            ApplyVisibility(transform, state.Active && state.Visible);
+            ApplyVisibility(transform, state.Active && (state.Visible || ShouldForceVisibleNpcState(state)));
             ApplyAnimatorState(transform, state);
             if (!state.Active && transform.gameObject.activeSelf)
             {
@@ -410,6 +410,23 @@ namespace WoodburySpectatorSync.Coop
             {
                 if (renderers[i] != null) renderers[i].enabled = visible;
             }
+        }
+
+        private static bool ShouldForceVisibleNpcState(NpcBrainState state)
+        {
+            if (!state.Active || !string.Equals(state.NpcId, "Pizzeria/Mike/Main", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var stateName = state.StateName ?? string.Empty;
+            if (stateName.IndexOf("InCar", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                stateName.IndexOf("WaitingInCar", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         private static void ApplyAnimatorState(Transform transform, NpcBrainState state)

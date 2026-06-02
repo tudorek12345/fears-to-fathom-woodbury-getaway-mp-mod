@@ -916,7 +916,7 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
-            if (string.Equals(name, "Layer", StringComparison.Ordinal)) { mike.gameObject.layer = value; return true; }
+            if (string.Equals(name, "Layer", StringComparison.Ordinal)) { if (!ShouldForcePizzeriaMikeVisible(manager, mike)) mike.gameObject.layer = value; return true; }
             if (string.Equals(name, "Visible", StringComparison.Ordinal)) { ApplyPizzeriaMikeVisibility(manager, mike, value != 0); return true; }
             if (string.Equals(name, "ParentMode", StringComparison.Ordinal)) { ApplyPizzeriaMikeParentMode(mike, value); return true; }
             if (string.Equals(name, "State", StringComparison.Ordinal)) { mike.state = (MikePizzeria.State)value; return true; }
@@ -927,9 +927,9 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "EatingPizza", StringComparison.Ordinal)) { mike.eatingPizza = value != 0; return true; }
             if (string.Equals(name, "MikeGotPizzaInHand", StringComparison.Ordinal)) { mike.mikeGotThePizzaInHand = value != 0; return true; }
             if (string.Equals(name, "CapsuleEnabled", StringComparison.Ordinal)) { if (mike.capsuleCollider != null) mike.capsuleCollider.enabled = value != 0; return true; }
-            if (string.Equals(name, "NavEnabled", StringComparison.Ordinal)) { if (mike.navMeshAgent != null) mike.navMeshAgent.enabled = value != 0; return true; }
+            if (string.Equals(name, "NavEnabled", StringComparison.Ordinal)) { SetNavEnabled(mike, value != 0, false); return true; }
             if (string.Equals(name, "NavStopped", StringComparison.Ordinal)) { if (mike.navMeshAgent != null && mike.navMeshAgent.enabled) mike.navMeshAgent.isStopped = value != 0; return true; }
-            if (string.Equals(name, "AnimatorEnabled", StringComparison.Ordinal)) { if (mike.animator != null) mike.animator.enabled = true; return true; }
+            if (string.Equals(name, "AnimatorEnabled", StringComparison.Ordinal)) { if (mike.animator != null) mike.animator.enabled = value != 0 || ShouldForcePizzeriaMikeVisible(manager, mike); return true; }
             if (string.Equals(name, "AnimatorSpeed1000", StringComparison.Ordinal)) { if (mike.animator != null) mike.animator.speed = Mathf.Max(0f, value / 1000f); return true; }
             if (string.Equals(name, "AnimatorParamState", StringComparison.Ordinal)) { SetAnimatorInt(mike.animator, "State", value); return true; }
             if (string.Equals(name, "ArmRigPizzaWeight1000", StringComparison.Ordinal)) { SetRigWeight(GetFieldObject(mike, "armRigPizza"), value / 1000f); return true; }
@@ -1215,6 +1215,12 @@ namespace WoodburySpectatorSync.Coop
                 driving.enabled = false;
             }
 
+            var mike = UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+            if (mike != null)
+            {
+                mike.enabled = false;
+            }
+
             var roadTripMusic = UnityEngine.Object.FindObjectOfType<DontDestroyRoadTripMusic>();
             if (roadTripMusic != null)
             {
@@ -1230,6 +1236,7 @@ namespace WoodburySpectatorSync.Coop
                                " outOfZones=" + outOfZones.Length +
                                " tvAudioProximity=" + tvAudioProximities.Length +
                                " driving=" + (driving != null ? 1 : 0) +
+                               " mike=" + (mike != null ? 1 : 0) +
                                " roadTripMusic=" + (roadTripMusic != null ? 1 : 0));
             }
         }
@@ -1495,6 +1502,419 @@ namespace WoodburySpectatorSync.Coop
 
             FieldCache[key] = null;
             return null;
+        }
+
+        private static MikePizzeria ResolvePizzeriaMike(PizzeriaGameManager manager)
+        {
+            return manager != null && manager.mikePizzeria != null
+                ? manager.mikePizzeria
+                : UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+        }
+
+        private static PizzeriaMikePhase ResolvePizzeriaMikePhase(PizzeriaGameManager manager, MikePizzeria mike, MikeDrivingInPizzeriaScene driving)
+        {
+            if (mike == null) return PizzeriaMikePhase.Unknown;
+
+            if (mike.state == MikePizzeria.State.WaitingInCar)
+            {
+                return PizzeriaMikePhase.WaitingInCar;
+            }
+
+            if (mike.state == MikePizzeria.State.GoBackToCar || GetFieldValue<bool>(mike, "completedPizzeria"))
+            {
+                return PizzeriaMikePhase.ReturningToCar;
+            }
+
+            if (GetFieldValue<bool>(mike, "goTrashCan") || mike.mikeThrowPizza)
+            {
+                return PizzeriaMikePhase.TrashCan;
+            }
+
+            var playerState = manager != null ? manager.currentPlayerState : PizzeriaGameManager.PlayerState.Normal;
+            var tableState = playerState == PizzeriaGameManager.PlayerState.Sitting ||
+                             playerState == PizzeriaGameManager.PlayerState.TalkingSitting ||
+                             playerState == PizzeriaGameManager.PlayerState.Consuming;
+            if (mike.eatingPizza ||
+                (GetFieldValue<bool>(mike, "pizzaInHand") && tableState) ||
+                (mike.mikeGotThePizzaInHand && playerState == PizzeriaGameManager.PlayerState.Consuming))
+            {
+                return PizzeriaMikePhase.Eating;
+            }
+
+            if (mike.state == MikePizzeria.State.Sitting || tableState)
+            {
+                return PizzeriaMikePhase.TableSitting;
+            }
+
+            if (GetFieldValue<bool>(mike, "goGetPizza") || mike.mikeGotThePizzaInHand)
+            {
+                return PizzeriaMikePhase.GetPizza;
+            }
+
+            if (mike.state == MikePizzeria.State.InCar)
+            {
+                var drivingStillAuthoritative = driving != null &&
+                                                driving.gameObject.activeInHierarchy &&
+                                                (driving.enabled ||
+                                                 !GetFieldValue<bool>(driving, "startSlowDown") ||
+                                                 !GetFieldValue<bool>(driving, "pushBreak"));
+                return drivingStillAuthoritative
+                    ? PizzeriaMikePhase.DrivingIntro
+                    : PizzeriaMikePhase.ParkedOutside;
+            }
+
+            return PizzeriaMikePhase.ParkedOutside;
+        }
+
+        private static void ApplyPizzeriaMikePhase(PizzeriaGameManager manager, MikePizzeria mike, MikeDrivingInPizzeriaScene driving, PizzeriaMikePhase phase, ManualLogSource logger)
+        {
+            if (mike == null) return;
+
+            if (phase != PizzeriaMikePhase.Unknown && !mike.gameObject.activeSelf)
+            {
+                mike.gameObject.SetActive(true);
+            }
+
+            if (phase != PizzeriaMikePhase.DrivingIntro && driving != null)
+            {
+                driving.enabled = false;
+            }
+
+            switch (phase)
+            {
+                case PizzeriaMikePhase.TableSitting:
+                case PizzeriaMikePhase.Eating:
+                    ApplyPizzeriaMikeParentMode(mike, 0);
+                    SnapMikeToTransform(mike, mike.sitDownTransform, false);
+                    SetNavEnabled(mike, false, true);
+                    if (mike.capsuleCollider != null) mike.capsuleCollider.enabled = false;
+                    SetAnimatorInt(mike.animator, "State", phase == PizzeriaMikePhase.Eating ? 4 : 3);
+                    ApplyPizzeriaMikeVisibility(manager, mike, true);
+                    break;
+                case PizzeriaMikePhase.GetPizza:
+                case PizzeriaMikePhase.TrashCan:
+                case PizzeriaMikePhase.ReturningToCar:
+                    ApplyPizzeriaMikeParentMode(mike, 0);
+                    SetNavEnabled(mike, true, false);
+                    if (mike.capsuleCollider != null) mike.capsuleCollider.enabled = true;
+                    SetAnimatorInt(mike.animator, "State", 1);
+                    ApplyPizzeriaMikeVisibility(manager, mike, true);
+                    break;
+                case PizzeriaMikePhase.WaitingInCar:
+                    ApplyPizzeriaMikeParentMode(mike, 1);
+                    SetNavEnabled(mike, false, true);
+                    if (mike.capsuleCollider != null) mike.capsuleCollider.enabled = false;
+                    SetAnimatorInt(mike.animator, "State", 5);
+                    ApplyPizzeriaMikeVisibility(manager, mike, true);
+                    break;
+                case PizzeriaMikePhase.ParkedOutside:
+                    ApplyPizzeriaMikeParentMode(mike, 0);
+                    SetNavEnabled(mike, true, false);
+                    if (mike.capsuleCollider != null) mike.capsuleCollider.enabled = true;
+                    ApplyPizzeriaMikeVisibility(manager, mike, true);
+                    break;
+                case PizzeriaMikePhase.DrivingIntro:
+                    if (mike.animator != null) mike.animator.enabled = true;
+                    break;
+            }
+
+            MaybeLogPizzeriaMikeDiagnostics("client apply", phase, manager, mike, driving, logger, null);
+        }
+
+        private static bool ShouldForcePizzeriaMikeVisible(PizzeriaGameManager manager, MikePizzeria mike)
+        {
+            var phase = ResolvePizzeriaMikePhase(manager, mike, null);
+            return phase == PizzeriaMikePhase.ParkedOutside ||
+                   phase == PizzeriaMikePhase.TableSitting ||
+                   phase == PizzeriaMikePhase.Eating ||
+                   phase == PizzeriaMikePhase.GetPizza ||
+                   phase == PizzeriaMikePhase.TrashCan ||
+                   phase == PizzeriaMikePhase.ReturningToCar;
+        }
+
+        private static void ApplyPizzeriaMikeVisibility(PizzeriaGameManager manager, MikePizzeria mike, bool visible)
+        {
+            if (mike == null) return;
+            var effectiveVisible = visible || ShouldForcePizzeriaMikeVisible(manager, mike);
+            if (effectiveVisible && !mike.gameObject.activeSelf)
+            {
+                mike.gameObject.SetActive(true);
+            }
+
+            if (effectiveVisible)
+            {
+                ApplyPizzeriaMikeOriginalLayer(mike);
+            }
+
+            var renderers = mike.GetComponentsInChildren<Renderer>(true);
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null) renderers[i].enabled = effectiveVisible;
+            }
+        }
+
+        private static int ResolvePizzeriaMikeParentMode(MikePizzeria mike)
+        {
+            if (mike == null || mike.transform == null) return 0;
+            return mike.mikeTruckParent != null && mike.transform.parent == mike.mikeTruckParent ? 1 : 0;
+        }
+
+        private static void ApplyPizzeriaMikeParentMode(MikePizzeria mike, int mode)
+        {
+            if (mike == null) return;
+            if (mode == 1 && mike.mikeTruckParent != null)
+            {
+                if (mike.transform.parent != mike.mikeTruckParent)
+                {
+                    mike.transform.SetParent(mike.mikeTruckParent, false);
+                }
+
+                mike.transform.localPosition = Vector3.zero;
+                mike.transform.localRotation = Quaternion.identity;
+                return;
+            }
+
+            if (mode == 0 && mike.mikeTruckParent != null && mike.transform.parent == mike.mikeTruckParent)
+            {
+                mike.transform.SetParent(null, true);
+            }
+        }
+
+        private static void SnapMikeToTransform(MikePizzeria mike, Transform target, bool preserveRotation)
+        {
+            if (mike == null || target == null) return;
+            if (Vector3.Distance(mike.transform.position, target.position) > 0.25f)
+            {
+                SetMikePosition(mike, target.position);
+            }
+
+            if (!preserveRotation)
+            {
+                mike.transform.rotation = target.rotation;
+            }
+        }
+
+        private static void SetNavEnabled(MikePizzeria mike, bool enabled, bool stopped)
+        {
+            if (mike == null || mike.navMeshAgent == null) return;
+            try
+            {
+                if (mike.navMeshAgent.enabled != enabled)
+                {
+                    mike.navMeshAgent.enabled = enabled;
+                }
+
+                if (mike.navMeshAgent.enabled)
+                {
+                    mike.navMeshAgent.isStopped = stopped;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static void SetMikePosition(MikePizzeria mike, Vector3 position)
+        {
+            if (mike == null) return;
+            try
+            {
+                if (mike.navMeshAgent != null && mike.navMeshAgent.enabled)
+                {
+                    mike.navMeshAgent.Warp(position);
+                    return;
+                }
+            }
+            catch
+            {
+            }
+
+            mike.transform.position = position;
+        }
+
+        private static void SetAxisPosition(Transform transform, int axis, float value)
+        {
+            if (transform == null) return;
+            var position = transform.position;
+            if (axis == 0) position.x = value;
+            else if (axis == 1) position.y = value;
+            else position.z = value;
+
+            var nav = transform.GetComponent<NavMeshAgent>();
+            try
+            {
+                if (nav != null && nav.enabled)
+                {
+                    nav.Warp(position);
+                    return;
+                }
+            }
+            catch
+            {
+            }
+
+            transform.position = position;
+        }
+
+        private static void SetYaw(Transform transform, float yaw)
+        {
+            if (transform == null) return;
+            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+        }
+
+        private static int CountRenderers(GameObject root)
+        {
+            return root != null ? root.GetComponentsInChildren<Renderer>(true).Length : 0;
+        }
+
+        private static int CountVisibleRenderers(GameObject root)
+        {
+            if (root == null) return 0;
+            var count = 0;
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null && renderers[i].enabled && renderers[i].gameObject.activeInHierarchy) count++;
+            }
+
+            return count;
+        }
+
+        private static int GetAnimatorInt(Animator animator, string parameter)
+        {
+            if (animator == null || string.IsNullOrEmpty(parameter)) return 0;
+            try
+            {
+                return animator.GetInteger(parameter);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        private static void SetAnimatorInt(Animator animator, string parameter, int value)
+        {
+            if (animator == null || string.IsNullOrEmpty(parameter)) return;
+            try
+            {
+                animator.enabled = true;
+                animator.SetInteger(parameter, value);
+            }
+            catch
+            {
+            }
+        }
+
+        private static float GetRigWeight(object rig)
+        {
+            if (rig == null) return 0f;
+            try
+            {
+                var property = rig.GetType().GetProperty("weight", FieldFlags);
+                if (property != null && property.PropertyType == typeof(float))
+                {
+                    return (float)property.GetValue(rig, null);
+                }
+            }
+            catch
+            {
+            }
+
+            return 0f;
+        }
+
+        private static void SetRigWeight(object rig, float weight)
+        {
+            if (rig == null) return;
+            try
+            {
+                var property = rig.GetType().GetProperty("weight", FieldFlags);
+                if (property != null && property.PropertyType == typeof(float))
+                {
+                    property.SetValue(rig, Mathf.Clamp01(weight), null);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static void ApplyPizzeriaMikeOriginalLayer(MikePizzeria mike)
+        {
+            if (mike == null) return;
+            var switches = mike.GetComponentsInChildren<SwitchObjectLayer>(true);
+            for (var i = 0; i < switches.Length; i++)
+            {
+                if (switches[i] == null) continue;
+                try
+                {
+                    switches[i].SwitchToOriginalLayer();
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static void MaybeLogPizzeriaMikeDiagnostics(
+            string side,
+            PizzeriaMikePhase phase,
+            PizzeriaGameManager manager,
+            MikePizzeria mike,
+            MikeDrivingInPizzeriaScene driving,
+            ManualLogSource logger,
+            Action<string> sessionLogWrite)
+        {
+            if (mike == null) return;
+
+            var animator = mike.animator ?? mike.GetComponentInChildren<Animator>(true);
+            var nav = mike.navMeshAgent ?? mike.GetComponentInChildren<NavMeshAgent>(true);
+            var signature = phase + "|" +
+                            mike.state + "|" +
+                            mike.gameObject.activeSelf + "|" +
+                            CountVisibleRenderers(mike.gameObject) + "|" +
+                            ResolvePizzeriaMikeParentMode(mike) + "|" +
+                            (animator != null ? GetAnimatorInt(animator, "State") : 0) + "|" +
+                            (nav != null && nav.enabled) + "|" +
+                            GetFieldValue<bool>(mike, "pizzaInHand") + "|" +
+                            mike.eatingPizza;
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var isHost = string.Equals(side, "host", StringComparison.Ordinal);
+            var nextLog = isHost ? _nextHostMikeLogMs : _nextClientMikeLogMs;
+            var lastSignature = isHost ? _lastHostMikeLogSignature : _lastClientMikeLogSignature;
+            if (signature == lastSignature && nowMs < nextLog) return;
+
+            if (isHost)
+            {
+                _lastHostMikeLogSignature = signature;
+                _nextHostMikeLogMs = nowMs + 5000;
+            }
+            else
+            {
+                _lastClientMikeLogSignature = signature;
+                _nextClientMikeLogMs = nowMs + 5000;
+            }
+
+            var line = "PizzeriaMike " + side +
+                       " phase=" + phase +
+                       " state=" + mike.state +
+                       " active=" + BoolText(mike.gameObject.activeSelf) +
+                       " visible=" + BoolText(CountVisibleRenderers(mike.gameObject) > 0) +
+                       " renderers=" + CountVisibleRenderers(mike.gameObject) + "/" + CountRenderers(mike.gameObject) +
+                       " parent=" + (ResolvePizzeriaMikeParentMode(mike) == 1 ? "truck" : "world") +
+                       " anim=" + (animator != null ? GetAnimatorInt(animator, "State").ToString() : "-") +
+                       " nav=" + BoolText(nav != null && nav.enabled) +
+                       " driving=" + BoolText(driving != null && driving.enabled) +
+                       " player=" + (manager != null ? manager.currentPlayerState.ToString() : "-");
+
+            if (logger != null) logger.LogInfo(line);
+            if (sessionLogWrite != null) sessionLogWrite(line);
+        }
+
+        private static string BoolText(bool value)
+        {
+            return value ? "yes" : "no";
         }
 
         private static int StableStringHash(string value)

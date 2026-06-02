@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.10, wire protocol 4.
+> Current iteration: Plugin 0.4.12, wire protocol 4.
 
-> Plugin 0.3.0 → 0.4.10 · wire protocol 3 → 4.
+> Plugin 0.3.0 → 0.4.12 · wire protocol 3 → 4.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
 
 ### Co-op Cabin
@@ -24,6 +24,7 @@
 
 ### Co-op Pizzeria
 
+- Mike visibility / handoff: added host-authored `MikeDetail` phase correction for `DrivingIntro`, `ParkedOutside`, `TableSitting`, `Eating`, `GetPizza`, `TrashCan`, `ReturningToCar`, and `WaitingInCar`, including direct parent/nav/collider/animator/renderer/prop correction and diagnostics for phase, renderer count, parent mode, and driving state.
 - `MikeDrivingInPizzeriaScene` opening drive: vehicle/path state, engine/key/handbrake audio, headlights/panel/bobblehead, transform correction, client-side driving brain suppression.
 - Manager + story progression: current player mode, first-conversation timers, pizza/burp gates, phone UI, text-reply unlocks, soda-can seating, doors, light triggers, phone canvas/network, truck triggers, keys UI + one-shot audio. Pizzeria NPC brain registry now includes Chef and Hobo in addition to Mike, hiker, folding worker, and table NPCs.
 - Camera/control: driving freeze, sitting/global FOV zoom, dialogue camera, zoom transitions, main-camera FOV, semantic look-target/look-here IDs for Mike/cashier/hiker/NPC dialogue framing, trash/truck layer switching, editor-start music. Player seat/drive/camera prop state, pizza-on-table visibility, boundary collider masks, out-of-play-zone trigger state.
@@ -32,6 +33,7 @@
 
 ### Co-op RoadTrip
 
+- Passenger seats: remote second-player proxies can lock to RoadTrip truck back-left/back-right visual seats with an F12 seatbelt prompt, using the existing host-authored truck `PathVehicleState`/audio sync while keeping story-trigger colliders disabled by default.
 - Camera + manager timers: dialogue camera activation, car camera rotation/freeze, FOV flags, auto-conversation timers, phone state, road-bump timers, text-reply unlocks. Camera look-target sync for Mike/bus/deer cinematic focus.
 - Vehicles + bobblehead: typed `PathVehicleState` smoothing for MikeInCar + MikeTruckInLoopScene/GoingToNora/InParking. Bobblehead active/layer-switched + animator state/speed + transform correction. Car radio playback, school bus active, horror/audio music sources, RoadTrip final-conversation fade/timing fields, RoadTripTruck brake/deer-run + truck/deer audio + deer animation + deer/school-bus transform correction. RedDeer local input brain is registry-synced/suppressed when present. Mike-in-car hidden conversation flags.
 - Triggers + traffic: generic triggers (`OnTriggerSub` / `OnTriggerDisplaySub` / `OnTrigger` / `TriggerEventInvoker`), traffic pool/active-state + AiTransform correction + one-shot/speed/spline trigger settings. Car loop spline/speed/timer metadata is host-authored to reduce client-local vehicle drift.
@@ -55,6 +57,7 @@
 
 ### Co-op avatars
 
+- Pizzeria avatar stability: Auto/GameModel no longer chooses story-critical `MikePizzeria` as the normal remote-player body; explicit `woodbury_pizzeria_mike` still works for diagnostics, while automatic fallback prefers non-Mike candidates or keeps an invisible nametag anchor.
 - Scene-model avatar cleanup: cloned in-scene avatars now strip utility/collider/push-capsule visuals in addition to story carry props, preventing the giant white capsule/egg from rendering during Cabin eating/post-eating while keeping the actual human scene model visible.
 - Source / fallback path: Auto → GameModel → AssetBundle → Capsule. Auto prefers safe non-Mike scene humans; Capsule explicit-only; Auto/GameModel stays invisible rather than rendering procedural egg unless capsule explicitly configured. Render-only AssetBundle avatars with no AnimatorController rejected; wrapped avatars grounded to renderer bounds. Cabin House/Host sequence objects rejected from Auto/GameModel fallback.
 - Nametags + display names: in-world HOST/CLIENT nametags for remote proxies; fallback role labels deduplicated; themed nametags hidden until a visible gameplay avatar is present. Host/client display names exchanged through Hello/HelloAck; launcher-selected names supported.
@@ -67,7 +70,7 @@
 - Explicit `SessionState` machine + `Hello`/`HelloAck` negotiation + session/generation-aware `SceneChange`/`SceneReady` + `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`. UDP apply gated until `Live`. Bounded `SceneChange` retry + structured pre-Live drop logs.
 - Scene-readiness probes for RoadTripLoop, CabinSceneDark, OfficeLayout, ParkingLotScene wait for the real scene managers instead of treating them as managerless. Client `SceneReady` waits up to 15s for scene-specific managers (CabinGameManager, PizzeriaGameManager, RoadTripGameManager) before falling back to `ReadyPartial`. Snapshot state buffered/applied before `Live`.
 - Host snapshot emission bracketed; normal world/story/door/holdable/AI deltas gated until `SnapshotAck` moves to `Live`; blind 5-second full-state spam removed in favor of emergency/manual resync paths.
-- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.10.
+- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.12.
 
 ### Co-op UI
 
