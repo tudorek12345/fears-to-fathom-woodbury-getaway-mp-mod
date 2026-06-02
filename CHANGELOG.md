@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.19, wire protocol 4.
+> Current iteration: Plugin 0.4.20, wire protocol 5.
 
-> Plugin 0.3.0 → 0.4.19 · wire protocol 3 → 4.
+> Plugin 0.3.0 → 0.4.20 · wire protocol 3 → 5.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
 
 ### Co-op Cabin
@@ -74,7 +74,7 @@
 - Explicit `SessionState` machine + `Hello`/`HelloAck` negotiation + session/generation-aware `SceneChange`/`SceneReady` + `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`. UDP apply gated until `Live`. Bounded `SceneChange` retry + structured pre-Live drop logs.
 - Scene-readiness probes for RoadTripLoop, CabinSceneDark, OfficeLayout, ParkingLotScene wait for the real scene managers instead of treating them as managerless. Client `SceneReady` waits up to 15s for scene-specific managers (CabinGameManager, PizzeriaGameManager, RoadTripGameManager) before falling back to `ReadyPartial`. Snapshot state buffered/applied before `Live`.
 - Host snapshot emission bracketed; normal world/story/door/holdable/AI deltas gated until `SnapshotAck` moves to `Live`; blind 5-second full-state spam removed in favor of emergency/manual resync paths.
-- Wire protocol bumped to 4 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`. Plugin compatibility 0.3.0 → 0.4.19.
+- Wire protocol bumped to 5 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`, and `VoiceFrame`. Plugin compatibility 0.3.0 → 0.4.20.
 
 ### Co-op UI
 
@@ -85,6 +85,7 @@
 - Host UI mirroring: Pizzeria + RoadTrip + Office UI managers (intro/fade canvases, dialogue cameras, phone pause/allow/canvas state, RoadTrip transition music, Office peeing UI).
 - Phone/text mirroring: host-authored phone message snapshots now ride through `UiMirrorState` snapshots/live deltas, applying message batch visibility, pending-reply flags, sender/notification labels, and network status on the client without calling local notification gameplay methods.
 - Death/hiding outcome mirror: Cabin `DeathManager` chase/haunt/caught/dead state, jumpscare light, and post-effect component enabled flags now mirror through host-authored Cabin state so the client follows the same end-state when the hiding/chaser flow catches a player.
+- Proximity voice: added config/menu-gated LAN voice frames over the existing co-op transport, spatial remote playback, compact mic/peer level HUD, overlay diagnostics, and host-side loud-voice hooks for Cabin hiker/chaser hiding checks.
 
 ### Tooling / diagnostics
 

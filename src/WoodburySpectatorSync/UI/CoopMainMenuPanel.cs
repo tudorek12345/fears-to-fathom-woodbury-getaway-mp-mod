@@ -75,6 +75,8 @@ namespace WoodburySpectatorSync.UI
             DrawTextRow("TCP Port", ref _hostPortText, 80f);
             DrawTextRow("UDP Port", ref _udpPortText, 80f);
             DrawBoolRow("UDP", _settings.UdpEnabled, sessionWrite);
+            DrawBoolRow("Voice", _settings.CoopVoiceChatEnabled, sessionWrite);
+            DrawBoolRow("Footsteps", _settings.CoopFootstepSyncEnabled, sessionWrite);
             DrawBoolRow("Auto host", _settings.CoopAutoStartHost, sessionWrite);
             DrawBoolRow("Auto connect", _settings.CoopAutoConnectClient, sessionWrite);
             DrawActionButtons(server, client, sessionWrite);

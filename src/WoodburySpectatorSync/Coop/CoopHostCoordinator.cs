@@ -19,6 +19,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly CoopServer _server;
         private readonly RemoteAvatar _clientAvatar;
         private readonly Action<string> _sessionLogWrite;
+        private readonly VoiceChatSync _voiceChat;
         private RemotePlayerProxy _remotePlayer;
         private string _hostDisplayName = "HOST";
         private string _clientDisplayName = "CLIENT";
@@ -78,6 +79,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly FieldInfo _playerPausedField;
         private readonly FieldInfo _cabinMikeControllerField;
         private readonly FieldInfo _cabinMikeRizzlerControllerField;
+        private readonly FieldInfo _cabinHikerControllerField;
+        private readonly FieldInfo _cabinHasPlayedEerieHitForHikerField;
         private readonly List<FieldInfo> _cabinHouseBoolFields = new List<FieldInfo>();
         private readonly List<FieldInfo> _cabinGameFields = new List<FieldInfo>();
         private readonly Dictionary<string, FieldInfo> _pizzeriaFieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -208,6 +211,7 @@ namespace WoodburySpectatorSync.Coop
         private string _hostWaitReason = "-";
         private string _hostWaitScene = "-";
         private string _hostWaitSummary = "HostWait: no";
+        private long _nextRemoteVoiceReactionMs;
 
         private const long HostWaitStillLogIntervalMs = 5000;
         private const long HostWaitSnapshotRetryMs = 15000;
@@ -460,6 +464,7 @@ namespace WoodburySpectatorSync.Coop
             _server = server;
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("host", logger, sessionLogWrite);
+            _voiceChat = new VoiceChatSync(logger, settings, "host", sessionLogWrite);
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "host");
             _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "host");
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "host");
@@ -475,6 +480,8 @@ namespace WoodburySpectatorSync.Coop
             _playerPausedField = typeof(PlayerController).GetField("isPaused", BindingFlags.Instance | BindingFlags.NonPublic);
             _cabinMikeControllerField = typeof(CabinGameManager).GetField("mikeController", BindingFlags.Instance | BindingFlags.NonPublic);
             _cabinMikeRizzlerControllerField = typeof(CabinGameManager).GetField("mikeRizzlerController", BindingFlags.Instance | BindingFlags.NonPublic);
+            _cabinHikerControllerField = typeof(CabinGameManager).GetField("hikerCabinController", BindingFlags.Instance | BindingFlags.NonPublic);
+            _cabinHasPlayedEerieHitForHikerField = typeof(CabinGameManager).GetField("hasPlayedEerieHitForHiker", BindingFlags.Instance | BindingFlags.NonPublic);
 
             SceneManager.activeSceneChanged += OnSceneChanged;
             CacheCabinHouseFields();
@@ -516,10 +523,16 @@ namespace WoodburySpectatorSync.Coop
         public string LastCabinMikeSyncDebug => _lastCabinMikeSyncDebug;
         public string NpcOverlaySummary => _npcOverlaySummary;
         public string BoardGameOverlaySummary => _boardGameOverlaySummary;
+        public string VoiceOverlaySummary => _voiceChat != null ? _voiceChat.Summary : "Voice: off";
         public string HostWaitSummary => _hostWaitSummary;
         public bool ShouldShowHostWaitIndicator => ShouldShowHostWaitIndicatorInternal();
         public string HostWaitIndicatorTitle => BuildHostWaitIndicatorTitle();
         public string HostWaitIndicatorDetail => BuildHostWaitIndicatorDetail();
+
+        public void DrawVoiceHud()
+        {
+            _voiceChat?.DrawHud("Proximity voice");
+        }
 
         public void Shutdown()
         {
@@ -527,6 +540,7 @@ namespace WoodburySpectatorSync.Coop
             SceneManager.activeSceneChanged -= OnSceneChanged;
             UnbindDialogueEvents();
             UnbindDialogueUiSelection();
+            _voiceChat?.Shutdown();
             _clientAvatar.SetActive(false);
             if (_remotePlayer != null && _remotePlayer.Root != null)
             {
@@ -661,6 +675,7 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
 
+            UpdateVoice(nowMs);
             PollSubText();
             PollPhoneMirror(nowMs);
 
@@ -1019,6 +1034,169 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private void UpdateVoice(long nowMs)
+        {
+            if (_voiceChat == null) return;
+            _voiceChat.UpdatePlaybackAnchor(ResolveRemoteVoiceAnchor());
+            _voiceChat.UpdateLocalCapture(
+                _lifecycle.CurrentSessionId,
+                _sceneGeneration,
+                SceneManager.GetActiveScene().name,
+                VoiceChatSync.HostSenderRole,
+                state =>
+                {
+                    var message = new VoiceFrameMessage(state);
+                    if (_settings.UdpEnabled.Value && _server.HasUdp)
+                    {
+                        _server.SendUdp(message);
+                    }
+                    else
+                    {
+                        _server.Enqueue(message);
+                    }
+                    return true;
+                });
+        }
+
+        private Transform ResolveRemoteVoiceAnchor()
+        {
+            if (_remotePlayer != null && _remotePlayer.Root != null)
+            {
+                return _remotePlayer.Root;
+            }
+
+            return _clientAvatar != null ? _clientAvatar.Root : null;
+        }
+
+        private void MaybeHandleRemoteVoiceReaction(VoiceFrameState state, long nowMs)
+        {
+            if (_voiceChat == null || !_voiceChat.RemoteIsLoud || nowMs < _nextRemoteVoiceReactionMs)
+            {
+                return;
+            }
+
+            _nextRemoteVoiceReactionMs = nowMs + 1500;
+            if (!IsCabinSceneName(SceneManager.GetActiveScene().name))
+            {
+                return;
+            }
+
+            if (TryTriggerRemoteVoiceDeath(nowMs))
+            {
+                return;
+            }
+
+            TryTriggerRemoteVoiceHikerReaction(nowMs);
+        }
+
+        private bool TryTriggerRemoteVoiceDeath(long nowMs)
+        {
+            var death = DeathManager.instance;
+            if (death == null)
+            {
+                death = UnityEngine.Object.FindObjectOfType<DeathManager>();
+            }
+
+            if (death == null || death.isDead || (!death.hostIsChasing && !death.hostIsHaunting))
+            {
+                return false;
+            }
+
+            try
+            {
+                death.playerCaught = true;
+                death.hostIsChasing = false;
+                death.hostIsHaunting = false;
+                death.StartCoroutine(death.PerformJumpscareAtRun(true));
+                var line = "Co-op voice host: remote shout triggered shared death scene=" +
+                           SceneManager.GetActiveScene().name + " gen=" + _sceneGeneration +
+                           " sid=" + _lifecycle.CurrentSessionId;
+                _logger.LogWarning(line);
+                _sessionLogWrite?.Invoke(line);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Co-op voice host: remote shout death trigger failed reason=" + ex.Message);
+                return false;
+            }
+        }
+
+        private bool TryTriggerRemoteVoiceHikerReaction(long nowMs)
+        {
+            if (_cabinGameManager == null || _cabinGameManager.CurrentSequence != SequenceType.HikerSequence)
+            {
+                return false;
+            }
+
+            var hiker = _cabinHikerControllerField != null
+                ? _cabinHikerControllerField.GetValue(_cabinGameManager) as HikerCabinController
+                : UnityEngine.Object.FindObjectOfType<HikerCabinController>();
+            if (hiker == null || !hiker.canSuddenlyLookAtPlayer)
+            {
+                return false;
+            }
+
+            var alreadyReacted = false;
+            try
+            {
+                alreadyReacted = _cabinHasPlayedEerieHitForHikerField != null &&
+                                 (bool)_cabinHasPlayedEerieHitForHikerField.GetValue(_cabinGameManager);
+            }
+            catch { }
+
+            if (alreadyReacted)
+            {
+                return false;
+            }
+
+            var clientIsCrouching = _hasInputState && _lastInputState.Crouch;
+            var hostIsCrouching = false;
+            try
+            {
+                var player = PlayerController.GetInstance();
+                var fpc = player != null && _playerFirstPersonField != null
+                    ? _playerFirstPersonField.GetValue(player)
+                    : null;
+                var crouchField = fpc != null
+                    ? fpc.GetType().GetField("isCrouching", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                    : null;
+                hostIsCrouching = crouchField != null && (bool)crouchField.GetValue(fpc);
+            }
+            catch { }
+
+            if (!clientIsCrouching && !hostIsCrouching)
+            {
+                return false;
+            }
+
+            try
+            {
+                hiker.LookAtPlayerSuddenly();
+                if (_cabinHasPlayedEerieHitForHikerField != null)
+                {
+                    _cabinHasPlayedEerieHitForHikerField.SetValue(_cabinGameManager, true);
+                }
+                if (GenericAudioReferences.instance != null && GenericAudioReferences.instance.eerieHit != null)
+                {
+                    GenericAudioReferences.instance.eerieHit.Play();
+                }
+                var line = "Co-op voice host: remote shout triggered hiker reaction crouchClient=" +
+                           (clientIsCrouching ? "yes" : "no") +
+                           " crouchHost=" + (hostIsCrouching ? "yes" : "no") +
+                           " gen=" + _sceneGeneration +
+                           " sid=" + _lifecycle.CurrentSessionId;
+                _logger.LogWarning(line);
+                _sessionLogWrite?.Invoke(line);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Co-op voice host: remote shout hiker trigger failed reason=" + ex.Message);
+                return false;
+            }
+        }
+
         private void DrainIncoming()
         {
             var nowSeconds = Time.realtimeSinceStartup;
@@ -1068,6 +1246,17 @@ namespace WoodburySpectatorSync.Coop
                     _lastInputState = input.State;
                     _hasInputState = true;
                     _remotePlayer?.ApplyInput(input.State);
+                }
+                else if (message is VoiceFrameMessage voice)
+                {
+                    if (!_lifecycle.IsLive)
+                    {
+                        _lifecycle.NoteDrop("VoiceFrame", null, nowSeconds);
+                        continue;
+                    }
+
+                    _voiceChat?.HandleRemoteFrame(voice.State, ResolveRemoteVoiceAnchor());
+                    MaybeHandleRemoteVoiceReaction(voice.State, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 }
                 else if (message is SceneActionIntentMessage intent)
                 {

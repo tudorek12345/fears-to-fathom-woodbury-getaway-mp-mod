@@ -21,6 +21,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly CoopClientInteractor _interactor;
         private RemoteAvatar _hostAvatar;
         private readonly Action<string> _sessionLogWrite;
+        private readonly VoiceChatSync _voiceChat;
 
         private CoopClientController _controller;
         private Camera _camera;
@@ -407,6 +408,7 @@ namespace WoodburySpectatorSync.Coop
             _client = client;
             _sessionLogWrite = sessionLogWrite;
             _lifecycle = new SessionLifecycle("client", logger, sessionLogWrite);
+            _voiceChat = new VoiceChatSync(logger, settings, "client", sessionLogWrite);
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "client");
             _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "client");
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "client");
@@ -435,6 +437,7 @@ namespace WoodburySpectatorSync.Coop
         public void Shutdown()
         {
             SceneManager.activeSceneChanged -= OnSceneChanged;
+            _voiceChat?.Shutdown();
             _hostAvatar.SetActive(false);
             if (_hostProxy != null && _hostProxy.Root != null)
             {
@@ -519,6 +522,12 @@ namespace WoodburySpectatorSync.Coop
             }
         }
         public string BoardGameOverlaySummary => _cabinGameManager != null ? CabinBoardGameSync.BuildOverlaySummary(_cabinGameManager) : "MiniGame: -";
+        public string VoiceOverlaySummary => _voiceChat != null ? _voiceChat.Summary : "Voice: off";
+
+        public void DrawVoiceHud()
+        {
+            _voiceChat?.DrawHud("Proximity voice");
+        }
 
         public bool TryGetRemoteDialogue(out string speaker, out string text, out byte kind)
         {
@@ -602,6 +611,7 @@ namespace WoodburySpectatorSync.Coop
             }
 
             DrainIncoming();
+            UpdateVoice(nowMs);
             ForceApplyLatchedTransform();
             UpdateHostTransformHeartbeat();
             UpdateSceneLoad();
@@ -829,6 +839,56 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private void UpdateVoice(long nowMs)
+        {
+            if (_voiceChat == null)
+            {
+                return;
+            }
+
+            _voiceChat.UpdatePlaybackAnchor(ResolveRemoteVoiceAnchor());
+            if (!_lifecycle.IsLive)
+            {
+                return;
+            }
+
+            var sessionId = _lifecycle.CurrentSessionId != 0 ? _lifecycle.CurrentSessionId : _activeHostSessionId;
+            _voiceChat.UpdateLocalCapture(
+                sessionId,
+                _activeSceneGeneration,
+                SceneManager.GetActiveScene().name,
+                VoiceChatSync.ClientSenderRole,
+                state =>
+                {
+                    var message = new VoiceFrameMessage(state);
+                    if (_settings.UdpEnabled.Value && _client.HasUdp)
+                    {
+                        _client.SendUdp(message);
+                    }
+                    else
+                    {
+                        _client.Enqueue(message);
+                    }
+                    return true;
+                });
+        }
+
+        private Transform ResolveRemoteVoiceAnchor()
+        {
+            if (_hostProxy != null && _hostProxy.Root != null)
+            {
+                return _hostProxy.Root;
+            }
+
+            if (_hostAvatar != null && _hostAvatar.Root != null)
+            {
+                return _hostAvatar.Root;
+            }
+
+            var camera = GetActiveCamera();
+            return camera != null ? camera.transform : null;
+        }
+
         private void DrainIncoming()
         {
             var processed = 0;
@@ -877,6 +937,25 @@ namespace WoodburySpectatorSync.Coop
                     {
                         break;
                     }
+                    continue;
+                }
+                if (message is VoiceFrameMessage voice)
+                {
+                    if (!_lifecycle.IsLive)
+                    {
+                        _lifecycle.NotePreLive(
+                            "TCP",
+                            "drop",
+                            MessageType.VoiceFrame,
+                            "not-scene-ready",
+                            SceneManager.GetActiveScene().name,
+                            _activeSceneGeneration,
+                            _activeHostSessionId,
+                            nowSeconds);
+                        continue;
+                    }
+
+                    _voiceChat?.HandleRemoteFrame(voice.State, ResolveRemoteVoiceAnchor());
                     continue;
                 }
 

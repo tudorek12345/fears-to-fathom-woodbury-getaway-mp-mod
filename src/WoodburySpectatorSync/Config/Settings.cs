@@ -58,6 +58,15 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<float> CoopRemotePlayerMaxPredictionDistance;
         public ConfigEntry<bool> CoopVehiclePassengerSeat;
         public ConfigEntry<bool> CoopVehiclePassengerSeatPrompt;
+        public ConfigEntry<bool> CoopVoiceChatEnabled;
+        public ConfigEntry<bool> CoopVoiceHudEnabled;
+        public ConfigEntry<float> CoopVoiceVolume;
+        public ConfigEntry<float> CoopVoiceMinDistance;
+        public ConfigEntry<float> CoopVoiceMaxDistance;
+        public ConfigEntry<float> CoopVoiceSendThreshold;
+        public ConfigEntry<float> CoopVoiceShoutThreshold;
+        public ConfigEntry<bool> CoopFootstepSyncEnabled;
+        public ConfigEntry<float> CoopFootstepVolume;
         public ConfigEntry<bool> SceneDiscoveryDump;
 
         public static Settings Bind(ConfigFile config)
@@ -101,6 +110,15 @@ namespace WoodburySpectatorSync.Config
             settings.CoopRemotePlayerMaxPredictionDistance = config.Bind("Sync", "RemotePlayerMaxPredictionDistance", 0.35f, "Maximum meters of visual prediction before clamping.");
             settings.CoopVehiclePassengerSeat = config.Bind("Coop", "VehiclePassengerSeat", true, "Lock remote co-op avatars to host-authored vehicle passenger seats during RoadTrip truck ride scenes.");
             settings.CoopVehiclePassengerSeatPrompt = config.Bind("UI", "VehiclePassengerSeatPrompt", true, "Show the small F12 seatbelt/passenger-seat overlay when a co-op vehicle seat is available.");
+            settings.CoopVoiceChatEnabled = config.Bind("Voice", "Enabled", true, "Enable LAN/Tailscale proximity voice chat over the co-op transport.");
+            settings.CoopVoiceHudEnabled = config.Bind("Voice", "HudEnabled", true, "Show a compact local/remote mic level HUD during co-op.");
+            settings.CoopVoiceVolume = config.Bind("Voice", "Volume", 0.85f, "Remote voice playback volume multiplier.");
+            settings.CoopVoiceMinDistance = config.Bind("Voice", "MinDistance", 1.2f, "Distance where remote proximity voice starts fading.");
+            settings.CoopVoiceMaxDistance = config.Bind("Voice", "MaxDistance", 18f, "Distance where remote proximity voice becomes very quiet.");
+            settings.CoopVoiceSendThreshold = config.Bind("Voice", "SendThreshold", 0.012f, "Local mic level required before voice frames are sent. Lower values transmit more room noise.");
+            settings.CoopVoiceShoutThreshold = config.Bind("Voice", "ShoutThreshold", 0.42f, "Normalized remote voice level that counts as a loud shout for hiker/chaser checks.");
+            settings.CoopFootstepSyncEnabled = config.Bind("Audio", "FootstepSyncEnabled", true, "Mirror host/client movement footsteps as spatial remote audio events.");
+            settings.CoopFootstepVolume = config.Bind("Audio", "FootstepVolume", 0.72f, "Remote footstep playback volume multiplier.");
             settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", true, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
             return settings;
         }

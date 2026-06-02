@@ -15,7 +15,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.19")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.20")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -241,6 +241,7 @@ namespace WoodburySpectatorSync
                 }
             }
 
+            DrawVoiceHud();
             DrawHostWaitIndicator();
             _brandMark?.Draw();
             _coopMenuPanel?.Draw(
@@ -285,6 +286,23 @@ namespace WoodburySpectatorSync
             }
 
             _waitingSpinnerOverlay?.Draw(_coopHost.HostWaitIndicatorTitle, _coopHost.HostWaitIndicatorDetail);
+        }
+
+        private void DrawVoiceHud()
+        {
+            if (_settings == null)
+            {
+                return;
+            }
+
+            if (_settings.ModeSetting.Value == Mode.CoopHost)
+            {
+                _coopHost?.DrawVoiceHud();
+            }
+            else if (_settings.ModeSetting.Value == Mode.CoopClient)
+            {
+                _coopClientCoordinator?.DrawVoiceHud();
+            }
         }
 
         private void HandleHotkeys()
@@ -488,6 +506,7 @@ namespace WoodburySpectatorSync
                     "Mike: " + _coopHost.LastCabinMikeSyncDebug,
                     _coopHost.NpcOverlaySummary,
                     _coopHost.BoardGameOverlaySummary,
+                    _coopHost.VoiceOverlaySummary,
                     BuildAvatarStatus(),
                     BuildDialogueStatus("Dlg", _coopHost.DialogueConversationId, _coopHost.DialogueEntryId, _coopHost.DialogueChoiceIndex, _coopHost.DialogueLastEventMs, nowMs),
                     BuildStoryStatus(_coopHost.LastStoryEventKey, _coopHost.LastStoryEventValue, _coopHost.LastStoryEventMs, nowMs),
@@ -547,6 +566,7 @@ namespace WoodburySpectatorSync
                     "Mike: " + _coopClientCoordinator.LastMikeSyncDebug,
                     _coopClientCoordinator.NpcOverlaySummary,
                     _coopClientCoordinator.BoardGameOverlaySummary,
+                    _coopClientCoordinator.VoiceOverlaySummary,
                     BuildAvatarStatus(),
                     BuildDialogueStatus("DlgHost", _coopClientCoordinator.HostDialogueConversationId, _coopClientCoordinator.HostDialogueEntryId, _coopClientCoordinator.HostDialogueChoiceIndex, _coopClientCoordinator.HostDialogueEventMs, nowMs),
                     "DlgLocal: " + localDialogue,

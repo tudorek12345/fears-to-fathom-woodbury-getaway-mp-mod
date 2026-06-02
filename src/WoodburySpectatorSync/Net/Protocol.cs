@@ -36,7 +36,8 @@ namespace WoodburySpectatorSync.Net
         UiMirrorState = 27,
         CameraRigState = 28,
         PathVehicleState = 29,
-        SceneEventState = 30
+        SceneEventState = 30,
+        VoiceFrame = 31
     }
 
     public enum ProtocolParseErrorCode
@@ -395,6 +396,17 @@ namespace WoodburySpectatorSync.Net
         }
     }
 
+    public sealed class VoiceFrameMessage : Message
+    {
+        public VoiceFrameState State;
+
+        public VoiceFrameMessage(VoiceFrameState state)
+        {
+            Type = MessageType.VoiceFrame;
+            State = state;
+        }
+    }
+
     public sealed class HelloAckMessage : Message
     {
         public ushort ProtocolVersion;
@@ -687,6 +699,21 @@ namespace WoodburySpectatorSync.Net
         public int Flags;
     }
 
+    public struct VoiceFrameState
+    {
+        public int SessionId;
+        public int Generation;
+        public int VoiceSeq;
+        public long UnixTimeMs;
+        public string SceneName;
+        public byte SenderRole;
+        public ushort SampleRate;
+        public ushort SampleCount;
+        public byte Level;
+        public byte Flags;
+        public byte[] Pcm8;
+    }
+
     public struct PlayerInputState
     {
         public byte PlayerId;
@@ -702,8 +729,8 @@ namespace WoodburySpectatorSync.Net
     public static class Protocol
     {
         public const uint Magic = 0x57535331; // "WSS1"
-        public const ushort Version = 4;
-        public const string PluginVersion = "0.4.19";
+        public const ushort Version = 5;
+        public const string PluginVersion = "0.4.20";
         public const int MaxPayloadBytes = 1024 * 1024;
 
         public static byte[] BuildFrame(byte[] payload)
@@ -924,6 +951,17 @@ namespace WoodburySpectatorSync.Net
             {
                 WriteHeader(writer, MessageType.SceneEventState);
                 WriteSceneEventState(writer, state);
+                return ms.ToArray();
+            }
+        }
+
+        public static byte[] BuildVoiceFrame(VoiceFrameState state)
+        {
+            using (var ms = new MemoryStream())
+            using (var writer = new BinaryWriter(ms, Encoding.UTF8))
+            {
+                WriteHeader(writer, MessageType.VoiceFrame);
+                WriteVoiceFrameState(writer, state);
                 return ms.ToArray();
             }
         }
@@ -1324,6 +1362,9 @@ namespace WoodburySpectatorSync.Net
                             return true;
                         case MessageType.SceneEventState:
                             message = new SceneEventStateMessage(ReadSceneEventState(reader));
+                            return true;
+                        case MessageType.VoiceFrame:
+                            message = new VoiceFrameMessage(ReadVoiceFrameState(reader));
                             return true;
                         case MessageType.PlayerInput:
                             message = new PlayerInputMessage(new PlayerInputState
@@ -1799,6 +1840,49 @@ namespace WoodburySpectatorSync.Net
                 FloatValue = reader.ReadSingle(),
                 Flags = reader.ReadInt32()
             };
+        }
+
+        private static void WriteVoiceFrameState(BinaryWriter writer, VoiceFrameState state)
+        {
+            var data = state.Pcm8 ?? new byte[0];
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.VoiceSeq);
+            writer.Write(state.UnixTimeMs);
+            WriteString(writer, state.SceneName);
+            writer.Write(state.SenderRole);
+            writer.Write(state.SampleRate);
+            writer.Write(state.SampleCount);
+            writer.Write(state.Level);
+            writer.Write(state.Flags);
+            writer.Write(data.Length);
+            writer.Write(data);
+        }
+
+        private static VoiceFrameState ReadVoiceFrameState(BinaryReader reader)
+        {
+            var state = new VoiceFrameState
+            {
+                SessionId = reader.ReadInt32(),
+                Generation = reader.ReadInt32(),
+                VoiceSeq = reader.ReadInt32(),
+                UnixTimeMs = reader.ReadInt64(),
+                SceneName = ReadString(reader),
+                SenderRole = reader.ReadByte(),
+                SampleRate = reader.ReadUInt16(),
+                SampleCount = reader.ReadUInt16(),
+                Level = reader.ReadByte(),
+                Flags = reader.ReadByte()
+            };
+
+            var length = reader.ReadInt32();
+            if (length < 0 || length > MaxPayloadBytes)
+            {
+                throw new InvalidDataException("Invalid voice frame length");
+            }
+
+            state.Pcm8 = reader.ReadBytes(length);
+            return state;
         }
     }
 }

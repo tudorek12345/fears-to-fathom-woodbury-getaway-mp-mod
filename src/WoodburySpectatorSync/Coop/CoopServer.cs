@@ -510,6 +510,8 @@ namespace WoodburySpectatorSync.Coop
                     return Protocol.BuildPathVehicleState(((PathVehicleStateMessage)message).State);
                 case MessageType.SceneEventState:
                     return Protocol.BuildSceneEventState(((SceneEventStateMessage)message).State);
+                case MessageType.VoiceFrame:
+                    return Protocol.BuildVoiceFrame(((VoiceFrameMessage)message).State);
                 case MessageType.UdpInfo:
                     return Protocol.BuildUdpInfo(((UdpInfoMessage)message).Port);
                 case MessageType.SceneReady:
