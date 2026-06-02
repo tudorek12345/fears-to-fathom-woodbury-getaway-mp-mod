@@ -83,6 +83,18 @@
   ],
   "recentCommits": [
     {
+      "sha": "970a8f9",
+      "subject": "Settings update"
+    },
+    {
+      "sha": "1ec8b23",
+      "subject": "prediction,office,PizzeriaSceneStateSync fixing"
+    },
+    {
+      "sha": "a3360ca",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "b8305e7",
       "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
     },
@@ -101,18 +113,6 @@
     {
       "sha": "354d1fe",
       "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "eacf877",
-      "subject": "site: bigger labeled visitor counter, More-projects section, copyright/ownership notice"
-    },
-    {
-      "sha": "c799750",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "5de8822",
-      "subject": "site: add Discord (hero button, Get-the-mod card, footer) with conservative sheen anima..."
     }
   ]
 }
