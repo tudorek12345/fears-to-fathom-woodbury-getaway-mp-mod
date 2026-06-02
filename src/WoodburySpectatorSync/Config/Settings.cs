@@ -53,6 +53,9 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<float> CoopRemotePlayerAvatarScale;
         public ConfigEntry<float> CoopRemotePlayerAvatarYOffset;
         public ConfigEntry<bool> CoopRemotePlayerPresenceCollider;
+        public ConfigEntry<bool> CoopRemotePlayerPrediction;
+        public ConfigEntry<float> CoopRemotePlayerPredictionSeconds;
+        public ConfigEntry<float> CoopRemotePlayerMaxPredictionDistance;
         public ConfigEntry<bool> CoopVehiclePassengerSeat;
         public ConfigEntry<bool> CoopVehiclePassengerSeatPrompt;
         public ConfigEntry<bool> SceneDiscoveryDump;
@@ -93,6 +96,9 @@ namespace WoodburySpectatorSync.Config
             settings.CoopRemotePlayerAvatarScale = config.Bind("Coop", "RemotePlayerAvatarScale", 1f, "Multiplier applied on top of the avatar manifest scale.");
             settings.CoopRemotePlayerAvatarYOffset = config.Bind("Coop", "RemotePlayerAvatarYOffset", 0f, "Extra vertical offset added on top of the avatar manifest offset.");
             settings.CoopRemotePlayerPresenceCollider = config.Bind("Coop", "RemotePlayerPresenceCollider", false, "Enable a trigger-only co-op presence capsule for remote players. Disabled by default to avoid firing local story triggers.");
+            settings.CoopRemotePlayerPrediction = config.Bind("Sync", "RemotePlayerPrediction", true, "Predict remote player proxy movement between network packets. Visual only; host/client packets remain authoritative.");
+            settings.CoopRemotePlayerPredictionSeconds = config.Bind("Sync", "RemotePlayerPredictionSeconds", 0.08f, "Seconds of visual extrapolation for remote player and vehicle passenger proxies.");
+            settings.CoopRemotePlayerMaxPredictionDistance = config.Bind("Sync", "RemotePlayerMaxPredictionDistance", 0.35f, "Maximum meters of visual prediction before clamping.");
             settings.CoopVehiclePassengerSeat = config.Bind("Coop", "VehiclePassengerSeat", true, "Lock remote co-op avatars to host-authored vehicle passenger seats during RoadTrip truck ride scenes.");
             settings.CoopVehiclePassengerSeatPrompt = config.Bind("UI", "VehiclePassengerSeatPrompt", true, "Show the small F12 seatbelt/passenger-seat overlay when a co-op vehicle seat is available.");
             settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", true, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
