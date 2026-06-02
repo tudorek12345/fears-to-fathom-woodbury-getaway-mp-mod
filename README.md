@@ -87,6 +87,27 @@ tools/AvatarBundle/          optional avatar bundle tooling
 
 ## Notes
 
-This project is unofficial and not affiliated with the game developer or publisher.
-
 See `CHANGELOG.md` for implementation history.
+
+## License & Ownership
+
+**Copyright © 2026 tudorek12345 ("Heperkoo"). All rights reserved.**
+
+This project is **proprietary and source-available for reference only** — it is **not**
+open source. It is the sole creation of the Author and is **intended to be modified,
+built, maintained, and distributed only by the Author.**
+
+Without the Author's prior written permission you may **not** copy, modify, build,
+re-upload, redistribute, sell, rebrand, or create derivative works from this project
+or its build output, on any platform. Viewing the public source for personal reference
+is permitted; everything else is reserved. See **[LICENSE.md](LICENSE.md)** for the
+full, binding terms.
+
+This is an **unofficial fan modification** for *Fears to Fathom: Woodbury Getaway*. It
+is not affiliated with, endorsed by, or sponsored by the game's developer or publisher.
+*"Fears to Fathom"*, *"Woodbury Getaway"*, and all related names, marks, characters, and
+assets belong to their respective owner(s); they are not licensed or claimed here, and
+this license covers only the Author's own original work.
+
+For permission or commercial-use requests: [GitHub](https://github.com/tudorek12345) ·
+[Discord](https://discord.gg/tyEhwgSxzV).
