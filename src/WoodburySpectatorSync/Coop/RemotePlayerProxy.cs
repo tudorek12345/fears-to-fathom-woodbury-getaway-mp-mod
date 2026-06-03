@@ -88,8 +88,6 @@ namespace WoodburySpectatorSync.Coop
             {
                 if (string.IsNullOrEmpty(_displayName) && string.IsNullOrEmpty(_role)) return;
                 if (!ShouldDrawInScene()) return;
-                if (CountVisibleRenderers(gameObject) <= 0) return;
-
                 var cam = Camera.main;
                 if (cam == null) return;
 
@@ -300,6 +298,8 @@ namespace WoodburySpectatorSync.Coop
         private string _seatedAnimationStateName;
         private bool _lastAnimatorMoving;
         private bool _lastSeatedVisual;
+        private readonly HashSet<Renderer> _vehicleClipHiddenRenderers = new HashSet<Renderer>();
+        private bool _vehicleVisualHiddenByCamera;
         private float _lastIdlePoseTime;
         private float _lastSeatedPoseTime;
         private int _hiddenStoryCarryPropCount;
@@ -546,6 +546,11 @@ namespace WoodburySpectatorSync.Coop
             {
                 _root.transform.SetPositionAndRotation(bodyPosition, bodyRotation);
             }
+
+            SetVehicleClipVisualHidden(
+                _secondPlayerController != null &&
+                _secondPlayerController.IsVehicleSeated &&
+                ShouldHideSeatedBodyForCamera(bodyPosition, state.CameraPosition));
 
             _lastSeatedVisual = seatedVisual;
             DriveAnimatorFromTransform(bodyPosition, bodyRotation, _lastSeatedVisual);
@@ -848,6 +853,47 @@ namespace WoodburySpectatorSync.Coop
         {
             var horizontalDelta = new Vector2(bodyPosition.x - cameraPosition.x, bodyPosition.z - cameraPosition.z).magnitude;
             return horizontalDelta <= CameraBodyProjectionMaxHorizontalDistance;
+        }
+
+        private static bool ShouldHideSeatedBodyForCamera(Vector3 bodyPosition, Vector3 cameraPosition)
+        {
+            if (cameraPosition == Vector3.zero) return false;
+            var horizontalDelta = new Vector2(bodyPosition.x - cameraPosition.x, bodyPosition.z - cameraPosition.z).magnitude;
+            var verticalDelta = Mathf.Abs(bodyPosition.y - cameraPosition.y);
+            return horizontalDelta <= 0.92f && verticalDelta <= 1.85f;
+        }
+
+        private void SetVehicleClipVisualHidden(bool hidden)
+        {
+            if (_root == null || _vehicleVisualHiddenByCamera == hidden)
+            {
+                return;
+            }
+
+            _vehicleVisualHiddenByCamera = hidden;
+            if (hidden)
+            {
+                _vehicleClipHiddenRenderers.Clear();
+                var renderers = _root.GetComponentsInChildren<Renderer>(true);
+                for (var i = 0; i < renderers.Length; i++)
+                {
+                    var renderer = renderers[i];
+                    if (renderer == null || !renderer.enabled) continue;
+                    if (LooksLikeUtilityAvatarObject(renderer.transform)) continue;
+                    renderer.enabled = false;
+                    _vehicleClipHiddenRenderers.Add(renderer);
+                }
+                return;
+            }
+
+            foreach (var renderer in _vehicleClipHiddenRenderers)
+            {
+                if (renderer != null)
+                {
+                    renderer.enabled = true;
+                }
+            }
+            _vehicleClipHiddenRenderers.Clear();
         }
 
         private static bool IsLikelyGroundSurface(Transform transform)
@@ -1488,9 +1534,7 @@ namespace WoodburySpectatorSync.Coop
             var sceneName = SceneManager.GetActiveScene().name ?? string.Empty;
             if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
-                       TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName) ||
-                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName);
+                return TryFindPizzeriaSafeAvatar(out candidate, out sourceName);
             }
 
             if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -1524,9 +1568,7 @@ namespace WoodburySpectatorSync.Coop
 
             if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker" }, out candidate, out sourceName) ||
-                       TryFindComponentAvatar<PizzeriaHiker>(out candidate, out sourceName) ||
-                       TryFindComponentAvatar<Hobo>(out candidate, out sourceName);
+                return TryFindPizzeriaSafeAvatar(out candidate, out sourceName);
             }
 
             return TryFindNonMikeSceneHuman(out candidate, out sourceName) ||
@@ -1551,8 +1593,22 @@ namespace WoodburySpectatorSync.Coop
                    TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker", "Hiker", "Nora" }, out candidate, out sourceName);
         }
 
+        private static bool TryFindPizzeriaSafeAvatar(out GameObject candidate, out string sourceName)
+        {
+            return TryFindComponentAvatar<Hobo>(out candidate, out sourceName) ||
+                   TryFindComponentAvatar<PizzeriaNPCOther>(out candidate, out sourceName) ||
+                   TryFindComponentAvatar<PizzeriaNPC>(out candidate, out sourceName) ||
+                   TryFindNamedAvatar(new[] { "Hobo", "Moe", "Tall Guy", "Customer" }, out candidate, out sourceName);
+        }
+
         private static bool TryFindNonMikeSceneHuman(out GameObject candidate, out string sourceName)
         {
+            var sceneName = SceneManager.GetActiveScene().name ?? string.Empty;
+            if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return TryFindPizzeriaSafeAvatar(out candidate, out sourceName);
+            }
+
             if (TryFindNamedAvatar(new[] { "BackpackerV2", "Backpacker", "Hiker", "Nora" }, out candidate, out sourceName) &&
                 !IsMikePath(GetTransformPath(candidate.transform)))
             {

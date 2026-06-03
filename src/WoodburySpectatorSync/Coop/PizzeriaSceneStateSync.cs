@@ -1553,9 +1553,14 @@ namespace WoodburySpectatorSync.Coop
 
             if (mike.state == MikePizzeria.State.InCar)
             {
+                var player = UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>();
+                var drivingCameraActive = player != null &&
+                                          (IsObjectActive(player.playerDrivingParent) ||
+                                           IsObjectActive(player.playerDrivingCam));
                 var drivingStillAuthoritative = driving != null &&
                                                 driving.gameObject.activeInHierarchy &&
-                                                (driving.enabled ||
+                                                (drivingCameraActive ||
+                                                 driving.enabled ||
                                                  !GetFieldValue<bool>(driving, "startSlowDown") ||
                                                  !GetFieldValue<bool>(driving, "pushBreak"));
                 return drivingStillAuthoritative
@@ -1614,7 +1619,11 @@ namespace WoodburySpectatorSync.Coop
                     ApplyPizzeriaMikeVisibility(manager, mike, true);
                     break;
                 case PizzeriaMikePhase.DrivingIntro:
-                    if (mike.animator != null) mike.animator.enabled = true;
+                    ApplyPizzeriaMikeParentMode(mike, 1);
+                    SetNavEnabled(mike, false, true);
+                    if (mike.capsuleCollider != null) mike.capsuleCollider.enabled = false;
+                    SetAnimatorInt(mike.animator, "State", 5);
+                    ApplyPizzeriaMikeVisibility(manager, mike, true);
                     break;
             }
 
@@ -1624,7 +1633,8 @@ namespace WoodburySpectatorSync.Coop
         private static bool ShouldForcePizzeriaMikeVisible(PizzeriaGameManager manager, MikePizzeria mike)
         {
             var phase = ResolvePizzeriaMikePhase(manager, mike, null);
-            return phase == PizzeriaMikePhase.ParkedOutside ||
+            return phase == PizzeriaMikePhase.DrivingIntro ||
+                   phase == PizzeriaMikePhase.ParkedOutside ||
                    phase == PizzeriaMikePhase.TableSitting ||
                    phase == PizzeriaMikePhase.Eating ||
                    phase == PizzeriaMikePhase.GetPizza ||

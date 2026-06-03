@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace WoodburySpectatorSync.Coop
 {
@@ -204,9 +205,9 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
             var boxes = FindPizzaBoxes();
-            if (index < 0 || index >= boxes.Count) return false;
+            if (index < 0 || index >= boxes.Count) return IsOptionalMissing(name, value);
             var box = boxes[index];
-            if (box == null) return false;
+            if (box == null) return IsOptionalMissing(name, value);
 
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { box.gameObject.SetActive(value != 0); return true; }
@@ -227,9 +228,9 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
             var lids = FindPizzaLids();
-            if (index < 0 || index >= lids.Count) return false;
+            if (index < 0 || index >= lids.Count) return IsOptionalMissing(name, value);
             var lid = lids[index];
-            if (lid == null) return false;
+            if (lid == null) return IsOptionalMissing(name, value);
 
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { lid.gameObject.SetActive(value != 0); return true; }
@@ -242,9 +243,9 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
             var slices = FindPizzaSlices();
-            if (index < 0 || index >= slices.Count) return false;
+            if (index < 0 || index >= slices.Count) return true;
             var slice = slices[index];
-            if (slice == null) return false;
+            if (slice == null) return true;
 
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { slice.gameObject.SetActive(value != 0); return true; }
@@ -258,9 +259,9 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
             var managers = FindBoxManagers();
-            if (index < 0 || index >= managers.Count) return false;
+            if (index < 0 || index >= managers.Count) return IsOptionalMissing(name, value);
             var manager = managers[index];
-            if (manager == null) return false;
+            if (manager == null) return IsOptionalMissing(name, value);
 
             var workerAnimator = GetFieldValue<Animator>(manager, "workerAnimator");
             var boxAnimator = GetFieldValue<Animator>(manager, "animatedPizzaBoxAnimator");
@@ -305,30 +306,53 @@ namespace WoodburySpectatorSync.Coop
 
         private static List<PizzaBox> FindPizzaBoxes()
         {
-            var list = new List<PizzaBox>(UnityEngine.Object.FindObjectsOfType<PizzaBox>());
+            var list = FindSceneComponents<PizzaBox>();
             SortByPath(list);
             return list;
         }
 
         private static List<PizzaBoxLid> FindPizzaLids()
         {
-            var list = new List<PizzaBoxLid>(UnityEngine.Object.FindObjectsOfType<PizzaBoxLid>());
+            var list = FindSceneComponents<PizzaBoxLid>();
             SortByPath(list);
             return list;
         }
 
         private static List<PizzaSlice> FindPizzaSlices()
         {
-            var list = new List<PizzaSlice>(UnityEngine.Object.FindObjectsOfType<PizzaSlice>());
+            var list = FindSceneComponents<PizzaSlice>();
             SortByPath(list);
             return list;
         }
 
         private static List<PizzaBoxesManager> FindBoxManagers()
         {
-            var list = new List<PizzaBoxesManager>(UnityEngine.Object.FindObjectsOfType<PizzaBoxesManager>());
+            var list = FindSceneComponents<PizzaBoxesManager>();
             SortByPath(list);
             return list;
+        }
+
+        private static List<T> FindSceneComponents<T>() where T : Component
+        {
+            var results = new List<T>();
+            var all = Resources.FindObjectsOfTypeAll<T>();
+            for (var i = 0; i < all.Length; i++)
+            {
+                var component = all[i];
+                if (component == null || component.gameObject == null) continue;
+                var scene = component.gameObject.scene;
+                if (!scene.IsValid() || !scene.isLoaded) continue;
+                if (scene.name != SceneManager.GetActiveScene().name) continue;
+                results.Add(component);
+            }
+
+            return results;
+        }
+
+        private static bool IsOptionalMissing(string name, int value)
+        {
+            if (string.Equals(name, "Exists", StringComparison.Ordinal) && value == 0) return true;
+            return false;
         }
 
         private static void SortByPath<T>(List<T> list) where T : Component

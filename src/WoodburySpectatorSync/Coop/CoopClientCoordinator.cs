@@ -5997,6 +5997,11 @@ namespace WoodburySpectatorSync.Coop
                 message += " cabinGameKeys=" + BuildPendingFlagSample(_pendingCabinGameFlags, _pendingCabinGameFirstSeen, now);
             }
 
+            if (_pendingPizzeriaFlags.Count > 0)
+            {
+                message += " pizzeriaKeys=" + BuildPendingFlagSample(_pendingPizzeriaFlags, _pendingPizzeriaFirstSeen, now);
+            }
+
             if (maxAge >= PendingRetryWarnAgeSeconds)
             {
                 _logger.LogWarning(message);

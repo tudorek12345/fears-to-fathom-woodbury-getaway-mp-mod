@@ -50,6 +50,8 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, GenericNpcRecord> _records = new Dictionary<string, GenericNpcRecord>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _lastAppliedSeqById = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastAppliedMsById = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> _nextMissingLogMsById = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _lastActiveById = new Dictionary<string, bool>(StringComparer.Ordinal);
         private readonly Dictionary<string, Vector3> _smoothedPositions = new Dictionary<string, Vector3>(StringComparer.Ordinal);
         private readonly Dictionary<string, Quaternion> _smoothedRotations = new Dictionary<string, Quaternion>(StringComparer.Ordinal);
         private readonly HashSet<string> _loggedPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -105,6 +107,7 @@ namespace WoodburySpectatorSync.Coop
                 if (entry == null || string.IsNullOrEmpty(entry.TypeName)) continue;
 
                 var found = FindLoadedComponentsByTypeName(entry.TypeName);
+                var suffixCounts = new Dictionary<string, int>(StringComparer.Ordinal);
                 for (var foundIndex = 0; foundIndex < found.Count; foundIndex++)
                 {
                     var component = found[foundIndex];
@@ -112,7 +115,7 @@ namespace WoodburySpectatorSync.Coop
 
                     var path = NetPath.GetPath(component.transform);
                     var id = entry.Multiple
-                        ? entry.IdPrefix + "/" + StablePathSuffix(path)
+                        ? entry.IdPrefix + "/" + StableComponentSuffix(component, suffixCounts)
                         : entry.IdPrefix;
                     if (_records.ContainsKey(id)) continue;
 
@@ -257,9 +260,16 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
-            if (!_records.TryGetValue(state.NpcId, out var record) || record.Component == null)
+            if ((!_records.TryGetValue(state.NpcId, out var record) || record.Component == null) &&
+                !TryResolveFallbackRecord(state, out record))
             {
-                LogInfo("NPCBrain missing npcId=" + state.NpcId + " critical=" + BoolText(state.Critical));
+                LogMissingThrottled(state);
+                if (!state.Critical)
+                {
+                    _lastAppliedSeqById[state.NpcId] = state.NpcSeq;
+                    _lastAppliedMsById[state.NpcId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    return true;
+                }
                 return false;
             }
 
@@ -270,11 +280,12 @@ namespace WoodburySpectatorSync.Coop
                 transform.gameObject.SetActive(true);
             }
 
-            var targetPosition = state.Position;
+            var targetPosition = PredictNpcTargetPosition(state);
             var targetRotation = state.Rotation;
-            if (!snapshot && _smoothedPositions.TryGetValue(state.NpcId, out var currentPosition))
+            var activeToggle = _lastActiveById.TryGetValue(state.NpcId, out var lastActive) && lastActive != state.Active;
+            if (!snapshot && !activeToggle && _smoothedPositions.TryGetValue(state.NpcId, out var currentPosition))
             {
-                var alpha = 1f - Mathf.Exp(-14f * Time.deltaTime);
+                var alpha = 1f - Mathf.Exp(-18f * Mathf.Max(Time.unscaledDeltaTime, Time.deltaTime, 0.016f));
                 currentPosition = Vector3.Distance(currentPosition, targetPosition) > 4f
                     ? targetPosition
                     : Vector3.Lerp(currentPosition, targetPosition, alpha);
@@ -304,6 +315,7 @@ namespace WoodburySpectatorSync.Coop
 
             _lastAppliedSeqById[state.NpcId] = state.NpcSeq;
             _lastAppliedMsById[state.NpcId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            _lastActiveById[state.NpcId] = state.Active;
             return true;
         }
 
@@ -552,6 +564,118 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.IsNullOrEmpty(path)) return "unknown";
             return path.Replace(" ", "_").Replace("[", "").Replace("]", "").Replace("/", ".");
+        }
+
+        private bool TryResolveFallbackRecord(NpcBrainState state, out GenericNpcRecord record)
+        {
+            record = null;
+            if (string.IsNullOrEmpty(state.NpcId))
+            {
+                return false;
+            }
+
+            var incoming = NormalizeNpcId(state.NpcId);
+            foreach (var pair in _records)
+            {
+                if (pair.Value == null || pair.Value.Component == null) continue;
+                var recordId = NormalizeNpcId(pair.Key);
+                if (string.Equals(recordId, incoming, StringComparison.Ordinal) ||
+                    incoming.EndsWith(recordId, StringComparison.Ordinal) ||
+                    recordId.EndsWith(incoming, StringComparison.Ordinal))
+                {
+                    record = pair.Value;
+                    _records[state.NpcId] = record;
+                    return true;
+                }
+
+                var objectName = NormalizeNpcId(pair.Value.Component.gameObject != null ? pair.Value.Component.gameObject.name : string.Empty);
+                if (!string.IsNullOrEmpty(objectName) && incoming.IndexOf(objectName, StringComparison.Ordinal) >= 0)
+                {
+                    record = pair.Value;
+                    _records[state.NpcId] = record;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static Vector3 PredictNpcTargetPosition(NpcBrainState state)
+        {
+            if (state.Velocity.sqrMagnitude < 0.0001f)
+            {
+                return state.Position;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var ageSeconds = Mathf.Clamp((nowMs - state.UnixTimeMs) / 1000f, 0f, 0.18f);
+            return state.Position + state.Velocity * ageSeconds;
+        }
+
+        private void LogMissingThrottled(NpcBrainState state)
+        {
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (_nextMissingLogMsById.TryGetValue(state.NpcId, out var nextMs) && nowMs < nextMs)
+            {
+                return;
+            }
+
+            _nextMissingLogMsById[state.NpcId] = nowMs + (state.Critical ? 2000 : 8000);
+            LogInfo("NPCBrain missing npcId=" + state.NpcId +
+                    " critical=" + BoolText(state.Critical) +
+                    " pending=" + (state.Critical ? "yes" : "no") +
+                    " scene=" + SceneManager.GetActiveScene().name);
+        }
+
+        private static string StableComponentSuffix(Component component, Dictionary<string, int> suffixCounts)
+        {
+            if (component == null) return "unknown";
+
+            var typeName = component.GetType().Name;
+            var objectName = component.gameObject != null ? component.gameObject.name : "unknown";
+            var suffix = SanitizeIdPart(typeName + "." + objectName);
+            if (suffixCounts == null)
+            {
+                return suffix;
+            }
+
+            suffixCounts.TryGetValue(suffix, out var count);
+            suffixCounts[suffix] = count + 1;
+            return count <= 0 ? suffix : suffix + "." + count;
+        }
+
+        private static string SanitizeIdPart(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "unknown";
+            var chars = value.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                var c = chars[i];
+                if (!char.IsLetterOrDigit(c) && c != '_' && c != '-' && c != '.')
+                {
+                    chars[i] = '_';
+                }
+            }
+            return new string(chars).Trim('_');
+        }
+
+        private static string NormalizeNpcId(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            var chars = new List<char>(value.Length);
+            for (var i = 0; i < value.Length; i++)
+            {
+                var c = char.ToLowerInvariant(value[i]);
+                if (char.IsLetterOrDigit(c))
+                {
+                    chars.Add(c);
+                }
+            }
+            while (chars.Count > 0 && char.IsDigit(chars[chars.Count - 1]))
+            {
+                chars.RemoveAt(chars.Count - 1);
+            }
+            return new string(chars.ToArray());
         }
 
         private static string BoolText(bool value)

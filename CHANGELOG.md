@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.20, wire protocol 5.
+> Current iteration: Plugin 0.4.24, wire protocol 5.
 
-> Plugin 0.3.0 → 0.4.20 · wire protocol 3 → 5.
+> Plugin 0.3.0 → 0.4.24 · wire protocol 3 → 5.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
 
 ### Co-op Cabin
@@ -12,8 +12,7 @@
 - Scene transition reliability: fixed dark-cabin scene matching to use the real `CabinSceneDark` key from decompiled `SceneNameKeys`, so Cabin-dark readiness, retry backoff, manager flags, and NPC brain adapters no longer miss the scene because of the older `CabinDarkScene` alias.
 - Prediction: client-side AI/NPC visual smoothing now extrapolates briefly from buffered host samples, bounded by the existing remote-player prediction settings, so Mike and other host-authored actors move with less visible packet-step snapping while host packets remain authoritative.
 
-- NPC brains: host-authoritative `NpcBrainState` sync for Mike variants (MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController), hiker/window (CabinHiker + HikerCabinController + HostFixingSink), Nora, and cat — registry-based actor IDs, client-side local brain suppression, snapshot buffering, stale-sequence drops, throttled diagnostics.
-- Hiker window: state enums + go/moving/reachedPos/followingHost flags + sinisterAudioTrigger/closetLight/hikerConvoTrigger active states. Lock window gated on `CurrentSequence` (HikerSequence / HostAtDoor / HostHittingDoor) instead of `gameObject.activeSelf` to stop client clumping.
+- NPC brains: host-authoritative `NpcBrainState` sync for Mike variants (MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController), hiker/window (CabinHiker + HikerCabinController + HostFixingSink), Nora, and cat — registry-based actor IDs, client-side local brain suppression, snapshot buffering, stale-sequence drops, throttled diagnostics.gated on `CurrentSequence` (HikerSequence / HostAtDoor / HostHittingDoor) instead of `gameObject.activeSelf` to stop client clumping.
 - Mini-games (Jenga + Ouija): full controller state, piece/drag mini-game state, audio, initial position, planchette/table transform correction, dining-table colliders as stable mask, basement/Ouija active objects, spectator camera state. Client local mini-game brains suppressed. Compact overlay line. Mike's held Ouija table/tablet setup mirrored. False `cabinGame=5` pending/missing fixed by removing invalid Jenga collider keys, accepting diagnostic Jenga piece counts, accepting inactive mini-game level visuals, logging unresolved Cabin game keys with values/ages.
 - Cooking/eating: casserole/oven prop sync via story flags + transform correction, Mike cook/eating visuals, plate masks, eating rig weights, living-room TV clip identity + playback time. Pre-Eating leak visuals suppressed on clients.
 - Ambient: light switches (basement/closet/outside), bedroom TV playback, flashlight light, sink/dishwashing visuals, seated-eating player/plate visuals.
@@ -25,6 +24,14 @@
 
 ### Co-op Pizzeria
 
+- Visual stability: Pizzeria driving intro now ignores in-cab child seat transforms and uses synthetic rear/truck-bed offsets for second-player bodies, with camera-proximity hiding so the remote anchor/nametag stays alive without blocking the active view.
+- NPC smoothing/diagnostics: generic multi-NPC IDs now normalize by component type + object name, noncritical unresolved Pizzeria actors are throttled diagnostics instead of pending spam, and NPC brain application extrapolates briefly from receive-time samples before interpolation.
+- Discovery diagnostics: Pizzeria F10 dumps now include a compact summary line for manager/player/Mike/driving/pizza/truck-key state so the next host/client diff points at changed sync fields faster.
+- Moe's Pizzeria exit handoff: removed the return-to-car roof passenger anchors so second-player proxies release during free-roam/eating/return-to-car instead of sticking to `roof-left`/`roof-right` while the host transitions scenes.
+- Pizza prop sync: pizza boxes, lids, slices, and folding managers now resolve inactive in-scene objects, and dynamic slice keys no longer leave the client stuck with long-running `pizzeria=N` pending retries when the host/client slice lists differ during eating.
+- Moe's Pizzeria vehicle handoff: Pizzeria truck intro uses the same second-player passenger-seat system as RoadTrip, with truck-bed seats during the opening drive and release during Pizzeria free-roam/eating/return-to-car instead of putting both players in the host camera seat.
+- Moe's Pizzeria Mike-in-car: `DrivingIntro` now force-parents Mike to the truck, disables his NavMesh/capsule, and applies the in-car animator state so the client no longer runs a shaky/floating local Mike while the host drives.
+- Diagnostics: pending Pizzeria state retries now include sampled key names/values/ages, so a future `pizzeria=N` warning points at the exact unresolved sync keys instead of only showing a count.
 - Mike visibility / handoff: added host-authored `MikeDetail` phase correction for `DrivingIntro`, `ParkedOutside`, `TableSitting`, `Eating`, `GetPizza`, `TrashCan`, `ReturningToCar`, and `WaitingInCar`, including direct parent/nav/collider/animator/renderer/prop correction and diagnostics for phase, renderer count, parent mode, and driving state.
 - `MikeDrivingInPizzeriaScene` opening drive: vehicle/path state, engine/key/handbrake audio, headlights/panel/bobblehead, transform correction, client-side driving brain suppression.
 - Manager + story progression: current player mode, first-conversation timers, pizza/burp gates, phone UI, text-reply unlocks, soda-can seating, doors, light triggers, phone canvas/network, truck triggers, keys UI + one-shot audio. Pizzeria NPC brain registry now includes Chef and Hobo in addition to Mike, hiker, folding worker, and table NPCs.
@@ -74,7 +81,7 @@
 - Explicit `SessionState` machine + `Hello`/`HelloAck` negotiation + session/generation-aware `SceneChange`/`SceneReady` + `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`. UDP apply gated until `Live`. Bounded `SceneChange` retry + structured pre-Live drop logs.
 - Scene-readiness probes for RoadTripLoop, CabinSceneDark, OfficeLayout, ParkingLotScene wait for the real scene managers instead of treating them as managerless. Client `SceneReady` waits up to 15s for scene-specific managers (CabinGameManager, PizzeriaGameManager, RoadTripGameManager) before falling back to `ReadyPartial`. Snapshot state buffered/applied before `Live`.
 - Host snapshot emission bracketed; normal world/story/door/holdable/AI deltas gated until `SnapshotAck` moves to `Live`; blind 5-second full-state spam removed in favor of emergency/manual resync paths.
-- Wire protocol bumped to 5 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`, and `VoiceFrame`. Plugin compatibility 0.3.0 → 0.4.20.
+- Wire protocol bumped to 5 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`, and `VoiceFrame`. Plugin compatibility 0.3.0 → 0.4.24.
 
 ### Co-op UI
 
@@ -86,6 +93,7 @@
 - Phone/text mirroring: host-authored phone message snapshots now ride through `UiMirrorState` snapshots/live deltas, applying message batch visibility, pending-reply flags, sender/notification labels, and network status on the client without calling local notification gameplay methods.
 - Death/hiding outcome mirror: Cabin `DeathManager` chase/haunt/caught/dead state, jumpscare light, and post-effect component enabled flags now mirror through host-authored Cabin state so the client follows the same end-state when the hiding/chaser flow catches a player.
 - Proximity voice: added config/menu-gated LAN voice frames over the existing co-op transport, spatial remote playback, compact mic/peer level HUD, overlay diagnostics, and host-side loud-voice hooks for Cabin hiker/chaser hiding checks.
+- Footsteps: host/client movement now emits config/menu-gated spatial remote footstep events over `SceneEventState`, with stale-event filtering and overlay diagnostics.
 
 ### Tooling / diagnostics
 

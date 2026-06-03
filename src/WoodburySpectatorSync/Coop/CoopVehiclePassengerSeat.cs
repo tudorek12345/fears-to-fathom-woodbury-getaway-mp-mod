@@ -31,6 +31,8 @@ namespace WoodburySpectatorSync.Coop
         private const float ExplicitSeatRootDrop = 0.52f;
         private const float BackSeatZ = -0.88f;
         private const float BackSeatX = 0.38f;
+        private const float PizzeriaTruckBedY = 0.62f;
+        private const float PizzeriaTruckBedZ = -1.34f;
         private const float LookUpPitch = 0f;
 
         private static readonly Dictionary<string, FieldInfo> FieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -39,52 +41,22 @@ namespace WoodburySpectatorSync.Coop
         {
             pose = default;
             var sceneName = SceneManager.GetActiveScene().name;
-            if (string.IsNullOrEmpty(sceneName) ||
-                sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) < 0)
+            if (string.IsNullOrEmpty(sceneName))
             {
                 return false;
             }
 
-            var truck = UnityEngine.Object.FindObjectOfType<MikeTruckInLoopScene>();
-            if (truck == null || truck.transform == null || !truck.gameObject.activeInHierarchy)
+            if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return false;
+                return TryResolveRoadTripSeat(role, requestedSide, out pose);
             }
 
-            var side = ResolveSide(role, requestedSide);
-            var root = truck.transform;
-            var velocity = ResolveVehicleVelocity(truck, root);
-            var speed = velocity.magnitude;
-            var explicitSeat = FindExplicitSeat(root, side);
-            if (explicitSeat != null)
+            if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                pose = new SeatPose
-                {
-                    Active = true,
-                    Position = explicitSeat.position - (explicitSeat.up * ExplicitSeatRootDrop),
-                    Rotation = ResolveSeatRotation(explicitSeat.rotation),
-                    Velocity = velocity,
-                    Speed = speed,
-                    VehicleName = root.name,
-                    SeatName = explicitSeat.name,
-                    FallbackPose = false
-                };
-                return true;
+                return TryResolvePizzeriaSeat(role, requestedSide, out pose);
             }
 
-            var localOffset = new Vector3(side == SeatSide.BackLeft ? -BackSeatX : BackSeatX, SeatRootHeight, BackSeatZ);
-            pose = new SeatPose
-            {
-                Active = true,
-                Position = root.TransformPoint(localOffset),
-                Rotation = ResolveSeatRotation(root.rotation),
-                Velocity = velocity,
-                Speed = speed,
-                VehicleName = root.name,
-                SeatName = side == SeatSide.BackLeft ? "back-left" : "back-right",
-                FallbackPose = true
-            };
-            return true;
+            return false;
         }
 
         public static SeatSide ResolveSide(string role, SeatSide requestedSide)
@@ -101,6 +73,106 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return SeatSide.BackLeft;
+        }
+
+        private static bool TryResolveRoadTripSeat(string role, SeatSide requestedSide, out SeatPose pose)
+        {
+            pose = default;
+            var truck = UnityEngine.Object.FindObjectOfType<MikeTruckInLoopScene>();
+            if (truck == null || truck.transform == null || !truck.gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            var speed = 0f;
+            TryReadFloat(truck, "speed", out speed);
+            return BuildSeatPose(role, requestedSide, truck.transform, speed, SeatRootHeight, BackSeatZ, "back", true, out pose);
+        }
+
+        private static bool TryResolvePizzeriaSeat(string role, SeatSide requestedSide, out SeatPose pose)
+        {
+            pose = default;
+            var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+            var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ??
+                          UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+            if (driving == null || driving.transform == null || !driving.gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            var player = UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>();
+            var drivingCameraActive = IsObjectActive(player != null ? player.playerDrivingParent : null) ||
+                                      IsObjectActive(player != null ? player.playerDrivingCam : null);
+            var mike = manager != null && manager.mikePizzeria != null
+                ? manager.mikePizzeria
+                : UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+            var speed = 0f;
+            TryReadFloat(driving, "speed", out speed);
+            var startSlowDown = GetFieldValue<bool>(driving, "startSlowDown");
+            var pushBreak = GetFieldValue<bool>(driving, "pushBreak");
+            var mikeStillInIntroCar = mike != null &&
+                                      mike.state == MikePizzeria.State.InCar &&
+                                      (Mathf.Abs(speed) > 0.02f || !startSlowDown || !pushBreak);
+
+            if (!drivingCameraActive && !mikeStillInIntroCar)
+            {
+                return false;
+            }
+
+            return BuildSeatPose(role, requestedSide, driving.transform, speed, PizzeriaTruckBedY, PizzeriaTruckBedZ, "truck-bed", false, out pose);
+        }
+
+        private static bool BuildSeatPose(
+            string role,
+            SeatSide requestedSide,
+            Transform root,
+            float rawSpeed,
+            float fallbackHeight,
+            float fallbackZ,
+            string fallbackName,
+            bool allowExplicitSeat,
+            out SeatPose pose)
+        {
+            pose = default;
+            if (root == null)
+            {
+                return false;
+            }
+
+            var side = ResolveSide(role, requestedSide);
+            var speed = Mathf.Clamp(rawSpeed, -40f, 40f);
+            var velocity = root.forward * speed;
+            var poseSpeed = velocity.magnitude;
+            var explicitSeat = allowExplicitSeat ? FindExplicitSeat(root, side) : null;
+            if (explicitSeat != null)
+            {
+                pose = new SeatPose
+                {
+                    Active = true,
+                    Position = explicitSeat.position - (explicitSeat.up * ExplicitSeatRootDrop),
+                    Rotation = ResolveSeatRotation(explicitSeat.rotation),
+                    Velocity = velocity,
+                    Speed = poseSpeed,
+                    VehicleName = root.name,
+                    SeatName = explicitSeat.name,
+                    FallbackPose = false
+                };
+                return true;
+            }
+
+            var localOffset = new Vector3(side == SeatSide.BackLeft ? -BackSeatX : BackSeatX, fallbackHeight, fallbackZ);
+            pose = new SeatPose
+            {
+                Active = true,
+                Position = root.TransformPoint(localOffset),
+                Rotation = ResolveSeatRotation(root.rotation),
+                Velocity = velocity,
+                Speed = poseSpeed,
+                VehicleName = root.name,
+                SeatName = fallbackName + (side == SeatSide.BackLeft ? "-left" : "-right"),
+                FallbackPose = true
+            };
+            return true;
         }
 
         private static Transform FindExplicitSeat(Transform root, SeatSide side)
@@ -157,40 +229,59 @@ namespace WoodburySpectatorSync.Coop
             return Quaternion.LookRotation(forward.normalized, Vector3.up) * Quaternion.Euler(LookUpPitch, 0f, 0f);
         }
 
-        private static Vector3 ResolveVehicleVelocity(MikeTruckInLoopScene truck, Transform root)
-        {
-            if (truck == null || root == null)
-            {
-                return Vector3.zero;
-            }
-
-            var speed = 0f;
-            if (!TryReadTruckFloat(truck, "speed", out speed))
-            {
-                return Vector3.zero;
-            }
-
-            speed = Mathf.Clamp(speed, -40f, 40f);
-            return root.forward * speed;
-        }
-
         public static bool TryReadTruckFloat(MikeTruckInLoopScene truck, string fieldName, out float value)
         {
-            value = 0f;
-            if (truck == null || string.IsNullOrEmpty(fieldName)) return false;
+            return TryReadFloat(truck, fieldName, out value);
+        }
 
-            var field = GetField(truck.GetType(), fieldName);
+        private static bool TryReadFloat(object target, string fieldName, out float value)
+        {
+            value = 0f;
+            if (target == null || string.IsNullOrEmpty(fieldName)) return false;
+
+            var field = GetField(target.GetType(), fieldName);
             if (field == null || field.FieldType != typeof(float)) return false;
 
             try
             {
-                value = (float)field.GetValue(truck);
+                value = (float)field.GetValue(target);
                 return true;
             }
             catch
             {
                 return false;
             }
+        }
+
+        private static bool IsObjectActive(object target)
+        {
+            var go = GetGameObject(target);
+            return go != null && go.activeSelf;
+        }
+
+        private static GameObject GetGameObject(object target)
+        {
+            if (target is GameObject go) return go;
+            if (target is Component component) return component.gameObject;
+            return null;
+        }
+
+        private static T GetFieldValue<T>(object target, string fieldName)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName)) return default(T);
+            var field = GetField(target.GetType(), fieldName);
+            if (field == null) return default(T);
+
+            try
+            {
+                var value = field.GetValue(target);
+                if (value is T typed) return typed;
+            }
+            catch
+            {
+            }
+
+            return default(T);
         }
 
         private static FieldInfo GetField(Type type, string name)

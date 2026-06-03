@@ -112,11 +112,64 @@ namespace WoodburySpectatorSync.Coop
                 "|scene=" + Escape(scene.name) +
                 "|components=" + components.Count.ToString(CultureInfo.InvariantCulture) +
                 "|fields=" + fieldCount.ToString(CultureInfo.InvariantCulture), logger, sessionLogWrite);
+
+            LogSceneSummary(side, scene, logger, sessionLogWrite, manual);
         }
 
         private static string Prefix(string suffix, bool manual)
         {
             return manual ? "SceneDiscoveryDumpManual" + suffix : "SceneDiscoveryDump" + suffix;
+        }
+
+        private static void LogSceneSummary(string side, Scene scene, ManualLogSource logger, Action<string> sessionLogWrite, bool manual)
+        {
+            if (scene.name == null ||
+                scene.name.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                return;
+            }
+
+            try
+            {
+                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                var player = UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>();
+                var driving = manager != null ? ReadField<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") : null;
+                if (driving == null) driving = UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+                var mike = manager != null && manager.mikePizzeria != null
+                    ? manager.mikePizzeria
+                    : UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+
+                Log(Prefix("Summary", manual) +
+                    "|role=" + Escape(side) +
+                    "|scene=" + Escape(scene.name) +
+                    "|managerState=" + Escape(manager != null ? manager.currentPlayerState.ToString() : "-") +
+                    "|playerSitting=" + BoolText(player != null && player.playerSitting) +
+                    "|playerSitdown=" + BoolText(IsActive(player != null ? player.playerSitdownPizzeria : null)) +
+                    "|drivingParent=" + BoolText(IsActive(player != null ? player.playerDrivingParent : null)) +
+                    "|drivingCam=" + BoolText(IsActive(player != null ? player.playerDrivingCam : null)) +
+                    "|pizzaOnTable=" + BoolText(IsActive(player != null ? player.pizzaOnTable : null)) +
+                    "|mikeState=" + Escape(mike != null ? mike.state.ToString() : "-") +
+                    "|mikeActive=" + BoolText(mike != null && mike.gameObject.activeSelf) +
+                    "|mikeVisibleRenderers=" + CountVisibleRenderers(mike != null ? mike.gameObject : null).ToString(CultureInfo.InvariantCulture) +
+                    "|mikeMoving=" + BoolText(mike != null && mike.moving) +
+                    "|mikePizzaBox=" + BoolText(IsActive(mike != null ? mike.pizzaBox : null)) +
+                    "|mikePizzaSlice=" + BoolText(IsActive(mike != null ? mike.pizzaSlice : null)) +
+                    "|drivingActive=" + BoolText(driving != null && driving.gameObject.activeInHierarchy) +
+                    "|drivingSpeed=" + FloatText(ReadField<float>(driving, "speed")) +
+                    "|drivingSlowDown=" + BoolText(ReadField<bool>(driving, "startSlowDown")) +
+                    "|truckDoorSwitched=" + BoolText(manager != null && ReadField<SwitchObjectLayer>(manager, "truckDoorLayer") != null && ReadField<SwitchObjectLayer>(manager, "truckDoorLayer").switched) +
+                    "|keysUI=" + BoolText(IsActive(manager != null ? manager.keysUI : null)),
+                    logger,
+                    sessionLogWrite);
+            }
+            catch (Exception ex)
+            {
+                Log(Prefix("SummaryError", manual) +
+                    "|role=" + Escape(side) +
+                    "|scene=" + Escape(scene.name) +
+                    "|errorType=" + Escape(ex.GetType().Name) +
+                    "|message=" + Escape(ex.Message), logger, sessionLogWrite);
+            }
         }
 
         private static List<MonoBehaviour> FindManagerLikeComponents(Scene scene)
@@ -379,6 +432,46 @@ namespace WoodburySpectatorSync.Coop
         private static string BoolText(bool value)
         {
             return value ? "1" : "0";
+        }
+
+        private static T ReadField<T>(object target, string fieldName)
+        {
+            if (target == null || string.IsNullOrEmpty(fieldName)) return default(T);
+            try
+            {
+                var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (field == null) return default(T);
+                var value = field.GetValue(target);
+                if (value is T typed) return typed;
+            }
+            catch (Exception)
+            {
+            }
+            return default(T);
+        }
+
+        private static bool IsActive(UnityEngine.Object target)
+        {
+            var go = target as GameObject;
+            if (go != null) return go.activeSelf;
+            var component = target as Component;
+            return component != null && component.gameObject != null && component.gameObject.activeSelf;
+        }
+
+        private static int CountVisibleRenderers(GameObject target)
+        {
+            if (target == null) return 0;
+            var renderers = target.GetComponentsInChildren<Renderer>(true);
+            var count = 0;
+            for (var i = 0; i < renderers.Length; i++)
+            {
+                var renderer = renderers[i];
+                if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy)
+                {
+                    count++;
+                }
+            }
+            return count;
         }
 
         private static string GetTypeName(Type type)
