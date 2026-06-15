@@ -67,9 +67,10 @@
     var gallery = document.getElementById("gallery");
     if (!gallery) return;
     var imgs = Array.prototype.slice.call(gallery.querySelectorAll(".shot img"));
-    if (!imgs.length) return;
+    var hasEmbed = !!gallery.querySelector(".imgur-embed-pub");
+    if (!imgs.length && !hasEmbed) return;
     function evaluate() {
-      var anyLoaded = false;
+      var anyLoaded = hasEmbed;
       imgs.forEach(function (img) {
         var ok = img.complete && img.naturalWidth > 0;
         var fig = img.closest(".shot");
@@ -452,6 +453,14 @@
     set("gh-link-changelog", base + "/blob/main/CHANGELOG.md");
     set("gh-link-actions",   base + "/actions");
     set("gh-more",           base + "/commits/main");
+
+    if (meta.download && meta.download.url) {
+      const dl = document.getElementById("download-build");
+      if (dl) {
+        dl.href = meta.download.url;
+        dl.title = meta.download.label || "Download current test build";
+      }
+    }
 
     const list = document.getElementById("commit-list");
     if (list && roadmap && roadmap.recentCommits) {

@@ -717,7 +717,7 @@ pre code { background: transparent; padding: 0; }
 }
 
 /* ----------------------------------------------------------- GALLERY */
-#gallery { display: none; }            /* revealed by app.js only if a screenshot loads */
+#gallery { display: block; }
 .shot-grid {
   display: grid;
   gap: 16px;
@@ -731,9 +731,67 @@ pre code { background: transparent; padding: 0; }
   overflow: hidden;
   box-shadow: var(--shadow);
 }
-.shot.shot-missing { display: none; }  /* hide any screenshot that 404s */
+.shot.shot-missing:not(.shot-keep) { display: none; }  /* hide optional screenshots that 404 */
 .shot-feature { grid-column: 1 / -1; }
 @media (min-width: 760px) { .shot-feature { grid-column: span 2; } }
+.shot-live a {
+  display: block;
+  color: inherit;
+  position: relative;
+  min-height: 220px;
+}
+.shot-live img {
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+.shot-fallback {
+  display: none;
+  min-height: 260px;
+  padding: 32px;
+  place-items: center;
+  text-align: center;
+  color: var(--fg-soft);
+  background:
+    linear-gradient(135deg, rgba(255, 85, 20, 0.14), transparent 48%),
+    var(--bg-alt);
+}
+.shot-live.shot-missing .shot-fallback {
+  display: grid;
+}
+.shot-live.shot-missing img {
+  display: none;
+}
+.shot-embed {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+}
+.showcase-frame {
+  min-height: 520px;
+  background:
+    linear-gradient(135deg, rgba(255, 85, 20, 0.08), transparent 44%),
+    var(--bg-alt);
+}
+.showcase-frame iframe {
+  display: block;
+  width: 100%;
+  height: 520px;
+  border: 0;
+  background: var(--bg-alt);
+}
+.shot-embed .imgur-embed-pub {
+  margin: 0;
+  min-height: 64px;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 85, 20, 0.08), transparent 44%),
+    var(--bg-alt);
+}
+.showcase-link {
+  margin: 14px 0 0;
+  font-size: 14px;
+}
 .shot img {
   display: block;
   width: 100%;
@@ -973,6 +1031,9 @@ pre code { background: transparent; padding: 0; }
   transform: translateY(-3px);
   border-color: var(--accent);
 }
+.get-card-build { background: linear-gradient(135deg, rgba(255,89,0,0.12), var(--bg-card) 62%); }
+.get-card-build .get-card-icon { color: #fff; background: linear-gradient(135deg, var(--grad-1), var(--grad-2)); }
+.get-card-build .get-card-cta { color: var(--accent); }
 .get-card-yt { background: linear-gradient(135deg, rgba(255,0,51,0.08), var(--bg-card) 60%); }
 .get-card-yt .get-card-icon { color: #ff0033; background: rgba(255,0,51,0.12); }
 .get-card-gh .get-card-icon { color: var(--fg); background: var(--bg-alt); }

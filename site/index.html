@@ -16,11 +16,15 @@
 <meta property="og:description" content="Unofficial co-op multiplayer mod for Fears to Fathom: Woodbury Getaway. Live status, roadmap, and source code.">
 <meta property="og:site_name" content="Woodbury Co-op Mod">
 <meta property="og:url" content="https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/">
+<meta property="og:image" content="https://i.imgur.com/36E1GIs.jpeg">
+<meta property="og:image:width" content="600">
+<meta property="og:image:height" content="315">
 
 <!-- Twitter/X Card -->
-<meta name="twitter:card" content="summary">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Fears to Fathom: Woodbury Getaway Co-op Mod">
 <meta name="twitter:description" content="Unofficial co-op multiplayer mod for the Steam horror game. Live status and roadmap.">
+<meta name="twitter:image" content="https://i.imgur.com/36E1GIsh.jpg">
 
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="stylesheet" href="styles.css">
@@ -107,6 +111,7 @@
     <a href="#systems">Systems</a>
     <a href="#roadmap">Roadmap</a>
     <a href="#changes">Updates</a>
+    <a href="#gallery">Showcase</a>
     <a href="#wiki">Game guide</a>
     <a href="#source">Get the mod</a>
     <a href="#support">Support</a>
@@ -244,23 +249,33 @@
   <div class="container">
     <header class="section-head">
       <span class="eyebrow">See it in action</span>
-      <h2>Screenshots</h2>
-      <p>The in-game host / join setup menu and co-op moments. Press <b>F11</b> in the main menu to host or connect.</p>
+      <h2>Development build showcase</h2>
+      <p>Current test-build screenshots: two-player Cabin and Pizzeria runs, vehicle seats, UI mirroring, synced NPCs, and debug overlays. Press <b>F11</b> in-game to host or connect.</p>
     </header>
     <div class="shot-grid">
-      <figure class="shot shot-feature">
-        <img src="assets/screenshots/host-client-menu.png" alt="In-game host and client co-op setup menu in the main menu" loading="lazy">
-        <figcaption>Host / Join menu — press <b>F11</b> in the main menu</figcaption>
+      <figure class="shot shot-feature shot-live shot-keep">
+        <a href="https://imgur.com/a/JlH4ppj" target="_blank" rel="noopener noreferrer">
+          <img src="https://i.imgur.com/36E1GIs.jpeg" alt="Woodbury Co-op development showcase screenshots" loading="lazy">
+          <span class="shot-fallback">Open the Woodbury Co-op development showcase album</span>
+        </a>
+        <figcaption>Latest development showcase — Cabin, Pizzeria, driving, UI, and two-player sync tests</figcaption>
       </figure>
-      <figure class="shot">
-        <img src="assets/screenshots/cabin-coop.png" alt="Two players together in the cabin" loading="lazy">
-        <figcaption>Two players in the Cabin</figcaption>
-      </figure>
-      <figure class="shot">
-        <img src="assets/screenshots/roadtrip-coop.png" alt="Co-op during the road trip drive" loading="lazy">
-        <figcaption>Riding the RoadTrip together</figcaption>
+      <figure class="shot shot-embed shot-keep">
+        <div class="showcase-frame">
+          <iframe
+            title="Woodbury Co-op development showcase album"
+            src="https://imgur.com/a/JlH4ppj/embed"
+            loading="lazy"
+            referrerpolicy="no-referrer"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
+        </div>
+        <blockquote class="imgur-embed-pub" lang="en" data-id="a/JlH4ppj">
+          <a href="https://imgur.com/a/JlH4ppj">Woodbury Co-op dev showcase on Imgur</a>
+        </blockquote>
+        <figcaption>Full Imgur album. If the embedded gallery is blocked by the browser, use the direct album link below.</figcaption>
       </figure>
     </div>
+    <p class="showcase-link"><a href="https://imgur.com/a/JlH4ppj" target="_blank" rel="noopener noreferrer">Open the full showcase album →</a></p>
   </div>
 </section>
 
@@ -449,6 +464,17 @@
     </header>
 
     <div class="get-wrap">
+      <a class="get-card get-card-build" id="download-build" href="downloads/woodbury-coop-latest.7z" download>
+        <div class="get-card-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3a1 1 0 0 1 1 1v9.59l3.3-3.3a1 1 0 1 1 1.4 1.42l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.42l3.3 3.3V4a1 1 0 0 1 1-1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"/></svg>
+        </div>
+        <div class="get-card-body">
+          <h3>Download test build</h3>
+          <p>All-in-one BepInEx overlay for the current 0.4.39 / protocol 5 test build. Extract into a valid game install.</p>
+          <span class="get-card-cta">downloads/woodbury-coop-latest.7z</span>
+        </div>
+      </a>
+
       <a class="get-card get-card-yt" href="https://www.youtube.com/heperkoo" target="_blank" rel="noopener noreferrer">
         <div class="get-card-icon">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
@@ -636,6 +662,7 @@
   </div>
 </footer>
 
+<script async src="https://s.imgur.com/min/embed.js" charset="utf-8"></script>
 <script src="app.js"></script>
 
 <!-- Privacy-friendly visitor counting (GoatCounter): no cookies, no personal data,
