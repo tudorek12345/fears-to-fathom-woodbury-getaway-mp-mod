@@ -26,10 +26,22 @@
 
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot ".."))
+    [string]$RepoRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
+$scriptRoot = $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($scriptRoot)) {
+    $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if ([string]::IsNullOrWhiteSpace($scriptRoot)) {
+    $scriptRoot = Join-Path (Get-Location) "scripts"
+}
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    $RepoRoot = (Resolve-Path (Join-Path $scriptRoot "..")).Path
+} else {
+    $RepoRoot = (Resolve-Path $RepoRoot).Path
+}
 Set-Location -LiteralPath $RepoRoot
 
 function Read-PluginVersion {
@@ -42,6 +54,18 @@ function Read-PluginVersion {
         return $Matches[1]
     }
     throw "Could not extract plugin version from Plugin.cs"
+}
+
+function Read-ProtocolVersion {
+    $protocolCs = "src/WoodburySpectatorSync/Net/Protocol.cs"
+    if (-not (Test-Path -LiteralPath $protocolCs)) {
+        throw "Protocol.cs not found at $protocolCs"
+    }
+    $text = Get-Content -LiteralPath $protocolCs -Raw
+    if ($text -match 'public\s+const\s+ushort\s+Version\s*=\s*(\d+)\s*;') {
+        return [int]$Matches[1]
+    }
+    throw "Could not extract protocol version from Protocol.cs"
 }
 
 function Get-RecentCommits {
@@ -167,6 +191,10 @@ Write-Host "-> Reading plugin version from Plugin.cs..."
 $plugin = Read-PluginVersion
 Write-Host "   plugin = $plugin"
 
+Write-Host "-> Reading wire protocol version from Protocol.cs..."
+$protocol = Read-ProtocolVersion
+Write-Host "   protocol = $protocol"
+
 Write-Host "-> Reading git log..."
 $commits = Get-RecentCommits -Count 8
 if ($commits -and $commits.Count -gt 0) {
@@ -184,6 +212,7 @@ Write-Host "-> Patching site/data/sync-status.json..."
 $syncStatusPath = "site/data/sync-status.json"
 $sync = Read-Json -Path $syncStatusPath
 $sync.meta.plugin = $plugin
+$sync.meta.protocol = $protocol
 $sync.meta.lastUpdated = $today
 if ($commits -and $commits.Count -gt 0) {
     $sync.meta.lastCommit = "$($commits[0].sha) `"$($commits[0].subject)`""
