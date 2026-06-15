@@ -1,118 +1,118 @@
-﻿{
-    "meta":  {
-                 "compiled":  "2026-06-15",
-                 "source":  "Live project status"
-             },
-    "headlineFeatures":  [
-                             {
-                                 "title":  "Passenger seat — ride together in vehicles",
-                                 "summary":  "Both players in the same vehicle during driving parts. Road Trip and Moe\u0027s Pizzeria ride-along are in active testing with F12 seatbelt toggles; Cabin intro seating is the remaining polish target.",
-                                 "scenes":  [
-                                                "Road Trip",
-                                                "Pizzeria",
-                                                "Cabin"
-                                            ],
-                                 "status":  "In progress — RoadTrip + Pizzeria in testing"
-                             },
-                             {
-                                 "title":  "Mid-game save \u0026 resume",
-                                 "summary":  "Save together and pick up later from the same point, instead of both starting a chapter from the start.",
-                                 "scenes":  [
-                                                "All chapters"
-                                            ],
-                                 "status":  "Planned"
-                             },
-                             {
-                                 "title":  "Synced death \u0026 ending",
-                                 "summary":  "If one of you dies or reaches the credits, the other follows — no one gets left stranded.",
-                                 "scenes":  [
-                                                "All chapters"
-                                            ],
-                                 "status":  "Planned"
-                             }
-                         ],
-    "unsyncedScenes":  [
-                           {
-                               "name":  "Menus \u0026 loading",
-                               "impact":  "Lobby/menu choices aren\u0027t shared yet — set up the session in-game with F11."
-                           },
-                           {
-                               "name":  "Death \u0026 end credits",
-                               "impact":  "If one player dies or finishes, the other doesn\u0027t follow automatically yet."
-                           },
-                           {
-                               "name":  "Dark cabin — deeper beats",
-                               "impact":  "The dark return-to-cabin run is in; a few of its later moments still need polish."
-                           }
-                       ],
-    "milestones":  [
-                       {
-                           "id":  "0.6",
-                           "title":  "Playable end to end",
-                           "subtitle":  "A full, clean run you can stream",
-                           "items":  [
-                                         "Reconnect handling",
-                                         "Synced death + end credits",
-                                         "Menu / loading hand-off",
-                                         "Office + Parking Lot polish",
-                                         "One-button host / join"
-                                     ]
-                       },
-                       {
-                           "id":  "0.7",
-                           "title":  "Ride-along",
-                           "subtitle":  "Both players in the same vehicle for the drives",
-                           "items":  [
-                                         "Passenger seat — Road Trip",
-                                         "Passenger seat — Pizzeria drive-in / return-to-truck",
-                                         "Passenger seat — Cabin intro drive polish",
-                                         "Shared in-car camera \u0026 dialogue"
-                                     ]
-                       },
-                       {
-                           "id":  "1.0",
-                           "title":  "Full co-op",
-                           "subtitle":  "Save state, drop-in join, polish",
-                           "items":  [
-                                         "Save \u0026 resume together",
-                                         "Drop-in join mid-session",
-                                         "Smoother play on higher-latency connections",
-                                         "Voice indicator + host controls"
-                                     ]
-                       }
-                   ],
-    "recentCommits":  [
-                          {
-                              "sha":  "49fb2e3",
-                              "subject":  "site: auto-refresh data + badge [skip ci]"
-                          },
-                          {
-                              "sha":  "0c5a13f",
-                              "subject":  "Merge branch \u0027main\u0027 of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
-                          },
-                          {
-                              "sha":  "8732fcd",
-                              "subject":  "editing src/WoodburySpectatorSync/Coop/CoopVehicle"
-                          },
-                          {
-                              "sha":  "7cadd59",
-                              "subject":  "site: auto-refresh data + badge [skip ci]"
-                          },
-                          {
-                              "sha":  "359d117",
-                              "subject":  "Merge branch \u0027main\u0027 of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
-                          },
-                          {
-                              "sha":  "881939c",
-                              "subject":  "PlayerFootstepSync"
-                          },
-                          {
-                              "sha":  "98f061a",
-                              "subject":  "site: auto-refresh data + badge [skip ci]"
-                          },
-                          {
-                              "sha":  "8e671ae",
-                              "subject":  "0.4.xx"
-                          }
-                      ]
+{
+  "meta": {
+    "compiled": "2026-06-15",
+    "source": "Live project status"
+  },
+  "headlineFeatures": [
+    {
+      "title": "Passenger seat — ride together in vehicles",
+      "summary": "Both players in the same vehicle during driving parts. Road Trip and Moe's Pizzeria ride-along are in active testing with F12 seatbelt toggles; Cabin intro seating is the remaining polish target.",
+      "scenes": [
+        "Road Trip",
+        "Pizzeria",
+        "Cabin"
+      ],
+      "status": "In progress — RoadTrip + Pizzeria in testing"
+    },
+    {
+      "title": "Mid-game save & resume",
+      "summary": "Save together and pick up later from the same point, instead of both starting a chapter from the start.",
+      "scenes": [
+        "All chapters"
+      ],
+      "status": "Planned"
+    },
+    {
+      "title": "Synced death & ending",
+      "summary": "If one of you dies or reaches the credits, the other follows — no one gets left stranded.",
+      "scenes": [
+        "All chapters"
+      ],
+      "status": "Planned"
+    }
+  ],
+  "unsyncedScenes": [
+    {
+      "name": "Menus & loading",
+      "impact": "Lobby/menu choices aren't shared yet — set up the session in-game with F11."
+    },
+    {
+      "name": "Death & end credits",
+      "impact": "If one player dies or finishes, the other doesn't follow automatically yet."
+    },
+    {
+      "name": "Dark cabin — deeper beats",
+      "impact": "The dark return-to-cabin run is in; a few of its later moments still need polish."
+    }
+  ],
+  "milestones": [
+    {
+      "id": "0.6",
+      "title": "Playable end to end",
+      "subtitle": "A full, clean run you can stream",
+      "items": [
+        "Reconnect handling",
+        "Synced death + end credits",
+        "Menu / loading hand-off",
+        "Office + Parking Lot polish",
+        "One-button host / join"
+      ]
+    },
+    {
+      "id": "0.7",
+      "title": "Ride-along",
+      "subtitle": "Both players in the same vehicle for the drives",
+      "items": [
+        "Passenger seat — Road Trip",
+        "Passenger seat — Pizzeria drive-in / return-to-truck",
+        "Passenger seat — Cabin intro drive polish",
+        "Shared in-car camera & dialogue"
+      ]
+    },
+    {
+      "id": "1.0",
+      "title": "Full co-op",
+      "subtitle": "Save state, drop-in join, polish",
+      "items": [
+        "Save & resume together",
+        "Drop-in join mid-session",
+        "Smoother play on higher-latency connections",
+        "Voice indicator + host controls"
+      ]
+    }
+  ],
+  "recentCommits": [
+    {
+      "sha": "eb41373",
+      "subject": "site: refresh showcase and test build download"
+    },
+    {
+      "sha": "50b3770",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
+      "sha": "731e2d1",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
+      "sha": "49fb2e3",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
+      "sha": "0c5a13f",
+      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
+    },
+    {
+      "sha": "8732fcd",
+      "subject": "editing src/WoodburySpectatorSync/Coop/CoopVehicle"
+    },
+    {
+      "sha": "7cadd59",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
+      "sha": "359d117",
+      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
+    }
+  ]
 }
