@@ -67,10 +67,10 @@
     var gallery = document.getElementById("gallery");
     if (!gallery) return;
     var imgs = Array.prototype.slice.call(gallery.querySelectorAll(".shot img"));
-    var hasEmbed = !!gallery.querySelector(".imgur-embed-pub");
-    if (!imgs.length && !hasEmbed) return;
+    var hasAlbumCard = !!gallery.querySelector(".shot-album");
+    if (!imgs.length && !hasAlbumCard) return;
     function evaluate() {
-      var anyLoaded = hasEmbed;
+      var anyLoaded = hasAlbumCard;
       imgs.forEach(function (img) {
         var ok = img.complete && img.naturalWidth > 0;
         var fig = img.closest(".shot");
