@@ -83,6 +83,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "4f73afc",
+      "subject": "site: fix showcase gallery rendering"
+    },
+    {
+      "sha": "175e4fa",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "eb41373",
       "subject": "site: refresh showcase and test build download"
     },
@@ -105,14 +113,6 @@
     {
       "sha": "8732fcd",
       "subject": "editing src/WoodburySpectatorSync/Coop/CoopVehicle"
-    },
-    {
-      "sha": "7cadd59",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "359d117",
-      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
     }
   ]
 }
