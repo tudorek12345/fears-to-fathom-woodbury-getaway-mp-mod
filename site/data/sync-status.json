@@ -1,17 +1,17 @@
 {
   "meta": {
-    "plugin": "0.4.24",
+    "plugin": "0.4.40",
     "protocol": 5,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
     "lastCommit": "024f7a9 \"site: harden showcase fallback\"",
-    "lastUpdated": "2026-06-16",
-    "overallPercent": 72,
+    "lastUpdated": "2026-06-17",
+    "overallPercent": 76,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",
     "subhead": "Play Fears to Fathom: Woodbury Getaway with a friend. An unofficial co-op mod for the Steam game — one of you hosts, the other connects, and the scary parts happen to both of you at the same time.",
     "repo": "https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod",
     "download": {
-      "label": "Woodbury Co-op 0.4.39 test build",
+      "label": "Woodbury Co-op 0.4.40 test build",
       "url": "downloads/woodbury-coop-latest.7z",
       "sizeMb": 7.6,
       "protocol": 5,
@@ -67,9 +67,9 @@
     {
       "id": "pizzeria",
       "name": "Pizzeria",
-      "percent": 78,
+      "percent": 80,
       "status": "Broad",
-      "summary": "Opening drive-in, Moe's Pizzeria visit, props/media, phone/UI, vending, triggers, passenger-seat handoffs, and NPC registry coverage.",
+      "summary": "Opening drive-in, Moe's Pizzeria visit, props/media, phone/UI, vending, triggers, passenger-seat handoffs, and NPC registry coverage. Latest build improves truck-bed passenger placement and pizza-box visual parity.",
       "syncedFiles": [
         "src/WoodburySpectatorSync/Coop/PizzeriaSceneStateSync.cs",
         "src/WoodburySpectatorSync/Coop/PizzeriaPropSync.cs",
