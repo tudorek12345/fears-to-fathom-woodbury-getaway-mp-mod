@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-06-16",
+    "compiled": "2026-06-18",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "18aaaae",
+      "subject": "site: refresh showcase and build metadata"
+    },
+    {
+      "sha": "4fd45bf",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "024f7a9",
       "subject": "site: harden showcase fallback"
     },
@@ -104,14 +112,6 @@
     },
     {
       "sha": "50b3770",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "731e2d1",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "49fb2e3",
       "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
