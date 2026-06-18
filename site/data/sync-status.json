@@ -1,188 +1,188 @@
-{
-  "meta": {
-    "plugin": "0.4.24",
-    "protocol": 5,
-    "bepInEx": "5 (Mono)",
-    "targetFramework": "net472",
-    "lastCommit": "18aaaae \"site: refresh showcase and build metadata\"",
-    "lastUpdated": "2026-06-18",
-    "overallPercent": 76,
-    "headline": "Co-op for Fears to Fathom: Woodbury Getaway",
-    "subhead": "Play Fears to Fathom: Woodbury Getaway with a friend. An unofficial co-op mod for the Steam game — one of you hosts, the other connects, and the scary parts happen to both of you at the same time.",
-    "repo": "https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod",
-    "download": {
-      "label": "Woodbury Co-op 0.4.40 test build",
-      "url": "downloads/woodbury-coop-latest.7z",
-      "sizeMb": 7.6,
-      "protocol": 5,
-      "note": "All-in-one BepInEx overlay. Extract into a valid Fears to Fathom: Woodbury Getaway install."
-    },
-    "reVerification": {
-      "date": "2026-05-30",
-      "classesReferenced": 76,
-      "classesConfirmed": 76,
-      "fieldsReferenced": 284,
-      "fieldsConfirmed": 266,
-      "fieldRatePercent": 93.7,
-      "note": "Every FindObjectOfType<T> across the non-Cabin sync modules names a real type declared in decompiled/. 93.7% of named field reflections resolve to declared fields in the matching class; misses concentrate on ParkingLotManager and fail safe (the GetField cache returns null and the lookup no-ops)."
-    }
-  },
-  "scenes": [
-    {
-      "id": "cabin",
-      "name": "Cabin",
-      "percent": 92,
-      "status": "Deep",
-      "summary": "Most playtested. Full NPC brain coverage, mini-games, cooking, ambient, opening drive.",
-      "syncedFiles": [
-        "src/WoodburySpectatorSync/Coop/CabinAmbientSync.cs",
-        "src/WoodburySpectatorSync/Coop/CabinBoardGameSync.cs",
-        "src/WoodburySpectatorSync/Coop/CabinCookingPropSync.cs",
-        "src/WoodburySpectatorSync/Coop/CabinNpcRegistry.cs",
-        "src/WoodburySpectatorSync/Coop/CabinPlayerBodyPose.cs",
-        "src/WoodburySpectatorSync/Coop/CabinTrafficSync.cs"
-      ],
-      "synced": [
-        "Mike NPC brains (MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController) via NpcBrainState",
-        "CabinHiker + HikerCabinController hiker-window sequence (state enums, go/moving/reachedPos/followingHost)",
-        "HostFixingSink, Nora, cat — generic NPC registry",
-        "CabinHouseManager boolean story flags (full set)",
-        "CabinGameManager sequence + player state + inConversation",
-        "Doors (CabinDoor + NOTLonely_Door.DoorScript) and holdables",
-        "JengaController + OuijaController mini-games (state, audio, transforms, planchette)",
-        "Casserole/oven cooking props + plate masks + eating rig weights",
-        "Living-room TV clip identity + playback time",
-        "Basement/closet/outside/flashlight lights + sink/dishwashing visuals",
-        "Seated proxies (couch / Ouija table / board-game seats / bed)",
-        "Opening RV/truck driving intro: state, lights, brake/turn, bobblehead, radio (clip + playback), bag/door/light actives, truck visual transforms",
-        "Randomized traffic pool: pool active state + AiTransform correction",
-        "Mike animation-state replication (StateHash/Loop/Phase10/Transition/NextStateHash)"
-      ],
-      "notSynced": [
-        "Cross-scene save/load checkpoint parity",
-        "Late-game endgame sequence edge cases (still being playtested)",
-        "Mid-session reconnect (Reconnecting state scaffolded only)"
-      ]
-    },
-    {
-      "id": "pizzeria",
-      "name": "Pizzeria",
-      "percent": 80,
-      "status": "Broad",
-      "summary": "Opening drive-in, Moe's Pizzeria visit, props/media, phone/UI, vending, triggers, passenger-seat handoffs, and NPC registry coverage. Latest build improves truck-bed passenger placement and pizza-box visual parity.",
-      "syncedFiles": [
-        "src/WoodburySpectatorSync/Coop/PizzeriaSceneStateSync.cs",
-        "src/WoodburySpectatorSync/Coop/PizzeriaPropSync.cs",
-        "src/WoodburySpectatorSync/Coop/PizzeriaMediaSync.cs",
-        "src/WoodburySpectatorSync/Coop/SceneTrafficSync.cs",
-        "src/WoodburySpectatorSync/Coop/VendingMachineSceneSync.cs"
-      ],
-      "synced": [
-        "PizzeriaGameManager: current player mode, first-conversation timers, pizza/burp gates, phone UI, text-reply unlocks, soda-can seating",
-        "MikePizzeria + PizzeriaHiker + PizzeriaFoldingGuy + PizzeriaNPC (generic NPC registry)",
-        "MikeDrivingInPizzeriaScene opening: vehicle/path state, engine/key/handbrake audio, headlights/panel/bobblehead, transform correction",
-        "Mike hands off cleanly across the whole visit — drive in, park, sit at the table, eat, get the pizza, leave (phase-corrected on the client)",
-        "Pizza box/slice/lid visibility + box-folding worker prop sync (with local folding brain suppression)",
-        "PizzeriaTVAudioProximity (range, inside-pizzeria volume)",
-        "PizzeriaChair interactability/layer state during pickup/sitting/eating/burp/get-up",
-        "TV/radio media: advert/news clip selection, playback time, radio track choice",
-        "Doors + light-trigger state + phone canvas/network state + truck triggers + keys UI + one-shot audio cues",
-        "Camera/control: driving freeze, global/sitting FOV zoom, dialogue camera, zoom transitions, main-camera FOV, look-target, trash/truck layer switching, editor-start music",
-        "Player seat/drive/camera prop state, pizza-on-table visibility, boundary collider masks, out-of-play-zone trigger state",
-        "Shared vending machine state (dialogue cameras, triggers, slot/sliding colliders, soda-can visibility/kinematic, audio, player-camera FOV)",
-        "Generic triggers: OnTriggerSub / OnTriggerDisplaySub / OnTrigger / TriggerEventInvoker",
-        "DontDestroyRoadTripMusic fade/playback handoff from RoadTrip",
-        "Traffic trigger active/enabled + pool/active-state with AiTransform correction"
-      ],
-      "notSynced": [
-        "Moe's return-to-truck and final transition edge cases are still being tested",
-        "Cross-scene save/load",
-        "A handful of one-shot props called out by Compare-SceneDiscoveryDump diffs"
-      ]
-    },
-    {
-      "id": "roadtrip",
-      "name": "RoadTrip",
-      "percent": 78,
-      "status": "Broad",
-      "summary": "Shared truck ride, camera + manager timers, vehicles, bobblehead, traffic, triggers, and typed vehicle smoothing.",
-      "syncedFiles": [
-        "src/WoodburySpectatorSync/Coop/RoadTripSceneStateSync.cs",
-        "src/WoodburySpectatorSync/Coop/SceneTrafficSync.cs"
-      ],
-      "synced": [
-        "RoadTripGameManager: auto-conversation timers, road-bump timers, phone state, text-reply unlocks, look-at zoom flags",
-        "MikeInCar + MikeTruckInLoopScene + MikeTruckGoingToNora + MikeTruckInParking (generic NPC registry, typed vehicle state smoothing)",
-        "RoadTrip camera look-target sync (Mike/bus/deer cinematic focus)",
-        "Dialogue camera activation, car camera rotation/freeze, FOV flags",
-        "RoadTrip bobblehead: active/layer-switched, animator state/speed, transform correction",
-        "Car radio playback + school bus active + horror audio + RoadTripTruck brake/deer-run + truck/deer audio",
-        "Deer animation state + deer/school-bus transform correction",
-        "Mike-in-car hidden conversation flags + bus/deer trigger actives",
-        "Generic triggers: OnTriggerSub / OnTriggerDisplaySub / OnTrigger / TriggerEventInvoker",
-        "Traffic pool/active-state with AiTransform correction + one-shot/speed/spline trigger settings",
-        "Passenger seats: the second player can ride in the back of the truck (F12 to buckle in), riding the host-authored truck path",
-        "Movement prediction: remote players are smoothed/extrapolated between packets so they glide instead of stutter (clamped to real surfaces)"
-      ],
-      "notSynced": [
-        "Cabin intro passenger-seat polish",
-        "Save/load parity"
-      ]
-    },
-    {
-      "id": "office",
-      "name": "Office",
-      "percent": 68,
-      "status": "Broad",
-      "summary": "Most recent deep coverage. Full game/player state + every subcontroller. Least playtested.",
-      "syncedFiles": [
-        "src/WoodburySpectatorSync/Coop/OfficeSceneStateSync.cs",
-        "src/WoodburySpectatorSync/Coop/VendingMachineSceneSync.cs"
-      ],
-      "synced": [
-        "OfficeLayoutGameManager: scene/player mode, first-person enablement, end-scene yellow intro/audio, coffee-sip hand animation, phone/restroom triggers, throw permission, camera FOV",
-        "YellowIntroManager: timer, current index, text visibility mask (with local intro brain suppression)",
-        "OfficeWorkerMonitor: clip identity, playback time, material/renderer state (with monitor brain suppression)",
-        "OfficeWorker conversation visual + audio state",
-        "TableManager / ComputerManager / CoffeeMachineManager / OfficePhone / TypeMasterManager / TypingShooterComputerManager subcontrollers",
-        "OfficeRadio (track/time/button)",
-        "OfficeFridge + OfficeMicrowave (door/light/audio)",
-        "OfficeToiletManager (stall/pee/lid/seat)",
-        "OfficeJanitor (jumpscare/cleaning)",
-        "OfficeLayoutUIManager + Office peeing UI",
-        "Shared VendingMachineManager (cameras, triggers, slot/sliding colliders, soda-can state, audio, player-camera FOV)",
-        "OnTriggerOfficeBoundsSub + OnTriggerSub + OnTriggerDisplaySub + OnTrigger + TriggerEventInvoker",
-        "Actor + movable appliance/toilet part transform correction"
-      ],
-      "notSynced": [
-        "Some late-game Office actor cinematics",
-        "Save/load parity",
-        "Discovery-only gaps surfaced by SceneDiscoveryDump diff"
-      ]
-    },
-    {
-      "id": "parkinglot",
-      "name": "ParkingLot",
-      "percent": 60,
-      "status": "Moderate",
-      "summary": "Game/player state, elevator, walking cop, anti-throw, intro/call. Some subcontrollers still discovery-only.",
-      "syncedFiles": [
-        "src/WoodburySpectatorSync/Coop/ParkingLotSceneStateSync.cs"
-      ],
-      "synced": [
-        "ParkingLotGameManager: call timing, intro state, phone ringing, talking/hugging mode, throw permission, first-person, camera FOV",
-        "Stranger / Mike / suitcase / truck / car subcontroller state",
-        "ParkingLotElevatorManager: travel, doors, audio, anti-throw",
-        "WalkingCopController: NavMesh brain suppression, animator/target mirroring, transform correction",
-        "UI/intro/phone flags + anti-throw zones",
-        "Elevator door transforms + truck tailgate transform correction",
-        "OnTriggerSub + OnTriggerDisplaySub + OnTrigger + TriggerEventInvoker"
-      ],
-      "notSynced": [
-        "Ending dialogue cinematics",
-        "Additional subcontrollers flagged by discovery dump but not yet synced",
-        "Save/load parity"
-      ]
-    }
-  ]
+﻿{
+    "meta":  {
+                 "plugin":  "0.4.40",
+                 "protocol":  5,
+                 "bepInEx":  "5 (Mono)",
+                 "targetFramework":  "net472",
+                 "lastCommit":  "d0f30a6 \"site: auto-refresh data + badge [skip ci]\"",
+                 "lastUpdated":  "2026-06-18",
+                 "overallPercent":  76,
+                 "headline":  "Co-op for Fears to Fathom: Woodbury Getaway",
+                 "subhead":  "Play Fears to Fathom: Woodbury Getaway with a friend. An unofficial co-op mod for the Steam game — one of you hosts, the other connects, and the scary parts happen to both of you at the same time.",
+                 "repo":  "https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod",
+                 "download":  {
+                                  "label":  "Woodbury Co-op 0.4.40 test build",
+                                  "url":  "downloads/woodbury-coop-latest.7z",
+                                  "sizeMb":  7.6,
+                                  "protocol":  5,
+                                  "note":  "All-in-one BepInEx overlay. Extract into a valid Fears to Fathom: Woodbury Getaway install."
+                              },
+                 "reVerification":  {
+                                        "date":  "2026-05-30",
+                                        "classesReferenced":  76,
+                                        "classesConfirmed":  76,
+                                        "fieldsReferenced":  284,
+                                        "fieldsConfirmed":  266,
+                                        "fieldRatePercent":  93.7,
+                                        "note":  "Every FindObjectOfType\u003cT\u003e across the non-Cabin sync modules names a real type declared in decompiled/. 93.7% of named field reflections resolve to declared fields in the matching class; misses concentrate on ParkingLotManager and fail safe (the GetField cache returns null and the lookup no-ops)."
+                                    }
+             },
+    "scenes":  [
+                   {
+                       "id":  "cabin",
+                       "name":  "Cabin",
+                       "percent":  92,
+                       "status":  "Deep",
+                       "summary":  "Most playtested. Full NPC brain coverage, mini-games, cooking, ambient, opening drive.",
+                       "syncedFiles":  [
+                                           "src/WoodburySpectatorSync/Coop/CabinAmbientSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/CabinBoardGameSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/CabinCookingPropSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/CabinNpcRegistry.cs",
+                                           "src/WoodburySpectatorSync/Coop/CabinPlayerBodyPose.cs",
+                                           "src/WoodburySpectatorSync/Coop/CabinTrafficSync.cs"
+                                       ],
+                       "synced":  [
+                                      "Mike NPC brains (MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController) via NpcBrainState",
+                                      "CabinHiker + HikerCabinController hiker-window sequence (state enums, go/moving/reachedPos/followingHost)",
+                                      "HostFixingSink, Nora, cat — generic NPC registry",
+                                      "CabinHouseManager boolean story flags (full set)",
+                                      "CabinGameManager sequence + player state + inConversation",
+                                      "Doors (CabinDoor + NOTLonely_Door.DoorScript) and holdables",
+                                      "JengaController + OuijaController mini-games (state, audio, transforms, planchette)",
+                                      "Casserole/oven cooking props + plate masks + eating rig weights",
+                                      "Living-room TV clip identity + playback time",
+                                      "Basement/closet/outside/flashlight lights + sink/dishwashing visuals",
+                                      "Seated proxies (couch / Ouija table / board-game seats / bed)",
+                                      "Opening RV/truck driving intro: state, lights, brake/turn, bobblehead, radio (clip + playback), bag/door/light actives, truck visual transforms",
+                                      "Randomized traffic pool: pool active state + AiTransform correction",
+                                      "Mike animation-state replication (StateHash/Loop/Phase10/Transition/NextStateHash)"
+                                  ],
+                       "notSynced":  [
+                                         "Cross-scene save/load checkpoint parity",
+                                         "Late-game endgame sequence edge cases (still being playtested)",
+                                         "Mid-session reconnect (Reconnecting state scaffolded only)"
+                                     ]
+                   },
+                   {
+                       "id":  "pizzeria",
+                       "name":  "Pizzeria",
+                       "percent":  80,
+                       "status":  "Broad",
+                       "summary":  "Opening drive-in, Moe\u0027s Pizzeria visit, props/media, phone/UI, vending, triggers, passenger-seat handoffs, and NPC registry coverage. Latest build improves truck-bed passenger placement and pizza-box visual parity.",
+                       "syncedFiles":  [
+                                           "src/WoodburySpectatorSync/Coop/PizzeriaSceneStateSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/PizzeriaPropSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/PizzeriaMediaSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/SceneTrafficSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/VendingMachineSceneSync.cs"
+                                       ],
+                       "synced":  [
+                                      "PizzeriaGameManager: current player mode, first-conversation timers, pizza/burp gates, phone UI, text-reply unlocks, soda-can seating",
+                                      "MikePizzeria + PizzeriaHiker + PizzeriaFoldingGuy + PizzeriaNPC (generic NPC registry)",
+                                      "MikeDrivingInPizzeriaScene opening: vehicle/path state, engine/key/handbrake audio, headlights/panel/bobblehead, transform correction",
+                                      "Mike hands off cleanly across the whole visit — drive in, park, sit at the table, eat, get the pizza, leave (phase-corrected on the client)",
+                                      "Pizza box/slice/lid visibility + box-folding worker prop sync (with local folding brain suppression)",
+                                      "PizzeriaTVAudioProximity (range, inside-pizzeria volume)",
+                                      "PizzeriaChair interactability/layer state during pickup/sitting/eating/burp/get-up",
+                                      "TV/radio media: advert/news clip selection, playback time, radio track choice",
+                                      "Doors + light-trigger state + phone canvas/network state + truck triggers + keys UI + one-shot audio cues",
+                                      "Camera/control: driving freeze, global/sitting FOV zoom, dialogue camera, zoom transitions, main-camera FOV, look-target, trash/truck layer switching, editor-start music",
+                                      "Player seat/drive/camera prop state, pizza-on-table visibility, boundary collider masks, out-of-play-zone trigger state",
+                                      "Shared vending machine state (dialogue cameras, triggers, slot/sliding colliders, soda-can visibility/kinematic, audio, player-camera FOV)",
+                                      "Generic triggers: OnTriggerSub / OnTriggerDisplaySub / OnTrigger / TriggerEventInvoker",
+                                      "DontDestroyRoadTripMusic fade/playback handoff from RoadTrip",
+                                      "Traffic trigger active/enabled + pool/active-state with AiTransform correction"
+                                  ],
+                       "notSynced":  [
+                                         "Moe\u0027s return-to-truck and final transition edge cases are still being tested",
+                                         "Cross-scene save/load",
+                                         "A handful of one-shot props called out by Compare-SceneDiscoveryDump diffs"
+                                     ]
+                   },
+                   {
+                       "id":  "roadtrip",
+                       "name":  "RoadTrip",
+                       "percent":  78,
+                       "status":  "Broad",
+                       "summary":  "Shared truck ride, camera + manager timers, vehicles, bobblehead, traffic, triggers, and typed vehicle smoothing.",
+                       "syncedFiles":  [
+                                           "src/WoodburySpectatorSync/Coop/RoadTripSceneStateSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/SceneTrafficSync.cs"
+                                       ],
+                       "synced":  [
+                                      "RoadTripGameManager: auto-conversation timers, road-bump timers, phone state, text-reply unlocks, look-at zoom flags",
+                                      "MikeInCar + MikeTruckInLoopScene + MikeTruckGoingToNora + MikeTruckInParking (generic NPC registry, typed vehicle state smoothing)",
+                                      "RoadTrip camera look-target sync (Mike/bus/deer cinematic focus)",
+                                      "Dialogue camera activation, car camera rotation/freeze, FOV flags",
+                                      "RoadTrip bobblehead: active/layer-switched, animator state/speed, transform correction",
+                                      "Car radio playback + school bus active + horror audio + RoadTripTruck brake/deer-run + truck/deer audio",
+                                      "Deer animation state + deer/school-bus transform correction",
+                                      "Mike-in-car hidden conversation flags + bus/deer trigger actives",
+                                      "Generic triggers: OnTriggerSub / OnTriggerDisplaySub / OnTrigger / TriggerEventInvoker",
+                                      "Traffic pool/active-state with AiTransform correction + one-shot/speed/spline trigger settings",
+                                      "Passenger seats: the second player can ride in the back of the truck (F12 to buckle in), riding the host-authored truck path",
+                                      "Movement prediction: remote players are smoothed/extrapolated between packets so they glide instead of stutter (clamped to real surfaces)"
+                                  ],
+                       "notSynced":  [
+                                         "Cabin intro passenger-seat polish",
+                                         "Save/load parity"
+                                     ]
+                   },
+                   {
+                       "id":  "office",
+                       "name":  "Office",
+                       "percent":  68,
+                       "status":  "Broad",
+                       "summary":  "Most recent deep coverage. Full game/player state + every subcontroller. Least playtested.",
+                       "syncedFiles":  [
+                                           "src/WoodburySpectatorSync/Coop/OfficeSceneStateSync.cs",
+                                           "src/WoodburySpectatorSync/Coop/VendingMachineSceneSync.cs"
+                                       ],
+                       "synced":  [
+                                      "OfficeLayoutGameManager: scene/player mode, first-person enablement, end-scene yellow intro/audio, coffee-sip hand animation, phone/restroom triggers, throw permission, camera FOV",
+                                      "YellowIntroManager: timer, current index, text visibility mask (with local intro brain suppression)",
+                                      "OfficeWorkerMonitor: clip identity, playback time, material/renderer state (with monitor brain suppression)",
+                                      "OfficeWorker conversation visual + audio state",
+                                      "TableManager / ComputerManager / CoffeeMachineManager / OfficePhone / TypeMasterManager / TypingShooterComputerManager subcontrollers",
+                                      "OfficeRadio (track/time/button)",
+                                      "OfficeFridge + OfficeMicrowave (door/light/audio)",
+                                      "OfficeToiletManager (stall/pee/lid/seat)",
+                                      "OfficeJanitor (jumpscare/cleaning)",
+                                      "OfficeLayoutUIManager + Office peeing UI",
+                                      "Shared VendingMachineManager (cameras, triggers, slot/sliding colliders, soda-can state, audio, player-camera FOV)",
+                                      "OnTriggerOfficeBoundsSub + OnTriggerSub + OnTriggerDisplaySub + OnTrigger + TriggerEventInvoker",
+                                      "Actor + movable appliance/toilet part transform correction"
+                                  ],
+                       "notSynced":  [
+                                         "Some late-game Office actor cinematics",
+                                         "Save/load parity",
+                                         "Discovery-only gaps surfaced by SceneDiscoveryDump diff"
+                                     ]
+                   },
+                   {
+                       "id":  "parkinglot",
+                       "name":  "ParkingLot",
+                       "percent":  60,
+                       "status":  "Moderate",
+                       "summary":  "Game/player state, elevator, walking cop, anti-throw, intro/call. Some subcontrollers still discovery-only.",
+                       "syncedFiles":  [
+                                           "src/WoodburySpectatorSync/Coop/ParkingLotSceneStateSync.cs"
+                                       ],
+                       "synced":  [
+                                      "ParkingLotGameManager: call timing, intro state, phone ringing, talking/hugging mode, throw permission, first-person, camera FOV",
+                                      "Stranger / Mike / suitcase / truck / car subcontroller state",
+                                      "ParkingLotElevatorManager: travel, doors, audio, anti-throw",
+                                      "WalkingCopController: NavMesh brain suppression, animator/target mirroring, transform correction",
+                                      "UI/intro/phone flags + anti-throw zones",
+                                      "Elevator door transforms + truck tailgate transform correction",
+                                      "OnTriggerSub + OnTriggerDisplaySub + OnTrigger + TriggerEventInvoker"
+                                  ],
+                       "notSynced":  [
+                                         "Ending dialogue cinematics",
+                                         "Additional subcontrollers flagged by discovery dump but not yet synced",
+                                         "Save/load parity"
+                                     ]
+                   }
+               ]
 }

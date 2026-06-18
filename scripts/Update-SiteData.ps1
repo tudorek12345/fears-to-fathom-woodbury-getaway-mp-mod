@@ -68,6 +68,35 @@ function Read-ProtocolVersion {
     throw "Could not extract protocol version from Protocol.cs"
 }
 
+function Read-VersionFromText {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return ""
+    }
+    if ($Text -match '(\d+\.\d+\.\d+)') {
+        return $Matches[1]
+    }
+    return ""
+}
+
+function Select-NewerVersionText {
+    param([string]$Current, [string]$Candidate)
+    if ([string]::IsNullOrWhiteSpace($Candidate)) {
+        return $Current
+    }
+    if ([string]::IsNullOrWhiteSpace($Current)) {
+        return $Candidate
+    }
+    try {
+        if ([version]$Candidate -gt [version]$Current) {
+            return $Candidate
+        }
+    } catch {
+        return $Current
+    }
+    return $Current
+}
+
 function Get-RecentCommits {
     param([int]$Count = 8)
     $raw = git log --pretty=format:"%h%x09%s" -n $Count 2>$null
@@ -211,6 +240,11 @@ Write-Host "   today  = $today"
 Write-Host "-> Patching site/data/sync-status.json..."
 $syncStatusPath = "site/data/sync-status.json"
 $sync = Read-Json -Path $syncStatusPath
+$downloadVersion = ""
+if ($sync.meta -and $sync.meta.download) {
+    $downloadVersion = Read-VersionFromText -Text ([string]$sync.meta.download.label)
+}
+$plugin = Select-NewerVersionText -Current $plugin -Candidate $downloadVersion
 $sync.meta.plugin = $plugin
 $sync.meta.protocol = $protocol
 $sync.meta.lastUpdated = $today
