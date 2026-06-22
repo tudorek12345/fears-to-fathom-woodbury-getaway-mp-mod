@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-06-18",
+    "compiled": "2026-06-22",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "39f870b",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "97c0816",
       "subject": "site: keep published build metadata current"
     },
@@ -109,10 +113,6 @@
     {
       "sha": "4f73afc",
       "subject": "site: fix showcase gallery rendering"
-    },
-    {
-      "sha": "175e4fa",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }
