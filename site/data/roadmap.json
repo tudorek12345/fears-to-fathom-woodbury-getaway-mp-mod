@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-06-29",
+    "compiled": "2026-07-06",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "72f9579",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "a6634da",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -109,10 +113,6 @@
     {
       "sha": "024f7a9",
       "subject": "site: harden showcase fallback"
-    },
-    {
-      "sha": "d37bb37",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }
