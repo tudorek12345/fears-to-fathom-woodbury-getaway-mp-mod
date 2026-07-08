@@ -83,6 +83,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "14891fa",
+      "subject": "coop: add cabin death diagnostics"
+    },
+    {
+      "sha": "93531aa",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "b941d4b",
       "subject": "site: refresh 0.4.43 metadata"
     },
@@ -104,14 +112,6 @@
     },
     {
       "sha": "39f870b",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "97c0816",
-      "subject": "site: keep published build metadata current"
-    },
-    {
-      "sha": "d0f30a6",
       "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
