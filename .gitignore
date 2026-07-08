@@ -49,3 +49,4 @@ claude-*.log
 claude-*.txt
 *.claude.md
 *.claude.txt
+AGENTS.md
