@@ -20,20 +20,26 @@ namespace WoodburySpectatorSync.Coop
 
         private readonly ManualLogSource _logger;
         private readonly Action<string> _sessionLogWrite;
+        private readonly Action<string, DeathManager, long> _deathDiagnostic;
         private readonly FieldInfo _navTargetField;
         private readonly FieldInfo _playerFirstPersonField;
 
         private bool _remoteSelected;
+        private string _lastTargetKey = string.Empty;
         private long _nextDestinationMs;
         private long _nextLogMs;
         private long _lastRemoteCatchMs;
         private Vector3 _lastDestination;
         private bool _hasDestination;
 
-        public CabinChaserTargetAssist(ManualLogSource logger, Action<string> sessionLogWrite)
+        public CabinChaserTargetAssist(
+            ManualLogSource logger,
+            Action<string> sessionLogWrite,
+            Action<string, DeathManager, long> deathDiagnostic = null)
         {
             _logger = logger;
             _sessionLogWrite = sessionLogWrite;
+            _deathDiagnostic = deathDiagnostic;
             _navTargetField = typeof(HostEndGame).GetField("navTarget", BindingFlags.Instance | BindingFlags.NonPublic);
             _playerFirstPersonField = typeof(PlayerController).GetField("firstPersonController", BindingFlags.Instance | BindingFlags.NonPublic);
         }
@@ -41,6 +47,7 @@ namespace WoodburySpectatorSync.Coop
         public void Reset()
         {
             _remoteSelected = false;
+            _lastTargetKey = string.Empty;
             _nextDestinationMs = 0;
             _nextLogMs = 0;
             _lastRemoteCatchMs = 0;
@@ -64,6 +71,7 @@ namespace WoodburySpectatorSync.Coop
                 nowMs - lastRemoteTransformMs > RemoteFreshMs)
             {
                 _remoteSelected = false;
+                _lastTargetKey = string.Empty;
                 return;
             }
 
@@ -71,6 +79,7 @@ namespace WoodburySpectatorSync.Coop
             if (death == null || death.isDead || death.hostEndGame == null)
             {
                 _remoteSelected = false;
+                _lastTargetKey = string.Empty;
                 return;
             }
 
@@ -79,6 +88,7 @@ namespace WoodburySpectatorSync.Coop
             if (!isActiveChase && !isActiveHaunt)
             {
                 _remoteSelected = false;
+                _lastTargetKey = string.Empty;
                 return;
             }
 
@@ -86,6 +96,7 @@ namespace WoodburySpectatorSync.Coop
             if (hostPlayer == null)
             {
                 _remoteSelected = false;
+                _lastTargetKey = string.Empty;
                 return;
             }
 
@@ -98,10 +109,22 @@ namespace WoodburySpectatorSync.Coop
                 var chooseRemote = _remoteSelected
                     ? remoteDistance <= hostDistance + HostSwitchBiasMeters
                     : remoteDistance + RemoteSwitchBiasMeters < hostDistance;
+                var mode = isActiveChase ? "chase" : "haunt";
 
                 if (!chooseRemote)
                 {
-                    if (_remoteSelected && nowMs >= _nextLogMs)
+                    var targetKey = "host:" + mode;
+                    if (!string.Equals(_lastTargetKey, targetKey, StringComparison.Ordinal))
+                    {
+                        Log("Co-op chaser host: target-select target=host mode=" + mode +
+                            " reason=host-nearer hostDist=" + FormatMeters(hostDistance) +
+                            " clientDist=" + FormatMeters(remoteDistance) +
+                            " scene=" + SceneManager.GetActiveScene().name +
+                            " gen=" + generation + " sid=" + sessionId +
+                            " death=" + FormatDeathState(death));
+                        _lastTargetKey = targetKey;
+                    }
+                    else if (_remoteSelected && nowMs >= _nextLogMs)
                     {
                         Log("Co-op chaser host: target=host reason=nearer hostDist=" +
                             FormatMeters(hostDistance) + " clientDist=" + FormatMeters(remoteDistance) +
@@ -112,6 +135,18 @@ namespace WoodburySpectatorSync.Coop
 
                     _remoteSelected = false;
                     return;
+                }
+
+                var clientTargetKey = "client:" + mode;
+                if (!string.Equals(_lastTargetKey, clientTargetKey, StringComparison.Ordinal))
+                {
+                    Log("Co-op chaser host: target-select target=client mode=" + mode +
+                        " reason=client-nearer hostDist=" + FormatMeters(hostDistance) +
+                        " clientDist=" + FormatMeters(remoteDistance) +
+                        " scene=" + SceneManager.GetActiveScene().name +
+                        " gen=" + generation + " sid=" + sessionId +
+                        " death=" + FormatDeathState(death));
+                    _lastTargetKey = clientTargetKey;
                 }
 
                 _remoteSelected = true;
@@ -125,7 +160,7 @@ namespace WoodburySpectatorSync.Coop
 
                 if (nowMs >= _nextLogMs)
                 {
-                    Log("Co-op chaser host: target=client mode=" + (isActiveChase ? "chase" : "haunt") +
+                    Log("Co-op chaser host: target=client mode=" + mode +
                         " hostDist=" + FormatMeters(hostDistance) +
                         " clientDist=" + FormatMeters(remoteDistance) +
                         " scene=" + SceneManager.GetActiveScene().name +
@@ -201,12 +236,19 @@ namespace WoodburySpectatorSync.Coop
             if (chaseMode && remoteDistance < ChaseCatchDistance)
             {
                 death.hostIsChasing = false;
+                Log("Co-op chaser host: native-death-start source=client-caught-chase action=HuntTriggeredFar dist=" +
+                    FormatMeters(remoteDistance) +
+                    " scene=" + SceneManager.GetActiveScene().name +
+                    " gen=" + generation + " sid=" + sessionId +
+                    " before=" + FormatDeathState(death));
                 death.HuntTriggeredFar();
                 death.playerCaught = true;
                 _lastRemoteCatchMs = nowMs;
                 Log("Co-op chaser host: client caught mode=chase dist=" + FormatMeters(remoteDistance) +
                     " scene=" + SceneManager.GetActiveScene().name +
-                    " gen=" + generation + " sid=" + sessionId);
+                    " gen=" + generation + " sid=" + sessionId +
+                    " after=" + FormatDeathState(death));
+                _deathDiagnostic?.Invoke("client-caught-chase", death, nowMs);
                 return;
             }
 
@@ -222,11 +264,18 @@ namespace WoodburySpectatorSync.Coop
             }
 
             death.playerCaught = true;
+            Log("Co-op chaser host: native-death-start source=client-caught-haunt action=PerformJumpscareAtRun dist=" +
+                FormatMeters(remoteDistance) +
+                " scene=" + SceneManager.GetActiveScene().name +
+                " gen=" + generation + " sid=" + sessionId +
+                " before=" + FormatDeathState(death));
             death.StartCoroutine(death.PerformJumpscareAtRun(true));
             _lastRemoteCatchMs = nowMs;
             Log("Co-op chaser host: client caught mode=haunt dist=" + FormatMeters(remoteDistance) +
                 " scene=" + SceneManager.GetActiveScene().name +
-                " gen=" + generation + " sid=" + sessionId);
+                " gen=" + generation + " sid=" + sessionId +
+                " after=" + FormatDeathState(death));
+            _deathDiagnostic?.Invoke("client-caught-haunt", death, nowMs);
         }
 
         private Transform TryResolveHostPlayer(CabinGameManager cabinGameManager)
@@ -277,6 +326,25 @@ namespace WoodburySpectatorSync.Coop
         private static string FormatMeters(float value)
         {
             return value.ToString("0.00") + "m";
+        }
+
+        private static string FormatDeathState(DeathManager death)
+        {
+            if (death == null)
+            {
+                return "null";
+            }
+
+            return "caught=" + BoolText(death.playerCaught) +
+                   ",dead=" + BoolText(death.isDead) +
+                   ",chase=" + BoolText(death.hostIsChasing) +
+                   ",haunt=" + BoolText(death.hostIsHaunting) +
+                   ",waitFar=" + BoolText(death.waitForFarScare);
+        }
+
+        private static string BoolText(bool value)
+        {
+            return value ? "1" : "0";
         }
 
         private void Log(string line)

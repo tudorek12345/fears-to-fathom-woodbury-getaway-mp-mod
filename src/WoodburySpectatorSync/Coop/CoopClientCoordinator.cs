@@ -229,6 +229,14 @@ namespace WoodburySpectatorSync.Coop
         private long _nextCabinCookingPropApplyLogMs;
         private long _nextCabinAmbientApplyLogMs;
         private bool _cabinSharedDeathTriggered;
+        private bool _cabinDeathDiagnosticPending;
+        private string _cabinDeathDiagnosticSource = string.Empty;
+        private string _cabinDeathDiagnosticScene = string.Empty;
+        private int _cabinDeathDiagnosticGeneration;
+        private int _cabinDeathDiagnosticSessionId;
+        private long _cabinDeathDiagnosticMs;
+        private int _lastCabinDeathDiagnosticHash;
+        private long _nextCabinDeathStateLogMs;
         private float _lastScriptedHostSnapTime;
         private bool _hostSceneScriptedLock;
         private int _hostCabinPlayerState = -1;
@@ -3041,6 +3049,8 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
             if (string.Equals(fieldName, "Active", StringComparison.Ordinal))
             {
                 return true;
@@ -3065,6 +3075,18 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var applied = TryApplyObjectFieldFlag(death, fieldName, _cabinDeathFieldCache, value);
+            if (applied)
+            {
+                MaybeLogCabinDeathMirrorState(fieldName, value, death, nowMs);
+                if (value != 0 &&
+                    !_cabinDeathDiagnosticPending &&
+                    (string.Equals(fieldName, "playerCaught", StringComparison.Ordinal) ||
+                     string.Equals(fieldName, "isDead", StringComparison.Ordinal)))
+                {
+                    NoteCabinDeathDiagnostic("host-" + fieldName + "-flag", death, nowMs);
+                }
+            }
+
             if (applied && string.Equals(fieldName, "isDead", StringComparison.Ordinal) && value != 0)
             {
                 TryTriggerSharedCabinDeath(death);
@@ -3098,18 +3120,29 @@ namespace WoodburySpectatorSync.Coop
             }
 
             _cabinSharedDeathTriggered = true;
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            NoteCabinDeathDiagnostic("host-isDead-flag", death, nowMs);
             try
             {
                 death.playerCaught = true;
                 death.hostIsChasing = false;
                 death.hostIsHaunting = false;
 
+                var beforeLine = "Co-op death diag client: native-death-start source=host-isDead-flag action=PerformJumpscareAtRun scene=" +
+                                 SceneManager.GetActiveScene().name +
+                                 " gen=" + _activeSceneGeneration +
+                                 " sid=" + _activeHostSessionId +
+                                 " before=" + FormatCabinDeathState(death);
+                _logger.LogWarning(beforeLine);
+                _sessionLogWrite?.Invoke(beforeLine);
+
                 death.StartCoroutine(death.PerformJumpscareAtRun(true));
 
                 var line = "Co-op shared death client: native death sequence started scene=" +
                            SceneManager.GetActiveScene().name +
                            " gen=" + _activeSceneGeneration +
-                           " sid=" + _activeHostSessionId;
+                           " sid=" + _activeHostSessionId +
+                           " after=" + FormatCabinDeathState(death);
                 _logger.LogWarning(line);
                 _sessionLogWrite?.Invoke(line);
             }
@@ -3117,6 +3150,129 @@ namespace WoodburySpectatorSync.Coop
             {
                 _logger.LogWarning("Co-op shared death client: failed to start native death sequence reason=" + ex.Message);
             }
+        }
+
+        private void NoteCabinDeathDiagnostic(string source, DeathManager death, long nowMs)
+        {
+            if (string.IsNullOrEmpty(source))
+            {
+                source = "unknown";
+            }
+
+            _cabinDeathDiagnosticPending = true;
+            _cabinDeathDiagnosticSource = source;
+            _cabinDeathDiagnosticScene = SceneManager.GetActiveScene().name;
+            _cabinDeathDiagnosticGeneration = _activeSceneGeneration;
+            _cabinDeathDiagnosticSessionId = _activeHostSessionId;
+            _cabinDeathDiagnosticMs = nowMs;
+
+            var line = "Co-op death diag client: trigger source=" + source +
+                       " scene=" + _cabinDeathDiagnosticScene +
+                       " gen=" + _cabinDeathDiagnosticGeneration +
+                       " sid=" + _cabinDeathDiagnosticSessionId +
+                       " state=" + FormatCabinDeathState(death);
+            _logger.LogWarning(line);
+            _sessionLogWrite?.Invoke(line);
+        }
+
+        private void MaybeLogCabinDeathMirrorState(string fieldName, int value, DeathManager death, long nowMs)
+        {
+            if (death == null)
+            {
+                return;
+            }
+
+            var hash = ComputeCabinDeathHash(death);
+            if (hash == _lastCabinDeathDiagnosticHash)
+            {
+                return;
+            }
+
+            _lastCabinDeathDiagnosticHash = hash;
+            var important = death.playerCaught || death.isDead || death.hostIsChasing || death.hostIsHaunting ||
+                            string.Equals(fieldName, "isDead", StringComparison.Ordinal) ||
+                            string.Equals(fieldName, "playerCaught", StringComparison.Ordinal);
+            if (!important && nowMs < _nextCabinDeathStateLogMs)
+            {
+                return;
+            }
+
+            _nextCabinDeathStateLogMs = nowMs + 1000;
+            var line = "Co-op death diag client: mirror-state field=" + fieldName +
+                       " value=" + value +
+                       " scene=" + SceneManager.GetActiveScene().name +
+                       " gen=" + _activeSceneGeneration +
+                       " sid=" + _activeHostSessionId +
+                       " state=" + FormatCabinDeathState(death);
+            _logger.LogInfo(line);
+            _sessionLogWrite?.Invoke(line);
+        }
+
+        private void MaybeLogCabinDeathReturnToMenu(Scene oldScene, Scene newScene)
+        {
+            if (!_cabinDeathDiagnosticPending ||
+                !string.Equals(newScene.name, "MainMenu", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var ageMs = _cabinDeathDiagnosticMs > 0 ? Math.Max(0, nowMs - _cabinDeathDiagnosticMs) : 0;
+            var line = "Co-op death diag client: returned-main-menu source=" + _cabinDeathDiagnosticSource +
+                       " fromScene=" + oldScene.name +
+                       " toScene=" + newScene.name +
+                       " triggerScene=" + _cabinDeathDiagnosticScene +
+                       " triggerAgeMs=" + ageMs +
+                       " triggerGen=" + _cabinDeathDiagnosticGeneration +
+                       " triggerSid=" + _cabinDeathDiagnosticSessionId +
+                       " currentGen=" + _activeSceneGeneration +
+                       " currentSid=" + _activeHostSessionId;
+            _logger.LogWarning(line);
+            _sessionLogWrite?.Invoke(line);
+
+            _cabinDeathDiagnosticPending = false;
+            _cabinDeathDiagnosticSource = string.Empty;
+            _cabinDeathDiagnosticScene = string.Empty;
+            _cabinDeathDiagnosticGeneration = 0;
+            _cabinDeathDiagnosticSessionId = 0;
+            _cabinDeathDiagnosticMs = 0;
+        }
+
+        private static int ComputeCabinDeathHash(DeathManager death)
+        {
+            if (death == null)
+            {
+                return 0;
+            }
+
+            unchecked
+            {
+                var hash = 17;
+                hash = hash * 31 + (death.gameObject != null && death.gameObject.activeSelf ? 1 : 0);
+                hash = hash * 31 + (death.hostIsChasing ? 1 : 0);
+                hash = hash * 31 + (death.hostIsHaunting ? 1 : 0);
+                hash = hash * 31 + (death.waitForFarScare ? 1 : 0);
+                hash = hash * 31 + (death.playerCaught ? 1 : 0);
+                hash = hash * 31 + (death.isDead ? 1 : 0);
+                hash = hash * 31 + (death.jumpscareLight != null && death.jumpscareLight.activeSelf ? 1 : 0);
+                return hash;
+            }
+        }
+
+        private static string FormatCabinDeathState(DeathManager death)
+        {
+            if (death == null)
+            {
+                return "null";
+            }
+
+            return "active=" + BoolText(death.gameObject != null && death.gameObject.activeSelf) +
+                   ",caught=" + BoolText(death.playerCaught) +
+                   ",dead=" + BoolText(death.isDead) +
+                   ",chase=" + BoolText(death.hostIsChasing) +
+                   ",haunt=" + BoolText(death.hostIsHaunting) +
+                   ",waitFar=" + BoolText(death.waitForFarScare) +
+                   ",light=" + BoolText(death.jumpscareLight != null && death.jumpscareLight.activeSelf);
         }
 
         private bool TryApplyBehaviourEnabledFlag(object owner, string fieldName, int value)
@@ -6839,6 +6995,7 @@ namespace WoodburySpectatorSync.Coop
 
         private void OnSceneChanged(Scene oldScene, Scene newScene)
         {
+            MaybeLogCabinDeathReturnToMenu(oldScene, newScene);
             _camera = null;
             _controller = null;
             _gameplayDisabled = false;
@@ -6981,6 +7138,8 @@ namespace WoodburySpectatorSync.Coop
             _nextCabinCookingPropApplyLogMs = 0;
             _nextCabinAmbientApplyLogMs = 0;
             _cabinSharedDeathTriggered = false;
+            _lastCabinDeathDiagnosticHash = 0;
+            _nextCabinDeathStateLogMs = 0;
             _lastScriptedHostSnapTime = 0f;
             _hostSceneScriptedLock = false;
             _hostCabinPlayerState = -1;
