@@ -83,8 +83,16 @@
   ],
   "recentCommits": [
     {
+      "sha": "b941d4b",
+      "subject": "site: refresh 0.4.43 metadata"
+    },
+    {
       "sha": "0301703",
       "subject": "coop: stabilize npc dialogue and cabin sync"
+    },
+    {
+      "sha": "1034f3c",
+      "subject": "site: auto-refresh data + badge [skip ci]"
     },
     {
       "sha": "72f9579",
@@ -104,14 +112,6 @@
     },
     {
       "sha": "d0f30a6",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "18aaaae",
-      "subject": "site: refresh showcase and build metadata"
-    },
-    {
-      "sha": "4fd45bf",
       "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
