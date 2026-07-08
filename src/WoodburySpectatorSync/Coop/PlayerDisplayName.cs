@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using WoodburySpectatorSync.Config;
 
@@ -21,6 +23,12 @@ namespace WoodburySpectatorSync.Coop
             }
 
             name = Sanitize(TryGetSteamName());
+            if (!string.IsNullOrEmpty(name))
+            {
+                return name;
+            }
+
+            name = Sanitize(TryGetSteamLoginUsersPersonaName());
             if (!string.IsNullOrEmpty(name))
             {
                 return name;
@@ -92,6 +100,183 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return string.Empty;
+        }
+
+        private static string TryGetSteamLoginUsersPersonaName()
+        {
+            try
+            {
+                foreach (var steamRoot in GetSteamRootCandidates())
+                {
+                    var path = Path.Combine(steamRoot, "config", "loginusers.vdf");
+                    if (!File.Exists(path))
+                    {
+                        continue;
+                    }
+
+                    var name = ParseLoginUsersPersonaName(path);
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        return name;
+                    }
+                }
+            }
+            catch
+            {
+                return string.Empty;
+            }
+
+            return string.Empty;
+        }
+
+        private static IEnumerable<string> GetSteamRootCandidates()
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            AddCandidate(seen, Environment.GetEnvironmentVariable("SteamPath"));
+            AddCandidate(seen, Environment.GetEnvironmentVariable("STEAM_PATH"));
+            AddCandidate(seen, Environment.GetEnvironmentVariable("SteamDir"));
+
+            var programFilesX86 = Environment.GetEnvironmentVariable("ProgramFiles(x86)");
+            if (!string.IsNullOrEmpty(programFilesX86))
+            {
+                AddCandidate(seen, Path.Combine(programFilesX86, "Steam"));
+            }
+
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (!string.IsNullOrEmpty(programFiles))
+            {
+                AddCandidate(seen, Path.Combine(programFiles, "Steam"));
+            }
+
+            AddCandidate(seen, @"C:\Program Files (x86)\Steam");
+            AddCandidate(seen, @"C:\Program Files\Steam");
+
+            return seen;
+        }
+
+        private static void AddCandidate(HashSet<string> seen, string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            try
+            {
+                seen.Add(Path.GetFullPath(path.Trim().Trim('"')));
+            }
+            catch
+            {
+                // Ignore malformed environment paths.
+            }
+        }
+
+        private static string ParseLoginUsersPersonaName(string path)
+        {
+            var bestName = string.Empty;
+            var fallbackName = string.Empty;
+            var currentName = string.Empty;
+            var currentMostRecent = false;
+            var depth = 0;
+            var inUserBlock = false;
+
+            foreach (var rawLine in File.ReadAllLines(path))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0)
+                {
+                    continue;
+                }
+
+                if (line == "{")
+                {
+                    depth++;
+                    if (depth == 2)
+                    {
+                        inUserBlock = true;
+                        currentName = string.Empty;
+                        currentMostRecent = false;
+                    }
+                    continue;
+                }
+
+                if (line == "}")
+                {
+                    if (inUserBlock && depth == 2)
+                    {
+                        if (!string.IsNullOrEmpty(currentName))
+                        {
+                            if (currentMostRecent)
+                            {
+                                bestName = currentName;
+                            }
+                            else if (string.IsNullOrEmpty(fallbackName))
+                            {
+                                fallbackName = currentName;
+                            }
+                        }
+
+                        inUserBlock = false;
+                    }
+
+                    depth = Math.Max(0, depth - 1);
+                    continue;
+                }
+
+                if (!inUserBlock)
+                {
+                    continue;
+                }
+
+                var keyValue = ParseVdfKeyValue(line);
+                if (keyValue == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(keyValue.Value.Key, "PersonaName", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentName = keyValue.Value.Value;
+                }
+                else if (string.Equals(keyValue.Value.Key, "MostRecent", StringComparison.OrdinalIgnoreCase))
+                {
+                    currentMostRecent = keyValue.Value.Value == "1";
+                }
+            }
+
+            return !string.IsNullOrEmpty(bestName) ? bestName : fallbackName;
+        }
+
+        private static KeyValuePair<string, string>? ParseVdfKeyValue(string line)
+        {
+            var firstKeyQuote = line.IndexOf('"');
+            if (firstKeyQuote < 0)
+            {
+                return null;
+            }
+
+            var secondKeyQuote = line.IndexOf('"', firstKeyQuote + 1);
+            if (secondKeyQuote <= firstKeyQuote)
+            {
+                return null;
+            }
+
+            var firstValueQuote = line.IndexOf('"', secondKeyQuote + 1);
+            if (firstValueQuote < 0)
+            {
+                return null;
+            }
+
+            var secondValueQuote = line.IndexOf('"', firstValueQuote + 1);
+            if (secondValueQuote <= firstValueQuote)
+            {
+                return null;
+            }
+
+            return new KeyValuePair<string, string>(
+                line.Substring(firstKeyQuote + 1, secondKeyQuote - firstKeyQuote - 1),
+                line.Substring(firstValueQuote + 1, secondValueQuote - firstValueQuote - 1));
         }
     }
 }

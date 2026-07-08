@@ -18,6 +18,7 @@ namespace WoodburySpectatorSync.UI
         private string _avatarIdText;
         private string _avatarScaleText;
         private string _avatarYOffsetText;
+        private string _steamworksAppIdText;
         private GUIStyle _windowStyle;
         private GUIStyle _headerStyle;
         private GUIStyle _labelStyle;
@@ -58,7 +59,7 @@ namespace WoodburySpectatorSync.UI
             EnsureStyles();
             UnlockCursorForMenu();
             _rect.width = Mathf.Min(380f, Mathf.Max(320f, Screen.width - 48f));
-            _rect.height = Mathf.Min(460f, Mathf.Max(360f, Screen.height - 70f));
+            _rect.height = Mathf.Min(510f, Mathf.Max(390f, Screen.height - 70f));
             _rect = GUI.Window(44270, _rect, id => DrawWindow(id, server, client, overlay, sessionWrite), "Woodbury Co-op", _windowStyle);
         }
 
@@ -77,6 +78,12 @@ namespace WoodburySpectatorSync.UI
             DrawBoolRow("UDP", _settings.UdpEnabled, sessionWrite);
             DrawBoolRow("Voice", _settings.CoopVoiceChatEnabled, sessionWrite);
             DrawBoolRow("Footsteps", _settings.CoopFootstepSyncEnabled, sessionWrite);
+            DrawSteamworksAppIdRow(sessionWrite);
+            if (_settings.SteamworksAppIdMode != null &&
+                _settings.SteamworksAppIdMode.Value == SteamworksAppIdMode.Custom)
+            {
+                DrawTextRow("App ID", ref _steamworksAppIdText, 96f);
+            }
             DrawBoolRow("Auto host", _settings.CoopAutoStartHost, sessionWrite);
             DrawBoolRow("Auto connect", _settings.CoopAutoConnectClient, sessionWrite);
             DrawActionButtons(server, client, sessionWrite);
@@ -95,6 +102,7 @@ namespace WoodburySpectatorSync.UI
             GUILayout.Label("Debug", _headerStyle);
             DrawOverlayRow(overlay, sessionWrite);
             DrawBoolRow("Scene dump", _settings.SceneDiscoveryDump, sessionWrite);
+            DrawBoolRow("Dump crawler", _settings.SceneDiscoveryDumpCrawler, sessionWrite);
 
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
@@ -159,6 +167,37 @@ namespace WoodburySpectatorSync.UI
                 {
                     _settings.CoopRemotePlayerAvatarSource.Value = source;
                     sessionWrite?.Invoke("Co-op menu: RemotePlayerAvatarSource=" + source);
+                }
+            }
+            GUI.backgroundColor = previous;
+        }
+
+        private void DrawSteamworksAppIdRow(Action<string> sessionWrite)
+        {
+            if (_settings.SteamworksAppIdMode == null) return;
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Steam", _labelStyle, GUILayout.Width(86f));
+            DrawSteamworksAppIdButton("LAN/Local", SteamworksAppIdMode.Disabled, sessionWrite);
+            DrawSteamworksAppIdButton("Spacewar", SteamworksAppIdMode.SteamworksTestApp, sessionWrite);
+            DrawSteamworksAppIdButton("Custom", SteamworksAppIdMode.Custom, sessionWrite);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Space(90f);
+            GUILayout.Label("direct/Steam default: Spacewar; local pair uses LAN/Local", _labelStyle, GUILayout.Width(270f));
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawSteamworksAppIdButton(string label, SteamworksAppIdMode mode, Action<string> sessionWrite)
+        {
+            var previous = GUI.backgroundColor;
+            if (_settings.SteamworksAppIdMode.Value == mode) GUI.backgroundColor = new Color(1f, 0.35f, 0.16f, 1f);
+            if (GUILayout.Button(label, _smallButtonStyle, GUILayout.Height(24f)))
+            {
+                if (_settings.SteamworksAppIdMode.Value != mode)
+                {
+                    _settings.SteamworksAppIdMode.Value = mode;
+                    sessionWrite?.Invoke("Co-op menu: Steamworks AppIdMode=" + mode + " (restart required)");
                 }
             }
             GUI.backgroundColor = previous;
@@ -254,6 +293,12 @@ namespace WoodburySpectatorSync.UI
                 _settings.CoopRemotePlayerAvatarYOffset.Value = Mathf.Clamp(avatarYOffset, -3f, 3f);
             }
 
+            if (_settings.SteamworksCustomAppId != null &&
+                uint.TryParse(_steamworksAppIdText, out var steamworksAppId))
+            {
+                _settings.SteamworksCustomAppId.Value = steamworksAppId;
+            }
+
             RefreshTextFromSettings();
             sessionWrite?.Invoke("Co-op menu: applied settings");
         }
@@ -268,6 +313,7 @@ namespace WoodburySpectatorSync.UI
             _avatarIdText = _settings.CoopRemotePlayerAvatarId != null ? _settings.CoopRemotePlayerAvatarId.Value : "woodbury_scene_auto";
             _avatarScaleText = _settings.CoopRemotePlayerAvatarScale != null ? _settings.CoopRemotePlayerAvatarScale.Value.ToString("0.###") : "1";
             _avatarYOffsetText = _settings.CoopRemotePlayerAvatarYOffset != null ? _settings.CoopRemotePlayerAvatarYOffset.Value.ToString("0.###") : "0";
+            _steamworksAppIdText = _settings.SteamworksCustomAppId != null ? _settings.SteamworksCustomAppId.Value.ToString() : "0";
         }
 
         private static bool IsMainMenu()

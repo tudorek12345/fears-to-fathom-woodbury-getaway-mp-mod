@@ -7,10 +7,12 @@ namespace WoodburySpectatorSync.Coop
     {
         private readonly CoopClient _client;
         private readonly float _range;
+        private readonly System.Func<bool> _suppressWorldClick;
 
-        public CoopClientInteractor(CoopClient client, float range = 3f)
+        public CoopClientInteractor(CoopClient client, System.Func<bool> suppressWorldClick = null, float range = 3f)
         {
             _client = client;
+            _suppressWorldClick = suppressWorldClick;
             _range = range;
         }
 
@@ -20,6 +22,11 @@ namespace WoodburySpectatorSync.Coop
 
             if (Input.GetMouseButtonDown(0))
             {
+                if (_suppressWorldClick != null && _suppressWorldClick())
+                {
+                    return;
+                }
+
                 var ray = camera.ScreenPointToRay(Input.mousePosition);
                 if (Physics.Raycast(ray, out var hit, _range))
                 {

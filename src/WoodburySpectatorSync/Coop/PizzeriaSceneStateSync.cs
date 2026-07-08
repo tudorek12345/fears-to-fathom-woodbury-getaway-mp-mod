@@ -1414,6 +1414,12 @@ namespace WoodburySpectatorSync.Coop
             return go != null && go.activeSelf;
         }
 
+        private static bool IsObjectActiveInHierarchy(object target)
+        {
+            var go = GetGameObject(target);
+            return go != null && go.activeInHierarchy;
+        }
+
         private static void SetObjectActive(object target, bool active)
         {
             var go = GetGameObject(target);
@@ -1555,8 +1561,8 @@ namespace WoodburySpectatorSync.Coop
             {
                 var player = UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>();
                 var drivingCameraActive = player != null &&
-                                          (IsObjectActive(player.playerDrivingParent) ||
-                                           IsObjectActive(player.playerDrivingCam));
+                                          (IsObjectActiveInHierarchy(player.playerDrivingParent) ||
+                                           IsObjectActiveInHierarchy(player.playerDrivingCam));
                 var drivingStillAuthoritative = driving != null &&
                                                 driving.gameObject.activeInHierarchy &&
                                                 (drivingCameraActive ||

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
@@ -15,7 +16,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.24")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.43")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -44,6 +45,13 @@ namespace WoodburySpectatorSync
         private int _cachedOverlayLineCount;
         private string _cachedOverlaySnapshot = string.Empty;
         private float _nextOverlayBuildTime;
+        private float _nextSceneDiscoveryDumpTime;
+        private string[] _sceneDiscoveryCrawlerScenes = new string[0];
+        private int _sceneDiscoveryCrawlerIndex = -1;
+        private bool _sceneDiscoveryCrawlerPrepared;
+        private bool _sceneDiscoveryCrawlerCompleted;
+        private float _nextSceneDiscoveryCrawlerActionTime;
+        private float _nextSceneDiscoveryCrawlerStatusLogTime;
 
         private const float SessionSnapshotLogIntervalSeconds = 15f;
         private const float OverlayBuildIntervalSeconds = 0.25f;
@@ -56,6 +64,7 @@ namespace WoodburySpectatorSync
         {
             var configFile = CreateConfigFile();
             _settings = Settings.Bind(configFile);
+            ApplySteamworksLaunchOverrides(_settings);
             ApplyRuntimeOverrides(_settings);
             Application.runInBackground = true;
             _overlay = new Overlay(_settings);
@@ -87,6 +96,137 @@ namespace WoodburySpectatorSync
             Logger.LogInfo("Woodbury Spectator Sync loaded (runInBackground enabled)");
             _sessionLog?.Write("Plugin loaded");
             _sessionLog?.Write("Config: " + (configFile != null ? configFile.ConfigFilePath : "default"));
+        }
+
+        private void ApplySteamworksLaunchOverrides(Settings settings)
+        {
+            var appIdText = ReadSteamworksAppIdOverride(settings);
+            if (string.IsNullOrWhiteSpace(appIdText))
+            {
+                ClearManagedSteamworksAppIdOverride();
+                return;
+            }
+
+            if (!uint.TryParse(appIdText.Trim(), out var appId) || appId == 0)
+            {
+                Logger.LogWarning("Steamworks launch compatibility: ignored invalid app id override '" + appIdText + "'");
+                return;
+            }
+
+            try
+            {
+                var appIdString = appId.ToString();
+                Environment.SetEnvironmentVariable("SteamAppId", appIdString);
+                Environment.SetEnvironmentVariable("SteamGameId", appIdString);
+
+                var gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                var appIdPath = Path.Combine(gameRoot, "steam_appid.txt");
+                var markerPath = Path.Combine(gameRoot, "WoodburySpectatorSync.steam_appid.managed");
+                File.WriteAllText(appIdPath, appIdString);
+                File.WriteAllText(markerPath, appIdString);
+                Logger.LogInfo("Steamworks launch compatibility: app id override applied id=" + appIdString +
+                    " file=" + appIdPath);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Steamworks launch compatibility: failed to apply app id override reason=" + ex.Message);
+            }
+        }
+
+        private void ClearManagedSteamworksAppIdOverride()
+        {
+            try
+            {
+                var gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                var appIdPath = Path.Combine(gameRoot, "steam_appid.txt");
+                var markerPath = Path.Combine(gameRoot, "WoodburySpectatorSync.steam_appid.managed");
+                if (!File.Exists(markerPath))
+                {
+                    if (File.Exists(appIdPath) &&
+                        string.Equals(File.ReadAllText(appIdPath).Trim(), "480", StringComparison.Ordinal))
+                    {
+                        File.Delete(appIdPath);
+                        Logger.LogInfo("Steamworks launch compatibility: removed previous test app id file=" + appIdPath);
+                    }
+                    return;
+                }
+
+                if (File.Exists(appIdPath))
+                {
+                    File.Delete(appIdPath);
+                }
+                File.Delete(markerPath);
+                Logger.LogInfo("Steamworks launch compatibility: disabled managed app id override");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Steamworks launch compatibility: failed to clear managed app id override reason=" + ex.Message);
+            }
+        }
+
+        private static string ReadSteamworksAppIdOverride(Settings settings)
+        {
+            var value = Environment.GetEnvironmentVariable("WSS_STEAMWORKS_APP_ID");
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+
+            value = Environment.GetEnvironmentVariable("WSS_STEAM_APP_ID");
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+
+            var args = Environment.GetCommandLineArgs();
+            for (var i = 0; i < args.Length; i++)
+            {
+                var arg = args[i];
+                if (string.IsNullOrWhiteSpace(arg))
+                {
+                    continue;
+                }
+
+                var equalsIndex = arg.IndexOf('=');
+                if (equalsIndex > 0)
+                {
+                    var key = arg.Substring(0, equalsIndex);
+                    if (IsSteamworksAppIdArgument(key))
+                    {
+                        return arg.Substring(equalsIndex + 1);
+                    }
+                }
+
+                if (IsSteamworksAppIdArgument(arg) && i + 1 < args.Length)
+                {
+                    return args[i + 1];
+                }
+            }
+
+            if (settings != null && settings.SteamworksAppIdMode != null)
+            {
+                switch (settings.SteamworksAppIdMode.Value)
+                {
+                    case SteamworksAppIdMode.SteamworksTestApp:
+                        return "480";
+                    case SteamworksAppIdMode.Custom:
+                        if (settings.SteamworksCustomAppId != null && settings.SteamworksCustomAppId.Value > 0)
+                        {
+                            return settings.SteamworksCustomAppId.Value.ToString();
+                        }
+                        break;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static bool IsSteamworksAppIdArgument(string arg)
+        {
+            return string.Equals(arg, "-WSSSteamAppId", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(arg, "--WSSSteamAppId", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(arg, "-SteamAppId", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(arg, "-steam_appid", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool ShouldEnableSessionLog(Settings settings)
@@ -188,6 +328,8 @@ namespace WoodburySpectatorSync
         {
             HandleHotkeys();
             HandleAutoStart();
+            HandlePeriodicSceneDiscoveryDump();
+            HandleSceneDiscoveryCrawler();
 
             if (_settings.ModeSetting.Value == Mode.Host)
             {
@@ -237,7 +379,7 @@ namespace WoodburySpectatorSync
             {
                 if (_coopClientCoordinator.TryGetRemoteDialogue(out var speaker, out var text, out var kind))
                 {
-                    _remoteDialogueOverlay.Draw(speaker, text);
+                    _remoteDialogueOverlay.Draw(speaker, text, kind);
                 }
             }
 
@@ -372,14 +514,378 @@ namespace WoodburySpectatorSync
             }
 
             var scene = SceneManager.GetActiveScene();
-            var role = _settings.ModeSetting.Value == Mode.CoopHost || _settings.ModeSetting.Value == Mode.Host
+            var role = GetSceneDiscoveryRole();
+            Action<string> sessionWrite = _sessionLog != null ? _sessionLog.Write : (Action<string>)null;
+            SceneDiscoveryDump.LogManualIfEnabled(_settings, role, scene, Logger, sessionWrite);
+            _sessionLog?.Write("Hotkey F10: scene discovery manual dump role=" + role + " scene=" + scene.name);
+        }
+
+        private void HandlePeriodicSceneDiscoveryDump()
+        {
+            if (_settings == null ||
+                _settings.SceneDiscoveryDump == null ||
+                !_settings.SceneDiscoveryDump.Value ||
+                _settings.SceneDiscoveryDumpIntervalSeconds == null)
+            {
+                _nextSceneDiscoveryDumpTime = 0f;
+                return;
+            }
+
+            var interval = Mathf.Clamp(_settings.SceneDiscoveryDumpIntervalSeconds.Value, 0f, 600f);
+            if (interval <= 0f)
+            {
+                _nextSceneDiscoveryDumpTime = 0f;
+                return;
+            }
+
+            var now = Time.realtimeSinceStartup;
+            if (_nextSceneDiscoveryDumpTime <= 0f)
+            {
+                _nextSceneDiscoveryDumpTime = now + interval;
+                return;
+            }
+
+            if (now < _nextSceneDiscoveryDumpTime)
+            {
+                return;
+            }
+
+            _nextSceneDiscoveryDumpTime = now + interval;
+            var scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                return;
+            }
+
+            var role = GetSceneDiscoveryRole();
+            Action<string> sessionWrite = _sessionLog != null ? _sessionLog.Write : (Action<string>)null;
+            SceneDiscoveryDump.LogTimedIfEnabled(_settings, role, scene, Logger, sessionWrite);
+            _sessionLog?.Write("Timed scene discovery dump role=" + role + " scene=" + scene.name + " interval=" + interval.ToString("0.###"));
+        }
+
+        private void HandleSceneDiscoveryCrawler()
+        {
+            if (!IsSceneDiscoveryCrawlerEnabled())
+            {
+                ResetSceneDiscoveryCrawler();
+                return;
+            }
+
+            if (!_sceneDiscoveryCrawlerPrepared)
+            {
+                PrepareSceneDiscoveryCrawler();
+            }
+
+            if (_sceneDiscoveryCrawlerCompleted || _sceneDiscoveryCrawlerScenes.Length == 0)
+            {
+                return;
+            }
+
+            string waitReason;
+            if (!CanSceneDiscoveryCrawlerAdvance(out waitReason))
+            {
+                MaybeLogSceneDiscoveryCrawlerStatus("waiting " + waitReason);
+                return;
+            }
+
+            var now = Time.realtimeSinceStartup;
+            if (_nextSceneDiscoveryCrawlerActionTime <= 0f)
+            {
+                _nextSceneDiscoveryCrawlerActionTime = now + GetSceneDiscoveryCrawlerStartDelaySeconds();
+                return;
+            }
+
+            if (now < _nextSceneDiscoveryCrawlerActionTime)
+            {
+                return;
+            }
+
+            var scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                MaybeLogSceneDiscoveryCrawlerStatus("waiting active-scene-not-loaded");
+                _nextSceneDiscoveryCrawlerActionTime = now + 2f;
+                return;
+            }
+
+            var role = GetSceneDiscoveryRole();
+            Action<string> sessionWrite = _sessionLog != null ? _sessionLog.Write : (Action<string>)null;
+            SceneDiscoveryDump.LogCrawlerIfEnabled(_settings, role, scene, Logger, sessionWrite);
+            LogSceneDiscoveryCrawler("dumped scene=" + scene.name + " index=" + _sceneDiscoveryCrawlerIndex);
+
+            var nextIndex = GetNextSceneDiscoveryCrawlerIndex(scene.name);
+            if (nextIndex < 0)
+            {
+                _sceneDiscoveryCrawlerCompleted = true;
+                LogSceneDiscoveryCrawler("completed scenes=" + _sceneDiscoveryCrawlerScenes.Length);
+                return;
+            }
+
+            LoadSceneDiscoveryCrawlerScene(nextIndex);
+        }
+
+        private bool IsSceneDiscoveryCrawlerEnabled()
+        {
+            if (_settings == null ||
+                _settings.SceneDiscoveryDump == null ||
+                !_settings.SceneDiscoveryDump.Value ||
+                _settings.SceneDiscoveryDumpCrawler == null ||
+                !_settings.SceneDiscoveryDumpCrawler.Value)
+            {
+                return false;
+            }
+
+            return _settings.ModeSetting.Value == Mode.Host ||
+                   _settings.ModeSetting.Value == Mode.CoopHost;
+        }
+
+        private void ResetSceneDiscoveryCrawler()
+        {
+            _sceneDiscoveryCrawlerScenes = new string[0];
+            _sceneDiscoveryCrawlerIndex = -1;
+            _sceneDiscoveryCrawlerPrepared = false;
+            _sceneDiscoveryCrawlerCompleted = false;
+            _nextSceneDiscoveryCrawlerActionTime = 0f;
+            _nextSceneDiscoveryCrawlerStatusLogTime = 0f;
+        }
+
+        private void PrepareSceneDiscoveryCrawler()
+        {
+            _sceneDiscoveryCrawlerScenes = BuildSceneDiscoveryCrawlerList();
+            _sceneDiscoveryCrawlerPrepared = true;
+            _sceneDiscoveryCrawlerCompleted = _sceneDiscoveryCrawlerScenes.Length == 0;
+            _sceneDiscoveryCrawlerIndex = FindSceneDiscoveryCrawlerSceneIndex(SceneManager.GetActiveScene().name);
+            _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + GetSceneDiscoveryCrawlerStartDelaySeconds();
+            LogSceneDiscoveryCrawler("enabled scenes=" + string.Join(",", _sceneDiscoveryCrawlerScenes) +
+                " startDelay=" + GetSceneDiscoveryCrawlerStartDelaySeconds().ToString("0.###") +
+                " sceneSeconds=" + GetSceneDiscoveryCrawlerSceneSeconds().ToString("0.###") +
+                " requireLivePeer=" + BoolText(_settings.SceneDiscoveryDumpCrawlerRequireLivePeer != null && _settings.SceneDiscoveryDumpCrawlerRequireLivePeer.Value));
+        }
+
+        private string[] BuildSceneDiscoveryCrawlerList()
+        {
+            var configured = _settings.SceneDiscoveryDumpCrawlerScenes != null
+                ? _settings.SceneDiscoveryDumpCrawlerScenes.Value
+                : string.Empty;
+            var scenes = new List<string>();
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                var parts = configured.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                for (var i = 0; i < parts.Length; i++)
+                {
+                    var value = parts[i].Trim();
+                    if (value.Length == 0) continue;
+
+                    int buildIndex;
+                    if (int.TryParse(value, out buildIndex))
+                    {
+                        value = GetSceneNameByBuildIndex(buildIndex);
+                    }
+
+                    AddUniqueSceneName(scenes, value);
+                }
+            }
+            else
+            {
+                var count = SceneManager.sceneCountInBuildSettings;
+                for (var i = 0; i < count; i++)
+                {
+                    AddUniqueSceneName(scenes, GetSceneNameByBuildIndex(i));
+                }
+            }
+
+            return scenes.ToArray();
+        }
+
+        private static void AddUniqueSceneName(List<string> scenes, string sceneName)
+        {
+            if (string.IsNullOrWhiteSpace(sceneName)) return;
+            for (var i = 0; i < scenes.Count; i++)
+            {
+                if (string.Equals(scenes[i], sceneName, StringComparison.Ordinal))
+                {
+                    return;
+                }
+            }
+
+            scenes.Add(sceneName);
+        }
+
+        private static string GetSceneNameByBuildIndex(int buildIndex)
+        {
+            if (buildIndex < 0 || buildIndex >= SceneManager.sceneCountInBuildSettings)
+            {
+                return string.Empty;
+            }
+
+            var path = SceneUtility.GetScenePathByBuildIndex(buildIndex);
+            if (string.IsNullOrEmpty(path))
+            {
+                return string.Empty;
+            }
+
+            return Path.GetFileNameWithoutExtension(path);
+        }
+
+        private bool CanSceneDiscoveryCrawlerAdvance(out string waitReason)
+        {
+            waitReason = string.Empty;
+            if (_settings.ModeSetting.Value == Mode.CoopHost &&
+                _settings.SceneDiscoveryDumpCrawlerRequireLivePeer != null &&
+                _settings.SceneDiscoveryDumpCrawlerRequireLivePeer.Value)
+            {
+                if (_coopServer == null || !_coopServer.IsClientConnected)
+                {
+                    waitReason = "client-not-connected";
+                    return false;
+                }
+
+                if (_coopHost == null || !string.Equals(_coopHost.SessionStateLabel, "Live", StringComparison.Ordinal))
+                {
+                    waitReason = "peer-not-live state=" + (_coopHost != null ? _coopHost.SessionStateLabel : "-");
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private int GetNextSceneDiscoveryCrawlerIndex(string currentSceneName)
+        {
+            var currentIndex = _sceneDiscoveryCrawlerIndex;
+            var sceneIndex = FindSceneDiscoveryCrawlerSceneIndex(currentSceneName);
+            if (sceneIndex >= 0)
+            {
+                currentIndex = sceneIndex;
+                _sceneDiscoveryCrawlerIndex = sceneIndex;
+            }
+
+            var nextIndex = currentIndex + 1;
+            if (nextIndex >= _sceneDiscoveryCrawlerScenes.Length)
+            {
+                if (_settings.SceneDiscoveryDumpCrawlerLoop != null && _settings.SceneDiscoveryDumpCrawlerLoop.Value)
+                {
+                    nextIndex = 0;
+                }
+                else
+                {
+                    return -1;
+                }
+            }
+
+            return nextIndex;
+        }
+
+        private int FindSceneDiscoveryCrawlerSceneIndex(string sceneName)
+        {
+            if (string.IsNullOrWhiteSpace(sceneName)) return -1;
+            for (var i = 0; i < _sceneDiscoveryCrawlerScenes.Length; i++)
+            {
+                if (string.Equals(_sceneDiscoveryCrawlerScenes[i], sceneName, StringComparison.Ordinal))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private void LoadSceneDiscoveryCrawlerScene(int sceneIndex)
+        {
+            if (sceneIndex < 0 || sceneIndex >= _sceneDiscoveryCrawlerScenes.Length)
+            {
+                return;
+            }
+
+            var sceneName = _sceneDiscoveryCrawlerScenes[sceneIndex];
+            if (string.IsNullOrWhiteSpace(sceneName))
+            {
+                _sceneDiscoveryCrawlerIndex = sceneIndex;
+                _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + 1f;
+                return;
+            }
+
+            try
+            {
+                _sceneDiscoveryCrawlerIndex = sceneIndex;
+                _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + GetSceneDiscoveryCrawlerSceneSeconds();
+                LogSceneDiscoveryCrawler("loading scene=" + sceneName + " index=" + sceneIndex);
+                SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+            }
+            catch (Exception ex)
+            {
+                LogSceneDiscoveryCrawler("load-failed scene=" + sceneName +
+                    " errorType=" + ex.GetType().Name +
+                    " message=" + ex.Message);
+                _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + 3f;
+            }
+        }
+
+        private void HandleSceneDiscoveryCrawlerSceneChanged(Scene newScene)
+        {
+            if (!IsSceneDiscoveryCrawlerEnabled() || !_sceneDiscoveryCrawlerPrepared)
+            {
+                return;
+            }
+
+            var sceneIndex = FindSceneDiscoveryCrawlerSceneIndex(newScene.name);
+            if (sceneIndex >= 0)
+            {
+                _sceneDiscoveryCrawlerIndex = sceneIndex;
+            }
+
+            _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + GetSceneDiscoveryCrawlerSceneSeconds();
+            LogSceneDiscoveryCrawler("scene-enter scene=" + newScene.name +
+                " index=" + _sceneDiscoveryCrawlerIndex +
+                " nextIn=" + GetSceneDiscoveryCrawlerSceneSeconds().ToString("0.###") + "s");
+        }
+
+        private float GetSceneDiscoveryCrawlerStartDelaySeconds()
+        {
+            return Mathf.Clamp(
+                _settings.SceneDiscoveryDumpCrawlerStartDelaySeconds != null
+                    ? _settings.SceneDiscoveryDumpCrawlerStartDelaySeconds.Value
+                    : 20f,
+                2f,
+                600f);
+        }
+
+        private float GetSceneDiscoveryCrawlerSceneSeconds()
+        {
+            return Mathf.Clamp(
+                _settings.SceneDiscoveryDumpCrawlerSceneSeconds != null
+                    ? _settings.SceneDiscoveryDumpCrawlerSceneSeconds.Value
+                    : 25f,
+                5f,
+                900f);
+        }
+
+        private void MaybeLogSceneDiscoveryCrawlerStatus(string message)
+        {
+            var now = Time.realtimeSinceStartup;
+            if (now < _nextSceneDiscoveryCrawlerStatusLogTime)
+            {
+                return;
+            }
+
+            _nextSceneDiscoveryCrawlerStatusLogTime = now + 10f;
+            LogSceneDiscoveryCrawler(message);
+        }
+
+        private void LogSceneDiscoveryCrawler(string message)
+        {
+            var line = "SceneDiscoveryDumpCrawler: " + message;
+            Logger.LogInfo(line);
+            _sessionLog?.Write(line);
+        }
+
+        private string GetSceneDiscoveryRole()
+        {
+            return _settings.ModeSetting.Value == Mode.CoopHost || _settings.ModeSetting.Value == Mode.Host
                 ? "host"
                 : _settings.ModeSetting.Value == Mode.CoopClient
                     ? "client"
                     : "spectator";
-            Action<string> sessionWrite = _sessionLog != null ? _sessionLog.Write : (Action<string>)null;
-            SceneDiscoveryDump.LogManualIfEnabled(_settings, role, scene, Logger, sessionWrite);
-            _sessionLog?.Write("Hotkey F10: scene discovery manual dump role=" + role + " scene=" + scene.name);
         }
 
         private void HandleAutoStart()
@@ -453,6 +959,8 @@ namespace WoodburySpectatorSync
 
         private void OnActiveSceneChanged(Scene oldScene, Scene newScene)
         {
+            HandleSceneDiscoveryCrawlerSceneChanged(newScene);
+
             if (_settings.ModeSetting.Value != Mode.Host) return;
             if (_hostServer.IsRunning)
             {
@@ -617,6 +1125,11 @@ namespace WoodburySpectatorSync
         private static string FormatPing(long pingMs)
         {
             return pingMs > 0 ? pingMs + "ms" : "n/a";
+        }
+
+        private static string BoolText(bool value)
+        {
+            return value ? "1" : "0";
         }
 
         private static string BuildDialogueStatus(string label, int conversationId, int entryId, int choiceIndex, long lastEventMs, long nowMs)

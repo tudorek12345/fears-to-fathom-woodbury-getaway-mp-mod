@@ -18,6 +18,13 @@ namespace WoodburySpectatorSync.Config
         Capsule
     }
 
+    public enum SteamworksAppIdMode
+    {
+        Disabled,
+        SteamworksTestApp,
+        Custom
+    }
+
     public sealed class Settings
     {
         public ConfigEntry<Mode> ModeSetting;
@@ -67,7 +74,16 @@ namespace WoodburySpectatorSync.Config
         public ConfigEntry<float> CoopVoiceShoutThreshold;
         public ConfigEntry<bool> CoopFootstepSyncEnabled;
         public ConfigEntry<float> CoopFootstepVolume;
+        public ConfigEntry<SteamworksAppIdMode> SteamworksAppIdMode;
+        public ConfigEntry<uint> SteamworksCustomAppId;
         public ConfigEntry<bool> SceneDiscoveryDump;
+        public ConfigEntry<float> SceneDiscoveryDumpIntervalSeconds;
+        public ConfigEntry<bool> SceneDiscoveryDumpCrawler;
+        public ConfigEntry<string> SceneDiscoveryDumpCrawlerScenes;
+        public ConfigEntry<float> SceneDiscoveryDumpCrawlerStartDelaySeconds;
+        public ConfigEntry<float> SceneDiscoveryDumpCrawlerSceneSeconds;
+        public ConfigEntry<bool> SceneDiscoveryDumpCrawlerLoop;
+        public ConfigEntry<bool> SceneDiscoveryDumpCrawlerRequireLivePeer;
 
         public static Settings Bind(ConfigFile config)
         {
@@ -119,7 +135,16 @@ namespace WoodburySpectatorSync.Config
             settings.CoopVoiceShoutThreshold = config.Bind("Voice", "ShoutThreshold", 0.42f, "Normalized remote voice level that counts as a loud shout for hiker/chaser checks.");
             settings.CoopFootstepSyncEnabled = config.Bind("Audio", "FootstepSyncEnabled", true, "Mirror host/client movement footsteps as spatial remote audio events.");
             settings.CoopFootstepVolume = config.Bind("Audio", "FootstepVolume", 0.72f, "Remote footstep playback volume multiplier.");
+            settings.SteamworksAppIdMode = config.Bind("Steamworks", "AppIdMode", global::WoodburySpectatorSync.Config.SteamworksAppIdMode.SteamworksTestApp, "Steamworks app id override for test launches. Direct/Steam launch defaults to SteamworksTestApp/Spacewar. Disabled is LAN/local multi-instance mode. Custom uses CustomAppId.");
+            settings.SteamworksCustomAppId = config.Bind("Steamworks", "CustomAppId", 0u, "Custom Steamworks app id used only when AppIdMode is Custom. Restart the game after changing this.");
             settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", true, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
+            settings.SceneDiscoveryDumpIntervalSeconds = config.Bind("Debug", "SceneDiscoveryDumpIntervalSeconds", 0f, "Optional repeated scene discovery dump interval in seconds. 0 disables timed dumps; F10 manual dumps still work when SceneDiscoveryDump is enabled.");
+            settings.SceneDiscoveryDumpCrawler = config.Bind("Debug", "SceneDiscoveryDumpCrawler", false, "Experimental host-side diagnostic crawler. When enabled with SceneDiscoveryDump, the host cycles through scenes and emits crawler dump blocks. Use only for dump collection.");
+            settings.SceneDiscoveryDumpCrawlerScenes = config.Bind("Debug", "SceneDiscoveryDumpCrawlerScenes", string.Empty, "Comma/semicolon separated scene names or build indices for the experimental dump crawler. Empty means all build-settings scenes.");
+            settings.SceneDiscoveryDumpCrawlerStartDelaySeconds = config.Bind("Debug", "SceneDiscoveryDumpCrawlerStartDelaySeconds", 20f, "Realtime seconds to wait before the experimental dump crawler starts.");
+            settings.SceneDiscoveryDumpCrawlerSceneSeconds = config.Bind("Debug", "SceneDiscoveryDumpCrawlerSceneSeconds", 25f, "Realtime seconds to wait in each scene before the experimental dump crawler dumps and advances.");
+            settings.SceneDiscoveryDumpCrawlerLoop = config.Bind("Debug", "SceneDiscoveryDumpCrawlerLoop", false, "Loop the experimental dump crawler scene list after the final scene.");
+            settings.SceneDiscoveryDumpCrawlerRequireLivePeer = config.Bind("Debug", "SceneDiscoveryDumpCrawlerRequireLivePeer", true, "In CoopHost mode, wait for the client to be connected and Live before each experimental crawler advance.");
             return settings;
         }
     }

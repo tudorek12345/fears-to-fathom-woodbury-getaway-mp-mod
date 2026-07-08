@@ -32,12 +32,12 @@ try {
 }
 finally {
     if (-not $KeepProcesses.IsPresent -and $launchInfo -ne $null) {
-        foreach ($pid in @($launchInfo.HostPid, $launchInfo.ClientPid)) {
-            if ($pid -le 0) { continue }
+        foreach ($processId in @($launchInfo.HostPid, $launchInfo.ClientPid)) {
+            if ($processId -le 0) { continue }
             try {
-                $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
                 if ($proc -ne $null) {
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                    Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                 }
             }
             catch {

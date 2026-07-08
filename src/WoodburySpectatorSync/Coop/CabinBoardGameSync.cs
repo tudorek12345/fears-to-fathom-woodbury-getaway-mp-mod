@@ -593,7 +593,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (mike == null)
             {
-                return false;
+                return IsNeutralMissingMikeOuijaFlag(key, value);
             }
 
             if (key == "ouijaTableParent")
@@ -615,7 +615,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (ouija == null)
             {
-                return false;
+                return IsNeutralMissingOuijaFlag(key, value);
             }
 
             if (key == "initialPositionX" || key == "initialPositionY" || key == "initialPositionZ")
@@ -1505,7 +1505,13 @@ namespace WoodburySpectatorSync.Coop
 
         private static bool TrySetFieldObjectActive(object owner, string fieldName, bool active)
         {
-            return SetActive(GetFieldObject(owner, fieldName), active);
+            var value = GetFieldObject(owner, fieldName);
+            if (value == null)
+            {
+                return !active;
+            }
+
+            return SetActive(value, active);
         }
 
         private static bool SetActive(object target, bool active)
@@ -1513,11 +1519,60 @@ namespace WoodburySpectatorSync.Coop
             var gameObject = ExtractGameObject(target);
             if (gameObject == null)
             {
-                return false;
+                return !active;
             }
 
             gameObject.SetActive(active);
             return true;
+        }
+
+        private static bool IsNeutralMissingMikeOuijaFlag(string key, int value)
+        {
+            if (key == "ouijaTableParent" || key == "tableHoldRigWeight")
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsNeutralMissingOuijaFlag(string key, int value)
+        {
+            if (key == "targetCode")
+            {
+                return value <= 0;
+            }
+
+            if (key == "roundIndex" ||
+                key == "canTakeMouseInput" ||
+                key == "startRound" ||
+                key == "movingToYesPoint" ||
+                key == "hasStartedMovingToYes" ||
+                key == "hasReachedYesPoint" ||
+                key == "startMoveYesTimer" ||
+                key == "canMoveToNextTarget" ||
+                key == "canRandomlyMove" ||
+                key == "hasReachedRandomPoint" ||
+                key == "parentIsMoving" ||
+                key == "randomPositionMoveTimer" ||
+                key == "moveToYesPointTimer" ||
+                key == "roundTimer" ||
+                key == "mouseX" ||
+                key == "mouseY" ||
+                key == "dragAudioVolume")
+            {
+                return true;
+            }
+
+            if (key == "dragAudioMuted" ||
+                key == "initialPositionX" ||
+                key == "initialPositionY" ||
+                key == "initialPositionZ")
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private static bool SetEnabledByReflection(object target, bool enabled)

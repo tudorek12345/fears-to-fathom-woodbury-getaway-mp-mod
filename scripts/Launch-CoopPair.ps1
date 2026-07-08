@@ -1,5 +1,5 @@
 param(
-    [string]$GameDir = "C:\Games\Fears to Fathom - Woodbury Getaway",
+    [string]$GameDir = "C:\Users\tudor\OneDrive\Plocha\Fears.to.Fathom.Woodbury.Getaway",
     [string]$ExePath = "",
     [string]$HostConfig = "",
     [string]$ClientConfig = "",
@@ -9,6 +9,13 @@ param(
     [bool]$UdpEnabled = $true,
     [int]$StartupDelaySeconds = 35,
     [int]$HostReadyTimeoutSeconds = 45,
+    [float]$SceneDiscoveryDumpIntervalSeconds = 0.0,
+    [switch]$ExperimentalSceneDumpCrawler,
+    [string]$SceneDumpCrawlerScenes = "",
+    [float]$SceneDumpCrawlerStartDelaySeconds = 20.0,
+    [float]$SceneDumpCrawlerSceneSeconds = 25.0,
+    [switch]$SceneDumpCrawlerLoop,
+    [switch]$SceneDumpCrawlerNoLivePeerWait,
     [switch]$EnableSessionLog,
     [switch]$NoPrepareConfigs,
     [switch]$AutoStartHost,
@@ -25,6 +32,9 @@ param(
     [float]$RemotePlayerAvatarYOffset = 0.0,
     [string]$HostDisplayName = "",
     [string]$ClientDisplayName = "",
+    [ValidateSet("Disabled", "SteamworksTestApp", "Custom")]
+    [string]$SteamworksAppIdMode = "Disabled",
+    [uint32]$SteamworksCustomAppId = 0,
     [switch]$ForceStopExisting
 )
 
@@ -197,10 +207,19 @@ function Write-WssConfig {
         [float]$RemotePlayerAvatarScale,
         [float]$RemotePlayerAvatarYOffset,
         [string]$DisplayName,
+        [string]$SteamworksAppIdMode,
+        [uint32]$SteamworksCustomAppId,
         [string]$HostIp,
         [int]$HostPort,
         [int]$UdpPort,
-        [bool]$UdpEnabled
+        [bool]$UdpEnabled,
+        [float]$SceneDiscoveryDumpIntervalSeconds,
+        [bool]$SceneDiscoveryDumpCrawler,
+        [string]$SceneDumpCrawlerScenes,
+        [float]$SceneDumpCrawlerStartDelaySeconds,
+        [float]$SceneDumpCrawlerSceneSeconds,
+        [bool]$SceneDumpCrawlerLoop,
+        [bool]$SceneDumpCrawlerRequireLivePeer
     )
 
     $parent = Split-Path -Parent $Path
@@ -226,6 +245,13 @@ UdpPort = $UdpPort
 [Debug]
 VerboseLogging = true
 SceneDiscoveryDump = true
+SceneDiscoveryDumpIntervalSeconds = $(Format-InvariantFloat -Value $SceneDiscoveryDumpIntervalSeconds)
+SceneDiscoveryDumpCrawler = $($SceneDiscoveryDumpCrawler.ToString().ToLowerInvariant())
+SceneDiscoveryDumpCrawlerScenes = $SceneDumpCrawlerScenes
+SceneDiscoveryDumpCrawlerStartDelaySeconds = $(Format-InvariantFloat -Value $SceneDumpCrawlerStartDelaySeconds)
+SceneDiscoveryDumpCrawlerSceneSeconds = $(Format-InvariantFloat -Value $SceneDumpCrawlerSceneSeconds)
+SceneDiscoveryDumpCrawlerLoop = $($SceneDumpCrawlerLoop.ToString().ToLowerInvariant())
+SceneDiscoveryDumpCrawlerRequireLivePeer = $($SceneDumpCrawlerRequireLivePeer.ToString().ToLowerInvariant())
 
 [UI]
 OverlayEnabled = true
@@ -246,6 +272,10 @@ RemotePlayerAvatarScale = $(Format-InvariantFloat -Value $RemotePlayerAvatarScal
 RemotePlayerAvatarYOffset = $(Format-InvariantFloat -Value $RemotePlayerAvatarYOffset)
 ForceCabinStartSequence = true
 CabinStartSequence = StartAfterShower
+
+[Steamworks]
+AppIdMode = $SteamworksAppIdMode
+CustomAppId = $SteamworksCustomAppId
 "@
 
     Set-Content -LiteralPath $Path -Value $content -Encoding UTF8
@@ -280,8 +310,9 @@ $bepInExConfig = Join-Path $GameDir "BepInEx\config\BepInEx.cfg"
 Wait-ForUnlockedFile -Path $bepInExConfig -TimeoutSeconds 20
 
 if (-not $NoPrepareConfigs.IsPresent) {
-    Write-WssConfig -Path $HostConfig -Mode "CoopHost" -AutoStartHost $AutoStartHost.IsPresent -AutoConnectClient $false -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -DisplayName $HostDisplayName -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled
-    Write-WssConfig -Path $ClientConfig -Mode "CoopClient" -AutoStartHost $false -AutoConnectClient $AutoConnectClient.IsPresent -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -DisplayName $ClientDisplayName -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled
+    $requireLivePeer = -not $SceneDumpCrawlerNoLivePeerWait.IsPresent
+    Write-WssConfig -Path $HostConfig -Mode "CoopHost" -AutoStartHost $AutoStartHost.IsPresent -AutoConnectClient $false -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -DisplayName $HostDisplayName -SteamworksAppIdMode $SteamworksAppIdMode -SteamworksCustomAppId $SteamworksCustomAppId -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled -SceneDiscoveryDumpIntervalSeconds $SceneDiscoveryDumpIntervalSeconds -SceneDiscoveryDumpCrawler $ExperimentalSceneDumpCrawler.IsPresent -SceneDumpCrawlerScenes $SceneDumpCrawlerScenes -SceneDumpCrawlerStartDelaySeconds $SceneDumpCrawlerStartDelaySeconds -SceneDumpCrawlerSceneSeconds $SceneDumpCrawlerSceneSeconds -SceneDumpCrawlerLoop $SceneDumpCrawlerLoop.IsPresent -SceneDumpCrawlerRequireLivePeer $requireLivePeer
+    Write-WssConfig -Path $ClientConfig -Mode "CoopClient" -AutoStartHost $false -AutoConnectClient $AutoConnectClient.IsPresent -RemotePlayerPrefabPath $RemotePlayerPrefabPath -RemotePlayerRig $RemotePlayerRig -RemotePlayerAvatarSource $RemotePlayerAvatarSource -RemotePlayerAvatarBundlePath $RemotePlayerAvatarBundlePath -RemotePlayerAvatarId $RemotePlayerAvatarId -RemotePlayerAvatarScale $RemotePlayerAvatarScale -RemotePlayerAvatarYOffset $RemotePlayerAvatarYOffset -DisplayName $ClientDisplayName -SteamworksAppIdMode $SteamworksAppIdMode -SteamworksCustomAppId $SteamworksCustomAppId -HostIp $HostIp -HostPort $HostPort -UdpPort $UdpPort -UdpEnabled $UdpEnabled -SceneDiscoveryDumpIntervalSeconds $SceneDiscoveryDumpIntervalSeconds -SceneDiscoveryDumpCrawler $false -SceneDumpCrawlerScenes $SceneDumpCrawlerScenes -SceneDumpCrawlerStartDelaySeconds $SceneDumpCrawlerStartDelaySeconds -SceneDumpCrawlerSceneSeconds $SceneDumpCrawlerSceneSeconds -SceneDumpCrawlerLoop $false -SceneDumpCrawlerRequireLivePeer $requireLivePeer
 }
 
 $hostProc = $null
@@ -375,6 +406,13 @@ if ($EnableSessionLog.IsPresent) {
 Write-Host "AutoStartHost   : $($AutoStartHost.IsPresent)"
 Write-Host "AutoConnectClient: $($AutoConnectClient.IsPresent)"
 Write-Host "Windowed launch : $($NoWindowed.IsPresent -eq $false) ($WindowWidth x $WindowHeight)"
+Write-Host "SceneDiscoveryDumpIntervalSeconds: $(Format-InvariantFloat -Value $SceneDiscoveryDumpIntervalSeconds)"
+Write-Host "ExperimentalSceneDumpCrawler: $($ExperimentalSceneDumpCrawler.IsPresent)"
+Write-Host "SceneDumpCrawlerScenes: $SceneDumpCrawlerScenes"
+Write-Host "SceneDumpCrawlerStartDelaySeconds: $(Format-InvariantFloat -Value $SceneDumpCrawlerStartDelaySeconds)"
+Write-Host "SceneDumpCrawlerSceneSeconds: $(Format-InvariantFloat -Value $SceneDumpCrawlerSceneSeconds)"
+Write-Host "SceneDumpCrawlerLoop: $($SceneDumpCrawlerLoop.IsPresent)"
+Write-Host "SceneDumpCrawlerRequireLivePeer: $(-not $SceneDumpCrawlerNoLivePeerWait.IsPresent)"
 Write-Host "RemotePlayerPrefabPath: $RemotePlayerPrefabPath"
 Write-Host "RemotePlayerRig : $RemotePlayerRig"
 Write-Host "RemotePlayerAvatarSource: $RemotePlayerAvatarSource"
@@ -384,6 +422,8 @@ Write-Host "RemotePlayerAvatarScale: $(Format-InvariantFloat -Value $RemotePlaye
 Write-Host "RemotePlayerAvatarYOffset: $(Format-InvariantFloat -Value $RemotePlayerAvatarYOffset)"
 Write-Host "HostDisplayName: $HostDisplayName"
 Write-Host "ClientDisplayName: $ClientDisplayName"
+Write-Host "SteamworksAppIdMode: $SteamworksAppIdMode"
+Write-Host "SteamworksCustomAppId: $SteamworksCustomAppId"
 
 [pscustomobject]@{
     StartedAt = Get-Date
@@ -406,6 +446,13 @@ Write-Host "ClientDisplayName: $ClientDisplayName"
     Windowed = (-not $NoWindowed.IsPresent)
     WindowWidth = $WindowWidth
     WindowHeight = $WindowHeight
+    SceneDiscoveryDumpIntervalSeconds = $SceneDiscoveryDumpIntervalSeconds
+    ExperimentalSceneDumpCrawler = $ExperimentalSceneDumpCrawler.IsPresent
+    SceneDumpCrawlerScenes = $SceneDumpCrawlerScenes
+    SceneDumpCrawlerStartDelaySeconds = $SceneDumpCrawlerStartDelaySeconds
+    SceneDumpCrawlerSceneSeconds = $SceneDumpCrawlerSceneSeconds
+    SceneDumpCrawlerLoop = $SceneDumpCrawlerLoop.IsPresent
+    SceneDumpCrawlerRequireLivePeer = (-not $SceneDumpCrawlerNoLivePeerWait.IsPresent)
     RemotePlayerPrefabPath = $RemotePlayerPrefabPath
     RemotePlayerRig = $RemotePlayerRig
     RemotePlayerAvatarSource = $RemotePlayerAvatarSource
@@ -415,4 +462,6 @@ Write-Host "ClientDisplayName: $ClientDisplayName"
     RemotePlayerAvatarYOffset = $RemotePlayerAvatarYOffset
     HostDisplayName = $HostDisplayName
     ClientDisplayName = $ClientDisplayName
+    SteamworksAppIdMode = $SteamworksAppIdMode
+    SteamworksCustomAppId = $SteamworksCustomAppId
 }

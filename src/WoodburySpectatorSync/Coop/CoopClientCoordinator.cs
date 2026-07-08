@@ -190,6 +190,7 @@ namespace WoodburySpectatorSync.Coop
         private const float AiGeneralSmoothing = 13f;
         private const float AiMikeSmoothing = 16f;
         private const float LocalPlayerHostSideOffsetMeters = 1.35f;
+        private const string DialogueChoiceIntentAction = "DialogueChoice";
         private bool _forcedCabinSpawn;
         private bool _cabinPrefsPrepared;
         private bool _dialogueUiDisabled;
@@ -202,6 +203,11 @@ namespace WoodburySpectatorSync.Coop
         private int _hostDialogueEntryId = -1;
         private int _hostDialogueChoiceIndex = -1;
         private long _hostDialogueEventMs;
+        private bool _hasHostDialogueMenu;
+        private DialogueUiMirrorSync.MenuState _lastHostDialogueMenu;
+        private long _lastDialogueChoiceIntentMs;
+        private int _localDialogueChoiceCursor;
+        private int _dialogueChoiceIntentSeq;
         private string _lastStoryEventKey = string.Empty;
         private int _lastStoryEventValue;
         private long _lastStoryEventMs;
@@ -222,6 +228,7 @@ namespace WoodburySpectatorSync.Coop
         private float _nextCabinHidingLogTime;
         private long _nextCabinCookingPropApplyLogMs;
         private long _nextCabinAmbientApplyLogMs;
+        private bool _cabinSharedDeathTriggered;
         private float _lastScriptedHostSnapTime;
         private bool _hostSceneScriptedLock;
         private int _hostCabinPlayerState = -1;
@@ -416,7 +423,7 @@ namespace WoodburySpectatorSync.Coop
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "client");
             _officeNpcRegistry = SceneSyncRegistries.CreateOfficeNpcRegistry(logger, sessionLogWrite, "client");
             _parkingLotNpcRegistry = SceneSyncRegistries.CreateParkingLotNpcRegistry(logger, sessionLogWrite, "client");
-            _interactor = new CoopClientInteractor(client);
+            _interactor = new CoopClientInteractor(client, () => _hasHostDialogueMenu);
             _hostAvatar = new RemoteAvatar("CoopHostAvatar", new Color(1f, 0.2f, 0.2f, 0.8f));
 
             var doorType = typeof(NOTLonely_Door.DoorScript);
@@ -622,6 +629,7 @@ namespace WoodburySpectatorSync.Coop
             TryApplyPendingPhoneMirror();
             SendSceneReadyIfNeeded();
             UpdateRemoteDialogue();
+            PollDialogueChoiceIntent(nowMs);
             CheckDialogueDrift();
             if (_isLoading)
             {
@@ -663,6 +671,7 @@ namespace WoodburySpectatorSync.Coop
             TryForceCabinStart();
             ApplyPendingStates();
             UpdateSmoothedAiStates();
+            UpdateSmoothedNpcStates();
             UnlockLocalDialogueCamera();
             MaybeTeleportToHost();
             SendPingIfDue();
@@ -1235,11 +1244,9 @@ namespace WoodburySpectatorSync.Coop
 
             if (!string.Equals(ack.PluginVersion, Protocol.PluginVersion, StringComparison.Ordinal))
             {
-                var reason = "plugin-version-mismatch host=" + ack.PluginVersion + " client=" + Protocol.PluginVersion + " detail=" + ack.Reason;
-                _logger.LogError("Co-op session client: HelloAck rejected reason=" + reason);
-                _lifecycle.ForceDisconnect("hello-rejected:" + reason, nowMs);
-                _client.Disconnect();
-                return;
+                _logger.LogWarning("Co-op session client: plugin patch differs but protocol matches; accepting hostPlugin=" +
+                    ack.PluginVersion + " clientPlugin=" + Protocol.PluginVersion + " protocol=" + Protocol.Version +
+                    " detail=" + ack.Reason);
             }
 
             _activeHostSessionId = ack.SessionId;
@@ -1792,6 +1799,7 @@ namespace WoodburySpectatorSync.Coop
             _hostDialogueEntryId = -1;
             _hostDialogueChoiceIndex = -1;
             _hostDialogueEventMs = 0;
+            _hasHostDialogueMenu = false;
             _lastStoryEventKey = string.Empty;
             _lastStoryEventValue = 0;
             _lastStoryEventMs = 0;
@@ -2029,10 +2037,213 @@ namespace WoodburySpectatorSync.Coop
                     state.Duration,
                     kind));
             }
+            else if (string.Equals(state.UiKind, DialogueUiMirrorSync.UiKind, StringComparison.OrdinalIgnoreCase))
+            {
+                HandleDialogueMenuMirrorState(state);
+            }
             else if (string.Equals(state.UiKind, PhoneMirrorSync.UiKind, StringComparison.OrdinalIgnoreCase))
             {
                 HandlePhoneMirrorState(state);
             }
+        }
+
+        private void HandleDialogueMenuMirrorState(UiMirrorState state)
+        {
+            if (!state.Visible || string.IsNullOrEmpty(state.Text))
+            {
+                _hasHostDialogueMenu = false;
+                HandleRemoteDialogue(new DialogueLineMessage(string.Empty, string.Empty, 0f, 3));
+                return;
+            }
+
+            DialogueUiMirrorSync.MenuState menu;
+            if (!DialogueUiMirrorSync.TryParsePayload(state.Text, out menu))
+            {
+                return;
+            }
+
+            if (!DialogueUiMirrorSync.IsForCurrentScene(menu))
+            {
+                return;
+            }
+
+            var text = DialogueUiMirrorSync.BuildDisplayText(menu);
+            if (string.IsNullOrEmpty(text))
+            {
+                _hasHostDialogueMenu = false;
+                return;
+            }
+
+            var choiceCount = menu.Choices != null ? menu.Choices.Length : 0;
+            if (choiceCount > 0)
+            {
+                if (menu.ChoiceIndex >= 0 && menu.ChoiceIndex < choiceCount)
+                {
+                    _localDialogueChoiceCursor = menu.ChoiceIndex;
+                }
+                else
+                {
+                    _localDialogueChoiceCursor = Mathf.Clamp(_localDialogueChoiceCursor, 0, choiceCount - 1);
+                    menu.ChoiceIndex = _localDialogueChoiceCursor;
+                    text = DialogueUiMirrorSync.BuildDisplayText(menu);
+                }
+            }
+
+            _lastHostDialogueMenu = menu;
+            _hasHostDialogueMenu = choiceCount > 0;
+
+            var duration = Mathf.Clamp(state.Duration, MinDialogueDisplaySeconds, 12f);
+            HandleRemoteDialogue(new DialogueLineMessage(
+                menu.Speaker ?? state.Speaker ?? string.Empty,
+                text,
+                duration,
+                3));
+
+            if (_settings.VerboseLogging.Value)
+            {
+                var line = "DialogueUiMirror client apply scene=" + SceneManager.GetActiveScene().name +
+                    " conv=" + menu.ConversationId +
+                    " entry=" + menu.EntryId +
+                    " choices=" + (menu.Choices != null ? menu.Choices.Length : 0) +
+                    " selected=" + menu.ChoiceIndex;
+                _logger.LogInfo(line);
+                _sessionLogWrite?.Invoke(line);
+            }
+        }
+
+        private void PollDialogueChoiceIntent(long nowMs)
+        {
+            if (!_hasHostDialogueMenu ||
+                !_lifecycle.IsLive ||
+                !_settings.CoopRouteInteractions.Value ||
+                _lastHostDialogueMenu.Choices == null ||
+                _lastHostDialogueMenu.Choices.Length == 0)
+            {
+                return;
+            }
+
+            bool cursorChanged;
+            var displayedIndex = GetDialogueChoiceInput(_lastHostDialogueMenu.Choices.Length, out cursorChanged);
+            if (cursorChanged)
+            {
+                RefreshDialogueMenuMirrorDisplay();
+            }
+
+            if (displayedIndex < 0)
+            {
+                return;
+            }
+
+            if (nowMs - _lastDialogueChoiceIntentMs < 350)
+            {
+                return;
+            }
+
+            _lastDialogueChoiceIntentMs = nowMs;
+
+            var choice = _lastHostDialogueMenu.Choices[displayedIndex];
+            var actionSeq = ++_dialogueChoiceIntentSeq;
+            var payload = "conv=" + _lastHostDialogueMenu.ConversationId +
+                          ";entry=" + _lastHostDialogueMenu.EntryId +
+                          ";choiceEntry=" + choice.EntryId;
+
+            _client.Enqueue(new SceneActionIntentMessage(new SceneActionIntent
+            {
+                SessionId = _activeHostSessionId,
+                Generation = _activeSceneGeneration,
+                ActionSeq = actionSeq,
+                UnixTimeMs = nowMs,
+                SceneName = SceneManager.GetActiveScene().name,
+                ActionId = DialogueChoiceIntentAction,
+                TargetPath = string.Empty,
+                Payload = payload,
+                IntValue = choice.Index,
+                FloatValue = 0f,
+                Flags = _lastHostDialogueMenu.Choices.Length
+            }));
+
+            if (_settings.VerboseLogging.Value)
+            {
+                var line = "DialogueChoice client intent choice=" + choice.Index +
+                    " displayed=" + displayedIndex +
+                    " conv=" + _lastHostDialogueMenu.ConversationId +
+                    " entry=" + _lastHostDialogueMenu.EntryId +
+                    " scene=" + SceneManager.GetActiveScene().name;
+                _logger.LogInfo(line);
+                _sessionLogWrite?.Invoke(line);
+            }
+        }
+
+        private int GetDialogueChoiceInput(int choiceCount, out bool cursorChanged)
+        {
+            cursorChanged = false;
+            if (choiceCount <= 0)
+            {
+                return -1;
+            }
+
+            for (var i = 0; i < Mathf.Min(choiceCount, 9); i++)
+            {
+                if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i)) ||
+                    Input.GetKeyDown((KeyCode)((int)KeyCode.Keypad1 + i)))
+                {
+                    return i;
+                }
+            }
+
+            var oldCursor = _localDialogueChoiceCursor;
+            var wheel = Input.mouseScrollDelta.y;
+            if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || wheel > 0.01f)
+            {
+                _localDialogueChoiceCursor--;
+            }
+            else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || wheel < -0.01f)
+            {
+                _localDialogueChoiceCursor++;
+            }
+
+            if (choiceCount > 0)
+            {
+                if (_localDialogueChoiceCursor < 0) _localDialogueChoiceCursor = choiceCount - 1;
+                if (_localDialogueChoiceCursor >= choiceCount) _localDialogueChoiceCursor = 0;
+            }
+
+            if (_localDialogueChoiceCursor != oldCursor)
+            {
+                cursorChanged = true;
+                return -1;
+            }
+
+            if (Input.GetKeyDown(KeyCode.Return) ||
+                Input.GetKeyDown(KeyCode.KeypadEnter) ||
+                Input.GetMouseButtonDown(0))
+            {
+                return Mathf.Clamp(_localDialogueChoiceCursor, 0, choiceCount - 1);
+            }
+
+            return -1;
+        }
+
+        private void RefreshDialogueMenuMirrorDisplay()
+        {
+            if (!_hasHostDialogueMenu ||
+                _lastHostDialogueMenu.Choices == null ||
+                _lastHostDialogueMenu.Choices.Length == 0)
+            {
+                return;
+            }
+
+            var menu = _lastHostDialogueMenu;
+            menu.ChoiceIndex = Mathf.Clamp(_localDialogueChoiceCursor, 0, menu.Choices.Length - 1);
+            _lastHostDialogueMenu = menu;
+            var text = DialogueUiMirrorSync.BuildDisplayText(menu);
+            if (string.IsNullOrEmpty(text)) return;
+
+            HandleRemoteDialogue(new DialogueLineMessage(
+                menu.Speaker ?? string.Empty,
+                text,
+                Mathf.Clamp(_remoteDialogueExpiresAt - Time.realtimeSinceStartup, MinDialogueDisplaySeconds, 12f),
+                3));
         }
 
         private void HandlePhoneMirrorState(UiMirrorState state)
@@ -2068,7 +2279,7 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
 
-            _nextPhoneMirrorRetryMs = nowMs + 500;
+            _nextPhoneMirrorRetryMs = nowMs + 150;
             if (TryApplyPhoneMirrorPayload(_pendingPhoneMirrorPayload, _pendingPhoneMirrorSeq, logOnSuccess: true))
             {
                 _pendingPhoneMirrorPayload = string.Empty;
@@ -2246,6 +2457,12 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
+            if (_cabinHouseManager != null &&
+                _cabinHouseManager.gameObject.scene != SceneManager.GetActiveScene())
+            {
+                _cabinHouseManager = null;
+            }
+
             if (_cabinHouseManager == null)
             {
                 _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
@@ -2330,6 +2547,12 @@ namespace WoodburySpectatorSync.Coop
                     TrackPendingState(_pendingCabinGameFirstSeen, key);
                 }
                 return false;
+            }
+
+            if (_cabinGameManager != null &&
+                _cabinGameManager.gameObject.scene != SceneManager.GetActiveScene())
+            {
+                _cabinGameManager = null;
             }
 
             if (_cabinGameManager == null)
@@ -2844,6 +3067,8 @@ namespace WoodburySpectatorSync.Coop
             var applied = TryApplyObjectFieldFlag(death, fieldName, _cabinDeathFieldCache, value);
             if (applied && string.Equals(fieldName, "isDead", StringComparison.Ordinal) && value != 0)
             {
+                TryTriggerSharedCabinDeath(death);
+
                 if (_localFpc != null)
                 {
                     _localFpc.enabled = false;
@@ -2863,6 +3088,35 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return applied;
+        }
+
+        private void TryTriggerSharedCabinDeath(DeathManager death)
+        {
+            if (death == null || _cabinSharedDeathTriggered)
+            {
+                return;
+            }
+
+            _cabinSharedDeathTriggered = true;
+            try
+            {
+                death.playerCaught = true;
+                death.hostIsChasing = false;
+                death.hostIsHaunting = false;
+
+                death.StartCoroutine(death.PerformJumpscareAtRun(true));
+
+                var line = "Co-op shared death client: native death sequence started scene=" +
+                           SceneManager.GetActiveScene().name +
+                           " gen=" + _activeSceneGeneration +
+                           " sid=" + _activeHostSessionId;
+                _logger.LogWarning(line);
+                _sessionLogWrite?.Invoke(line);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Co-op shared death client: failed to start native death sequence reason=" + ex.Message);
+            }
         }
 
         private bool TryApplyBehaviourEnabledFlag(object owner, string fieldName, int value)
@@ -3077,6 +3331,12 @@ namespace WoodburySpectatorSync.Coop
         private bool TryEnsureCabinGameManager()
         {
             if (!IsCabinSceneName(SceneManager.GetActiveScene().name)) return false;
+            if (_cabinGameManager != null &&
+                _cabinGameManager.gameObject.scene != SceneManager.GetActiveScene())
+            {
+                _cabinGameManager = null;
+            }
+
             if (_cabinGameManager == null)
             {
                 _cabinGameManager = UnityEngine.Object.FindObjectOfType<CabinGameManager>();
@@ -3087,7 +3347,13 @@ namespace WoodburySpectatorSync.Coop
 
         private bool TryEnsureCabinHouseManager()
         {
-            if (SceneManager.GetActiveScene().name != "CabinScene") return false;
+            if (!IsCabinSceneName(SceneManager.GetActiveScene().name)) return false;
+            if (_cabinHouseManager != null &&
+                _cabinHouseManager.gameObject.scene != SceneManager.GetActiveScene())
+            {
+                _cabinHouseManager = null;
+            }
+
             if (_cabinHouseManager == null)
             {
                 _cabinHouseManager = UnityEngine.Object.FindObjectOfType<CabinHouseManager>();
@@ -4650,6 +4916,40 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return latest.Position + offset;
+        }
+
+        private void UpdateSmoothedNpcStates()
+        {
+            var sceneName = SceneManager.GetActiveScene().name;
+            if (sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _cabinNpcRegistry?.UpdateSmoothing();
+                return;
+            }
+
+            if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _pizzeriaNpcRegistry?.UpdateSmoothing();
+                return;
+            }
+
+            if (sceneName.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _roadTripNpcRegistry?.UpdateSmoothing();
+                return;
+            }
+
+            if (sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _officeNpcRegistry?.UpdateSmoothing();
+                return;
+            }
+
+            if (sceneName.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                sceneName.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _parkingLotNpcRegistry?.UpdateSmoothing();
+            }
         }
 
         private Transform ResolveAiFallback(AiTransformState state)
@@ -6587,6 +6887,7 @@ namespace WoodburySpectatorSync.Coop
             _hostDialogueEntryId = -1;
             _hostDialogueChoiceIndex = -1;
             _hostDialogueEventMs = 0;
+            _hasHostDialogueMenu = false;
             _lastStoryEventKey = string.Empty;
             _lastStoryEventValue = 0;
             _lastStoryEventMs = 0;
@@ -6679,6 +6980,7 @@ namespace WoodburySpectatorSync.Coop
             _nextCabinHidingLogTime = 0f;
             _nextCabinCookingPropApplyLogMs = 0;
             _nextCabinAmbientApplyLogMs = 0;
+            _cabinSharedDeathTriggered = false;
             _lastScriptedHostSnapTime = 0f;
             _hostSceneScriptedLock = false;
             _hostCabinPlayerState = -1;
@@ -7232,7 +7534,8 @@ namespace WoodburySpectatorSync.Coop
             _remoteDialogueText = dialogue.Text ?? string.Empty;
             _remoteDialogueKind = dialogue.Kind;
             var duration = Mathf.Max(MinDialogueDisplaySeconds, dialogue.Duration);
-            if (TryShowNativeRemoteDialogue(_remoteDialogueSpeaker, _remoteDialogueText, duration))
+            if (dialogue.Kind != 3 &&
+                TryShowNativeRemoteDialogue(_remoteDialogueSpeaker, _remoteDialogueText, duration))
             {
                 ClearRemoteDialogue();
                 return;
@@ -7295,6 +7598,21 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!_client.TryConsumeLatestHostTransform(out var state))
             {
+                return;
+            }
+
+            if (!_lifecycle.IsLive)
+            {
+                _hostTransformsDroppedPreLive++;
+                _lifecycle.NotePreLive(
+                    "Latest",
+                    "drop",
+                    MessageType.PlayerTransform,
+                    "not-scene-ready",
+                    SceneManager.GetActiveScene().name,
+                    _activeSceneGeneration,
+                    _activeHostSessionId,
+                    Time.realtimeSinceStartup);
                 return;
             }
 

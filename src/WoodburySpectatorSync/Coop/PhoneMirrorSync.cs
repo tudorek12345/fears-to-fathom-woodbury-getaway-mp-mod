@@ -12,7 +12,10 @@ namespace WoodburySpectatorSync.Coop
         public const string UiKind = "Phone";
 
         private const string Header = "WSS_PHONE";
-        private const int Version = 1;
+        private const int Version = 3;
+
+        private static string _lastNotifPulseKey = string.Empty;
+        private static string _lastRentPulseKey = string.Empty;
 
         public struct Summary
         {
@@ -23,6 +26,7 @@ namespace WoodburySpectatorSync.Coop
             public int AppliedBatchCount;
             public int AppliedMessageCount;
             public int MissingCount;
+            public int NotificationPulseCount;
             public string SceneName;
 
             public override string ToString()
@@ -34,6 +38,7 @@ namespace WoodburySpectatorSync.Coop
                        " active=" + ActiveMessageCount +
                        " appliedBatches=" + AppliedBatchCount +
                        " appliedMessages=" + AppliedMessageCount +
+                       " pulses=" + NotificationPulseCount +
                        " missing=" + MissingCount;
             }
         }
@@ -140,7 +145,7 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
-            ApplyPhoneHeader(phone, headerValues);
+            ApplyPhoneHeader(phone, headerValues, ref summary);
 
             var characters = GetCharacters(notif);
             if (characters == null)
@@ -222,12 +227,24 @@ namespace WoodburySpectatorSync.Coop
                 TryBringCharacterPanelToFront(characters[c]);
             }
 
+            InvokeNoArg(phone, "ResetScroll");
+
             return true;
         }
 
         private static void AppendHeader(StringBuilder builder, string sceneName, Phone phone)
         {
             var notif = GetFieldValue(phone, "notifSystem");
+            var notifSender = GetTextValue(GetFieldValue(notif, "senderNameText"));
+            var notifText = GetTextValue(GetFieldValue(notif, "notificationText"));
+            var rentSender = GetTextValue(GetFieldValue(notif, "senderNameTextRentACabin"));
+            var rentText = GetTextValue(GetFieldValue(notif, "notificationTextRentACabin"));
+            var notifPulseComponent = GetFieldValue(notif, "notif");
+            var rentPulseComponent = GetFieldValue(notif, "notifRentACabin");
+            var notifActive = IsComponentGameObjectActive(notifPulseComponent);
+            var rentActive = IsComponentGameObjectActive(rentPulseComponent);
+            var notifPulse = BuildPulseKey(sceneName, "notif", notifSender, notifText, notifActive);
+            var rentPulse = BuildPulseKey(sceneName, "rent", rentSender, rentText, rentActive);
             builder.Append(Header)
                 .Append("|v=").Append(Version.ToString(CultureInfo.InvariantCulture))
                 .Append("|scene=").Append(Encode(sceneName))
@@ -235,10 +252,14 @@ namespace WoodburySpectatorSync.Coop
                 .Append("|paused=").Append(phone.isPaused ? "1" : "0")
                 .Append("|canvas=").Append(phone.phoneCanvas != null && phone.phoneCanvas.activeSelf ? "1" : "0")
                 .Append("|net=").Append(((int)phone.networkStatus).ToString(CultureInfo.InvariantCulture))
-                .Append("|notifS=").Append(Encode(GetTextValue(GetFieldValue(notif, "senderNameText"))))
-                .Append("|notifT=").Append(Encode(GetTextValue(GetFieldValue(notif, "notificationText"))))
-                .Append("|rentS=").Append(Encode(GetTextValue(GetFieldValue(notif, "senderNameTextRentACabin"))))
-                .Append("|rentT=").Append(Encode(GetTextValue(GetFieldValue(notif, "notificationTextRentACabin"))))
+                .Append("|notifS=").Append(Encode(notifSender))
+                .Append("|notifT=").Append(Encode(notifText))
+                .Append("|notifA=").Append(notifActive ? "1" : "0")
+                .Append("|notifP=").Append(Encode(notifPulse))
+                .Append("|rentS=").Append(Encode(rentSender))
+                .Append("|rentT=").Append(Encode(rentText))
+                .Append("|rentA=").Append(rentActive ? "1" : "0")
+                .Append("|rentP=").Append(Encode(rentPulse))
                 .AppendLine();
         }
 
@@ -271,7 +292,7 @@ namespace WoodburySpectatorSync.Coop
             return builder.ToString();
         }
 
-        private static void ApplyPhoneHeader(Phone phone, Dictionary<string, string> values)
+        private static void ApplyPhoneHeader(Phone phone, Dictionary<string, string> values, ref Summary summary)
         {
             phone.allowPhone = GetBool(values, "allow");
             var networkStatus = Mathf.Clamp(GetInt(values, "net", (int)phone.networkStatus), 0, 4);
@@ -299,6 +320,36 @@ namespace WoodburySpectatorSync.Coop
             SetTextValue(GetFieldValue(notif, "notificationText"), Decode(GetString(values, "notifT", string.Empty)));
             SetTextValue(GetFieldValue(notif, "senderNameTextRentACabin"), Decode(GetString(values, "rentS", string.Empty)));
             SetTextValue(GetFieldValue(notif, "notificationTextRentACabin"), Decode(GetString(values, "rentT", string.Empty)));
+
+            var notifPulseKey = Decode(GetString(values, "notifP", string.Empty));
+            ApplyNotificationPulse(GetFieldValue(notif, "notif"), GetBool(values, "notifA"), notifPulseKey, ref _lastNotifPulseKey, ref summary);
+
+            var rentPulseKey = Decode(GetString(values, "rentP", string.Empty));
+            ApplyNotificationPulse(GetFieldValue(notif, "notifRentACabin"), GetBool(values, "rentA"), rentPulseKey, ref _lastRentPulseKey, ref summary);
+        }
+
+        private static void ApplyNotificationPulse(object pulse, bool active, string pulseKey, ref string lastPulseKey, ref Summary summary)
+        {
+            if (!active)
+            {
+                SetComponentGameObjectActive(pulse, false);
+                lastPulseKey = string.Empty;
+                return;
+            }
+
+            SetComponentGameObjectActive(pulse, true);
+            if (string.IsNullOrEmpty(pulseKey) ||
+                string.Equals(pulseKey, lastPulseKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (InvokeNoArg(pulse, "Pulse"))
+            {
+                summary.NotificationPulseCount++;
+            }
+
+            lastPulseKey = pulseKey;
         }
 
         private static void SetBarColor(object image, bool high)
@@ -360,6 +411,61 @@ namespace WoodburySpectatorSync.Coop
 
             var field = target.GetType().GetField(fieldName);
             return field != null ? field.GetValue(target) : null;
+        }
+
+        private static string BuildPulseKey(string sceneName, string channel, string sender, string text, bool active)
+        {
+            if (!active && string.IsNullOrEmpty(sender) && string.IsNullOrEmpty(text))
+            {
+                return string.Empty;
+            }
+
+            return (sceneName ?? string.Empty) + ":" +
+                   (channel ?? string.Empty) + ":" +
+                   (active ? "1" : "0") + ":" +
+                   StableHash((sender ?? string.Empty) + "\n" + (text ?? string.Empty)).ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static bool IsComponentGameObjectActive(object component)
+        {
+            var unityComponent = component as Component;
+            return unityComponent != null &&
+                   unityComponent.gameObject != null &&
+                   unityComponent.gameObject.activeSelf;
+        }
+
+        private static void SetComponentGameObjectActive(object component, bool active)
+        {
+            var unityComponent = component as Component;
+            if (unityComponent != null && unityComponent.gameObject != null &&
+                unityComponent.gameObject.activeSelf != active)
+            {
+                unityComponent.gameObject.SetActive(active);
+            }
+        }
+
+        private static bool InvokeNoArg(object target, string methodName)
+        {
+            if (target == null || string.IsNullOrEmpty(methodName))
+            {
+                return false;
+            }
+
+            var method = target.GetType().GetMethod(methodName, Type.EmptyTypes);
+            if (method == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                method.Invoke(target, null);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string GetTextValue(object textComponent)

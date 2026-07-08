@@ -21,6 +21,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly Action<string> _sessionLogWrite;
         private readonly VoiceChatSync _voiceChat;
         private readonly PlayerFootstepSync _footstepSync;
+        private readonly CabinChaserTargetAssist _cabinChaserTargetAssist;
         private RemotePlayerProxy _remotePlayer;
         private string _hostDisplayName = "HOST";
         private string _clientDisplayName = "CLIENT";
@@ -140,6 +141,7 @@ namespace WoodburySpectatorSync.Coop
         private const string RoadTripTruckFlagPrefix = RoadTripFlagPrefix + "Truck.";
         private const string OfficeLayoutFlagPrefix = "OfficeLayoutGM.";
         private const string ParkingLotFlagPrefix = "ParkingLotGM.";
+        private const string DialogueChoiceIntentAction = "DialogueChoice";
         private const float MaxInteractDistanceMeters = 3.5f;
         private const float InteractLosPaddingMeters = 0.2f;
         private const long CabinMikeAnimPhaseSendIntervalMs = 250;
@@ -149,6 +151,7 @@ namespace WoodburySpectatorSync.Coop
         private long _nextStorySendMs;
         private long _nextInputSendMs;
         private long _nextCabinMikeAnimPhaseSendMs;
+        private long _nextPizzeriaVisualHeartbeatMs;
         private bool _lastClientConnected;
         private string _lastSceneName = string.Empty;
         private bool _clientSceneReady;
@@ -185,6 +188,9 @@ namespace WoodburySpectatorSync.Coop
         private Response[] _lastDialogueResponses = new Response[0];
         private float _nextDialogueUiScanTime;
         private readonly List<AbstractDialogueUI> _dialogueUis = new List<AbstractDialogueUI>();
+        private long _lastDialogueManualSelectMs;
+        private long _nextDialogueInputRepairMs;
+        private long _nextDialogueInputRepairLogMs;
         private string _lastStoryEventKey = string.Empty;
         private int _lastStoryEventValue;
         private long _lastStoryEventMs;
@@ -467,6 +473,7 @@ namespace WoodburySpectatorSync.Coop
             _lifecycle = new SessionLifecycle("host", logger, sessionLogWrite);
             _voiceChat = new VoiceChatSync(logger, settings, "host", sessionLogWrite);
             _footstepSync = new PlayerFootstepSync(logger, settings, "host", sessionLogWrite);
+            _cabinChaserTargetAssist = new CabinChaserTargetAssist(logger, sessionLogWrite);
             _cabinNpcRegistry = new CabinNpcRegistry(logger, sessionLogWrite, "host");
             _pizzeriaNpcRegistry = SceneSyncRegistries.CreatePizzeriaNpcRegistry(logger, sessionLogWrite, "host");
             _roadTripNpcRegistry = SceneSyncRegistries.CreateRoadTripNpcRegistry(logger, sessionLogWrite, "host");
@@ -623,6 +630,7 @@ namespace WoodburySpectatorSync.Coop
             EnsureRemotePlayer();
             DrainIncoming();
             BindDialogueUiSelection();
+            MaintainHostDialogueInput(nowMs);
 
             // Bounded SceneChange retry; host-wait mode holds the host and continues slow heartbeats.
             if (_server.IsClientConnected && _lifecycle.State == SessionState.SceneSyncing &&
@@ -681,6 +689,7 @@ namespace WoodburySpectatorSync.Coop
 
             UpdateVoice(nowMs);
             UpdateFootsteps(nowMs);
+            UpdateCabinChaserTargetAssist(nowMs);
             PollSubText();
             PollPhoneMirror(nowMs);
 
@@ -1094,6 +1103,27 @@ namespace WoodburySpectatorSync.Coop
                 });
         }
 
+        private void UpdateCabinChaserTargetAssist(long nowMs)
+        {
+            if (_cabinChaserTargetAssist == null)
+            {
+                return;
+            }
+
+            var remoteRoot = _remotePlayer != null && _remotePlayer.Root != null
+                ? _remotePlayer.Root
+                : (_clientAvatar != null ? _clientAvatar.Root : null);
+
+            _cabinChaserTargetAssist.Update(
+                _lifecycle.IsLive,
+                _cabinGameManager,
+                remoteRoot,
+                _lastClientTransformMs,
+                _sceneGeneration,
+                _lifecycle.CurrentSessionId,
+                nowMs);
+        }
+
         private Transform ResolveRemoteVoiceAnchor()
         {
             if (_remotePlayer != null && _remotePlayer.Root != null)
@@ -1309,10 +1339,13 @@ namespace WoodburySpectatorSync.Coop
                 }
                 else if (message is SceneActionIntentMessage intent)
                 {
-                    _logger.LogInfo("SceneActionIntent host received action=" +
-                        (string.IsNullOrEmpty(intent.State.ActionId) ? "-" : intent.State.ActionId) +
-                        " target=" + (string.IsNullOrEmpty(intent.State.TargetPath) ? "-" : intent.State.TargetPath) +
-                        " scene=" + (string.IsNullOrEmpty(intent.State.SceneName) ? "-" : intent.State.SceneName));
+                    if (!_lifecycle.IsLive)
+                    {
+                        _lifecycle.NoteDrop("SceneActionIntent", intent.State.ActionId, nowSeconds);
+                        continue;
+                    }
+
+                    HandleSceneActionIntent(intent.State, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                 }
                 else if (message is PingMessage)
                 {
@@ -1357,18 +1390,15 @@ namespace WoodburySpectatorSync.Coop
 
             if (!string.Equals(hello.PluginVersion, Protocol.PluginVersion, StringComparison.Ordinal))
             {
-                var reason = "plugin-version-mismatch host=" + Protocol.PluginVersion + " client=" + hello.PluginVersion;
-                _logger.LogWarning("Co-op session host: rejecting client " + reason);
-                _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, false, reason, _hostDisplayName));
-                _lifecycle.ForceDisconnect("hello-rejected:" + reason, nowMs);
-                _sceneHandshake.ResetReady();
-                _awaitingSceneReady = false;
-                _clientSceneReady = false;
-                return;
+                _logger.LogWarning("Co-op session host: plugin patch differs but protocol matches; accepting client hostPlugin=" +
+                    Protocol.PluginVersion + " clientPlugin=" + hello.PluginVersion + " protocol=" + Protocol.Version);
             }
 
             _clientDisplayName = PlayerDisplayName.Normalize(hello.DisplayName, "CLIENT");
-            _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, true, "ok", _hostDisplayName));
+            var acceptReason = string.Equals(hello.PluginVersion, Protocol.PluginVersion, StringComparison.Ordinal)
+                ? "ok"
+                : "plugin-patch-compatible host=" + Protocol.PluginVersion + " client=" + hello.PluginVersion;
+            _server.Enqueue(new HelloAckMessage(Protocol.Version, Protocol.PluginVersion, _server.ActiveSessionId, true, acceptReason, _hostDisplayName));
             UpdateRemotePlayerNameTag();
             _lifecycle.SetSessionId(_server.ActiveSessionId);
             _lifecycle.TryTransition(
@@ -2241,15 +2271,21 @@ namespace WoodburySpectatorSync.Coop
                     nowMs);
             }
 
+            var forcePizzeriaVisualHeartbeat = nowMs >= _nextPizzeriaVisualHeartbeatMs;
+            if (forcePizzeriaVisualHeartbeat)
+            {
+                _nextPizzeriaVisualHeartbeatMs = nowMs + 1500;
+            }
+
             SceneTrafficSync.EmitPizzeriaHostFlags(
                 PizzeriaFlagPrefix,
-                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs));
+                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs, forcePizzeriaVisualHeartbeat));
             PizzeriaMediaSync.EmitHostFlags(
                 PizzeriaFlagPrefix,
                 (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs));
             PizzeriaPropSync.EmitHostFlags(
                 PizzeriaFlagPrefix,
-                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs));
+                (key, value) => EmitStoryFlagIfChanged(_pizzeriaFlags, key, value, nowMs, forcePizzeriaVisualHeartbeat));
             PizzeriaSceneStateSync.EmitHostFlags(
                 PizzeriaFlagPrefix,
                 _pizzeriaGameManager,
@@ -2596,9 +2632,10 @@ namespace WoodburySpectatorSync.Coop
             Dictionary<string, int> cache,
             string key,
             int value,
-            long nowMs)
+            long nowMs,
+            bool force = false)
         {
-            if (cache.TryGetValue(key, out var last) && last == value)
+            if (!force && cache.TryGetValue(key, out var last) && last == value)
             {
                 return;
             }
@@ -4178,6 +4215,7 @@ namespace WoodburySpectatorSync.Coop
             }
             _remotePlayer = null;
             _lastSceneName = newScene.name;
+            _cabinChaserTargetAssist?.Reset();
             OnSceneEnterAdapters(newScene.name);
             SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("host", newScene.name, _logger, _sessionLogWrite);
             if (_settings.ModeSetting.Value == Mode.CoopHost)
@@ -4478,13 +4516,375 @@ namespace WoodburySpectatorSync.Coop
             _dialogueConversationId = -1;
             _dialogueEntryId = -1;
             _dialogueChoiceIndex = -1;
+            _lastDialogueResponses = new Response[0];
             _lastDialogueEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             _server.Enqueue(new DialogueEndMessage(convoId));
+            SendUiMirrorDialogueMenu(null, visible: false, selectedChoiceIndex: -1);
         }
 
         private void HandleConversationResponseMenu(Response[] responses)
         {
             _lastDialogueResponses = responses ?? new Response[0];
+            SendUiMirrorDialogueMenu(_lastDialogueResponses, visible: true, selectedChoiceIndex: -1);
+        }
+
+        private void HandleSceneActionIntent(SceneActionIntent state, long nowMs)
+        {
+            var action = state.ActionId ?? string.Empty;
+            if (string.Equals(action, DialogueChoiceIntentAction, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!IsSceneIntentCurrent(state))
+                {
+                    LogDialogueInput("DialogueChoice intent ignored stale scene=" + state.SceneName +
+                        " gen=" + state.Generation +
+                        " sid=" + state.SessionId, nowMs);
+                    return;
+                }
+
+                if (TrySelectDialogueResponse(state.IntValue, "client-intent"))
+                {
+                    LogDialogueInput("DialogueChoice intent applied choice=" + state.IntValue +
+                        " payload=" + (state.Payload ?? string.Empty), nowMs);
+                }
+                else
+                {
+                    LogDialogueInput("DialogueChoice intent failed choice=" + state.IntValue +
+                        " responses=" + (_lastDialogueResponses != null ? _lastDialogueResponses.Length : 0), nowMs);
+                }
+                return;
+            }
+
+            _logger.LogInfo("SceneActionIntent host received action=" +
+                (string.IsNullOrEmpty(action) ? "-" : action) +
+                " target=" + (string.IsNullOrEmpty(state.TargetPath) ? "-" : state.TargetPath) +
+                " scene=" + (string.IsNullOrEmpty(state.SceneName) ? "-" : state.SceneName));
+        }
+
+        private bool IsSceneIntentCurrent(SceneActionIntent state)
+        {
+            if (state.SessionId != 0 && _server.ActiveSessionId != 0 && state.SessionId != _server.ActiveSessionId)
+            {
+                return false;
+            }
+
+            if (state.Generation != 0 && _sceneHandshake.Generation != 0 && state.Generation != _sceneHandshake.Generation)
+            {
+                return false;
+            }
+
+            return string.IsNullOrEmpty(state.SceneName) ||
+                   string.Equals(state.SceneName, SceneManager.GetActiveScene().name, StringComparison.Ordinal);
+        }
+
+        private void MaintainHostDialogueInput(long nowMs)
+        {
+            if (!HasActiveDialogueResponses())
+            {
+                return;
+            }
+
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
+            if (nowMs >= _nextDialogueInputRepairMs)
+            {
+                _nextDialogueInputRepairMs = nowMs + 500;
+                var repaired = EnsureDialogueInputObjectsEnabled();
+                var selected = EnsureFirstDialogueResponseSelected();
+                if (repaired > 0 || selected)
+                {
+                    LogDialogueInput("Dialogue input host repaired objects=" + repaired +
+                        " selected=" + (selected ? "yes" : "no") +
+                        " responses=" + _lastDialogueResponses.Length, nowMs);
+                }
+            }
+
+            var choiceIndex = GetDialogueChoiceHotkey(_lastDialogueResponses.Length);
+            if (choiceIndex >= 0)
+            {
+                TrySelectDialogueResponse(choiceIndex, "host-hotkey");
+            }
+        }
+
+        private bool HasActiveDialogueResponses()
+        {
+            if (_lastDialogueResponses == null || _lastDialogueResponses.Length == 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                return DialogueManager.isConversationActive;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private int EnsureDialogueInputObjectsEnabled()
+        {
+            var repaired = 0;
+
+            var behaviours = Resources.FindObjectsOfTypeAll<MonoBehaviour>();
+            for (var i = 0; i < behaviours.Length; i++)
+            {
+                var behaviour = behaviours[i];
+                if (behaviour == null || behaviour.enabled) continue;
+
+                var type = behaviour.GetType();
+                var typeName = type.FullName ?? type.Name;
+                if (typeName.IndexOf("InputDeviceManager", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    typeName.IndexOf("EventSystem", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    typeName.IndexOf("InputModule", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+
+                if (behaviour.gameObject != null && behaviour.gameObject.activeInHierarchy)
+                {
+                    behaviour.enabled = true;
+                    repaired++;
+                }
+            }
+
+            return repaired;
+        }
+
+        private bool EnsureFirstDialogueResponseSelected()
+        {
+            var eventSystem = GetCurrentEventSystem();
+            if (eventSystem == null || GetCurrentSelectedGameObject(eventSystem) != null)
+            {
+                return false;
+            }
+
+            var buttons = Resources.FindObjectsOfTypeAll<StandardUIResponseButton>();
+            for (var i = 0; i < buttons.Length; i++)
+            {
+                var button = buttons[i];
+                if (button == null || button.response == null || !button.isClickable)
+                {
+                    continue;
+                }
+
+                if (button.gameObject == null || !button.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                SetSelectedGameObject(eventSystem, button.gameObject);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static object GetCurrentEventSystem()
+        {
+            var type = FindLoadedType("UnityEngine.EventSystems.EventSystem");
+            if (type == null) return null;
+
+            try
+            {
+                var property = type.GetProperty("current", BindingFlags.Static | BindingFlags.Public);
+                return property != null ? property.GetValue(null, null) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static GameObject GetCurrentSelectedGameObject(object eventSystem)
+        {
+            if (eventSystem == null) return null;
+
+            try
+            {
+                var property = eventSystem.GetType().GetProperty("currentSelectedGameObject", BindingFlags.Instance | BindingFlags.Public);
+                return property != null ? property.GetValue(eventSystem, null) as GameObject : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void SetSelectedGameObject(object eventSystem, GameObject selected)
+        {
+            if (eventSystem == null || selected == null) return;
+
+            try
+            {
+                var method = eventSystem.GetType().GetMethod(
+                    "SetSelectedGameObject",
+                    BindingFlags.Instance | BindingFlags.Public,
+                    null,
+                    new[] { typeof(GameObject) },
+                    null);
+                method?.Invoke(eventSystem, new object[] { selected });
+            }
+            catch
+            {
+            }
+        }
+
+        private static Type FindLoadedType(string fullName)
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (var i = 0; i < assemblies.Length; i++)
+            {
+                try
+                {
+                    var type = assemblies[i].GetType(fullName, false);
+                    if (type != null) return type;
+                }
+                catch
+                {
+                }
+            }
+
+            return null;
+        }
+
+        private int GetDialogueChoiceHotkey(int choiceCount)
+        {
+            if (choiceCount <= 0)
+            {
+                return -1;
+            }
+
+            for (var i = 0; i < Mathf.Min(choiceCount, 9); i++)
+            {
+                if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i)) ||
+                    Input.GetKeyDown((KeyCode)((int)KeyCode.Keypad1 + i)))
+                {
+                    return i;
+                }
+            }
+
+            if (choiceCount == 1 &&
+                (Input.GetKeyDown(KeyCode.Return) ||
+                 Input.GetKeyDown(KeyCode.KeypadEnter) ||
+                 Input.GetMouseButtonDown(0)))
+            {
+                return 0;
+            }
+
+            return -1;
+        }
+
+        private bool TrySelectDialogueResponse(int choiceIndex, string reason)
+        {
+            if (_lastDialogueResponses == null || choiceIndex < 0 || choiceIndex >= _lastDialogueResponses.Length)
+            {
+                return false;
+            }
+
+            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (nowMs - _lastDialogueManualSelectMs < 250)
+            {
+                return false;
+            }
+
+            var response = _lastDialogueResponses[choiceIndex];
+            if (response == null)
+            {
+                return false;
+            }
+
+            _lastDialogueManualSelectMs = nowMs;
+
+            if (TryClickMatchingDialogueButton(response, reason, nowMs))
+            {
+                return true;
+            }
+
+            for (var i = 0; i < _dialogueUis.Count; i++)
+            {
+                var ui = _dialogueUis[i];
+                if (ui == null || !ui.enabled) continue;
+                ui.OnClick(response);
+                LogDialogueInput("Dialogue input selected choice=" + choiceIndex +
+                    " reason=" + reason +
+                    " ui=" + ui.GetType().Name, nowMs);
+                return true;
+            }
+
+            var uis = Resources.FindObjectsOfTypeAll<AbstractDialogueUI>();
+            for (var i = 0; i < uis.Length; i++)
+            {
+                var ui = uis[i];
+                if (ui == null || !ui.enabled) continue;
+                ui.OnClick(response);
+                LogDialogueInput("Dialogue input selected choice=" + choiceIndex +
+                    " reason=" + reason +
+                    " ui=" + ui.GetType().Name, nowMs);
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryClickMatchingDialogueButton(Response response, string reason, long nowMs)
+        {
+            var buttons = Resources.FindObjectsOfTypeAll<StandardUIResponseButton>();
+            for (var i = 0; i < buttons.Length; i++)
+            {
+                var button = buttons[i];
+                if (button == null || button.response == null)
+                {
+                    continue;
+                }
+
+                if (!IsSameDialogueResponse(button.response, response))
+                {
+                    continue;
+                }
+
+                button.OnClick();
+                LogDialogueInput("Dialogue input clicked native button reason=" + reason +
+                    " target=" + (button.target != null ? button.target.name : "-"), nowMs);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsSameDialogueResponse(Response left, Response right)
+        {
+            if (left == null || right == null)
+            {
+                return false;
+            }
+
+            if (ReferenceEquals(left, right))
+            {
+                return true;
+            }
+
+            return left.destinationEntry != null &&
+                   right.destinationEntry != null &&
+                   left.destinationEntry.conversationID == right.destinationEntry.conversationID &&
+                   left.destinationEntry.id == right.destinationEntry.id;
+        }
+
+        private void LogDialogueInput(string line, long nowMs)
+        {
+            if (!_settings.VerboseLogging.Value && nowMs < _nextDialogueInputRepairLogMs)
+            {
+                return;
+            }
+
+            if (!_settings.VerboseLogging.Value)
+            {
+                _nextDialogueInputRepairLogMs = nowMs + 5000;
+            }
+
+            _logger.LogInfo(line);
+            _sessionLogWrite?.Invoke(line);
         }
 
         private void OnDialogueResponseSelected(object sender, SelectedResponseEventArgs e)
@@ -4515,10 +4915,12 @@ namespace WoodburySpectatorSync.Coop
             _dialogueChoiceIndex = choiceIndex;
             _lastDialogueEventMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             _server.Enqueue(new DialogueChoiceMessage(convoId, entryId, choiceIndex));
+            SendUiMirrorDialogueMenu(_lastDialogueResponses, visible: true, selectedChoiceIndex: choiceIndex);
         }
 
         private void HandleConversationLine(Subtitle subtitle)
         {
+            SendUiMirrorDialogueMenu(null, visible: false, selectedChoiceIndex: -1);
             SendDialogueLine(subtitle, kind: 0);
             SendDialogueAdvance(subtitle);
         }
@@ -4528,6 +4930,7 @@ namespace WoodburySpectatorSync.Coop
             if (!_clientSceneReady) return;
             _server.Enqueue(new DialogueLineMessage(string.Empty, string.Empty, 0f, 0));
             SendUiMirrorDialogue(string.Empty, string.Empty, 0f, 0, visible: false);
+            SendUiMirrorDialogueMenu(null, visible: false, selectedChoiceIndex: -1);
         }
 
         private void HandleBarkLine(Subtitle subtitle)
@@ -4575,6 +4978,166 @@ namespace WoodburySpectatorSync.Coop
                 Duration = duration,
                 Flags = kind
             }));
+        }
+
+        private void SendUiMirrorDialogueMenu(Response[] responses, bool visible, int selectedChoiceIndex)
+        {
+            if (!_clientSceneReady) return;
+
+            var choices = new List<DialogueUiMirrorSync.Choice>();
+            if (visible && responses != null)
+            {
+                for (var i = 0; i < responses.Length; i++)
+                {
+                    var response = responses[i];
+                    if (response == null) continue;
+
+                    var text = GetResponseText(response);
+                    if (string.IsNullOrEmpty(text)) continue;
+
+                    choices.Add(new DialogueUiMirrorSync.Choice
+                    {
+                        Index = i,
+                        EntryId = response.destinationEntry != null ? response.destinationEntry.id : -1,
+                        Text = text
+                    });
+                }
+            }
+
+            var shouldShow = visible && choices.Count > 0;
+            var convoId = _dialogueConversationId;
+            var entryId = _dialogueEntryId;
+            var speaker = string.Empty;
+            var prompt = string.Empty;
+            TryGetCurrentDialoguePrompt(out convoId, out entryId, out speaker, out prompt);
+
+            var duration = shouldShow
+                ? Mathf.Clamp(2f + (prompt.Length + choices.Count * 28) * 0.04f, 4f, 12f)
+                : 0f;
+
+            _uiMirrorSeq++;
+            _server.Enqueue(new UiMirrorStateMessage(new UiMirrorState
+            {
+                SessionId = _server.ActiveSessionId,
+                Generation = _sceneHandshake.Generation,
+                UiSeq = _uiMirrorSeq,
+                UnixTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                SceneName = SceneManager.GetActiveScene().name,
+                UiKind = DialogueUiMirrorSync.UiKind,
+                Speaker = speaker,
+                Text = shouldShow
+                    ? DialogueUiMirrorSync.BuildPayload(
+                        SceneManager.GetActiveScene().name,
+                        convoId,
+                        entryId,
+                        selectedChoiceIndex,
+                        speaker,
+                        prompt,
+                        choices)
+                    : string.Empty,
+                ChoiceIndex = selectedChoiceIndex,
+                Visible = shouldShow,
+                Duration = duration,
+                Flags = choices.Count
+            }));
+
+            if (_settings.VerboseLogging.Value && shouldShow)
+            {
+                var line = "DialogueUiMirror host menu scene=" + SceneManager.GetActiveScene().name +
+                    " conv=" + convoId +
+                    " entry=" + entryId +
+                    " choices=" + choices.Count +
+                    " selected=" + selectedChoiceIndex;
+                _logger.LogInfo(line);
+                _sessionLogWrite?.Invoke(line);
+            }
+        }
+
+        private bool TryGetCurrentDialoguePrompt(out int conversationId, out int entryId, out string speaker, out string text)
+        {
+            conversationId = _dialogueConversationId;
+            entryId = _dialogueEntryId;
+            speaker = string.Empty;
+            text = string.Empty;
+
+            try
+            {
+                var state = DialogueManager.currentConversationState;
+                var subtitle = state != null ? state.subtitle : null;
+                if (subtitle == null)
+                {
+                    return false;
+                }
+
+                if (subtitle.dialogueEntry != null)
+                {
+                    conversationId = subtitle.dialogueEntry.conversationID;
+                    entryId = subtitle.dialogueEntry.id;
+                }
+
+                speaker = subtitle.speakerInfo != null ? subtitle.speakerInfo.Name : string.Empty;
+                text = subtitle.formattedText != null ? subtitle.formattedText.text : string.Empty;
+                return !string.IsNullOrEmpty(text) || !string.IsNullOrEmpty(speaker);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string GetResponseText(Response response)
+        {
+            if (response == null)
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                var type = response.GetType();
+                var field = type.GetField("formattedText", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                var formattedText = field != null ? field.GetValue(response) : null;
+                if (formattedText != null)
+                {
+                    var textProperty = formattedText.GetType().GetProperty("text", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    var text = textProperty != null ? textProperty.GetValue(formattedText, null) as string : null;
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        return text;
+                    }
+                }
+            }
+            catch
+            {
+                // Fall through to destination-entry fallback.
+            }
+
+            try
+            {
+                if (response.destinationEntry != null)
+                {
+                    var entryType = response.destinationEntry.GetType();
+                    var subtitleField = entryType.GetField("subtitleText", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    var subtitleText = subtitleField != null ? subtitleField.GetValue(response.destinationEntry) as string : null;
+                    if (!string.IsNullOrEmpty(subtitleText))
+                    {
+                        return subtitleText;
+                    }
+
+                    var dialogueTextField = entryType.GetField("DialogueText", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    var dialogueText = dialogueTextField != null ? dialogueTextField.GetValue(response.destinationEntry) as string : null;
+                    if (!string.IsNullOrEmpty(dialogueText))
+                    {
+                        return dialogueText;
+                    }
+                }
+            }
+            catch
+            {
+                // Keep this best-effort; bad response reflection must not affect gameplay.
+            }
+
+            return string.Empty;
         }
 
         private void SendDialogueAdvance(Subtitle subtitle)
@@ -4627,7 +5190,7 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
 
-            _nextPhoneMirrorSendMs = nowMs + 500;
+            _nextPhoneMirrorSendMs = nowMs + 150;
             SendPhoneMirror(force: false);
         }
 

@@ -190,6 +190,7 @@ namespace WoodburySpectatorSync.Coop
             Emit(prefix + "PlayerInteracting", GetFieldValue<bool>(manager, "playerIsInteracting") ? 1 : 0, emit, ref hash);
             Emit(prefix + "AnimationPaused", GetFieldValue<bool>(manager, "animationPaused") ? 1 : 0, emit, ref hash);
             Emit(prefix + "FoldedCount", foldedBoxes != null ? foldedBoxes.Count : 0, emit, ref hash);
+            Emit(prefix + "FoldedActiveMask", BuildActiveMask(foldedBoxes), emit, ref hash);
             Emit(prefix + "AnimatedBox", IsObjectActive(GetFieldValue<Transform>(manager, "animatedPizzaBox")) ? 1 : 0, emit, ref hash);
             Emit(prefix + "LatestFoldedBox", IsObjectActive(GetFieldValue<GameObject>(manager, "latestFoldedBox")) ? 1 : 0, emit, ref hash);
             Emit(prefix + "WorkerAnimState", workerAnimator != null ? workerAnimator.GetInteger(Animator.StringToHash("state")) : 0, emit, ref hash);
@@ -275,9 +276,10 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "FoldingBoxes", StringComparison.Ordinal)) { SetFieldValue(manager, "foldingBoxes", value != 0); return true; }
             if (string.Equals(name, "PlayerInteracting", StringComparison.Ordinal)) { SetFieldValue(manager, "playerIsInteracting", value != 0); return true; }
             if (string.Equals(name, "AnimationPaused", StringComparison.Ordinal)) { SetFieldValue(manager, "animationPaused", value != 0); return true; }
-            if (string.Equals(name, "FoldedCount", StringComparison.Ordinal)) return true;
-            if (string.Equals(name, "AnimatedBox", StringComparison.Ordinal)) { SetObjectActive(GetFieldValue<Transform>(manager, "animatedPizzaBox"), value != 0); return true; }
-            if (string.Equals(name, "LatestFoldedBox", StringComparison.Ordinal)) { SetObjectActive(GetFieldValue<GameObject>(manager, "latestFoldedBox"), value != 0); return true; }
+            if (string.Equals(name, "FoldedCount", StringComparison.Ordinal)) { CoerceFoldedBoxCount(manager, value); return true; }
+            if (string.Equals(name, "FoldedActiveMask", StringComparison.Ordinal)) { ApplyFoldedBoxActiveMask(manager, value); return true; }
+            if (string.Equals(name, "AnimatedBox", StringComparison.Ordinal)) { ApplyAnimatedBoxState(manager, value != 0); return true; }
+            if (string.Equals(name, "LatestFoldedBox", StringComparison.Ordinal)) { ApplyLatestFoldedBoxState(manager, value != 0); return true; }
             if (string.Equals(name, "WorkerAnimState", StringComparison.Ordinal)) { if (workerAnimator != null) workerAnimator.SetInteger(Animator.StringToHash("state"), value); return true; }
             if (string.Equals(name, "WorkerIdleIndex", StringComparison.Ordinal)) { if (workerAnimator != null) workerAnimator.SetInteger(Animator.StringToHash("idleIndex"), value); return true; }
             if (string.Equals(name, "WorkerSpeed100", StringComparison.Ordinal)) { if (workerAnimator != null) workerAnimator.speed = value / 100f; return true; }
@@ -293,7 +295,18 @@ namespace WoodburySpectatorSync.Coop
             var managers = FindBoxManagers();
             for (var i = 0; i < managers.Count; i++)
             {
-                if (managers[i] != null) managers[i].enabled = false;
+                var manager = managers[i];
+                if (manager == null) continue;
+
+                manager.StopAllCoroutines();
+                manager.enabled = false;
+                SetFieldValue(manager, "foldingBoxes", false);
+                SetFieldValue(manager, "canInteract", false);
+                SetFieldValue(manager, "playerIsInteracting", false);
+                SetFieldValue(manager, "animationPaused", false);
+
+                var foldingAudio = GetFieldValue<AudioSource>(manager, "foldingAS");
+                if (foldingAudio != null) foldingAudio.Stop();
             }
 
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -386,6 +399,18 @@ namespace WoodburySpectatorSync.Coop
             return mask;
         }
 
+        private static int BuildActiveMask(List<GameObject> objects)
+        {
+            var mask = 0;
+            if (objects == null) return mask;
+            for (var i = 0; i < objects.Count && i < 30; i++)
+            {
+                if (objects[i] != null && objects[i].activeSelf) mask |= 1 << i;
+            }
+
+            return mask;
+        }
+
         private static void ApplyActiveMask(GameObject[] objects, int mask)
         {
             if (objects == null) return;
@@ -393,6 +418,159 @@ namespace WoodburySpectatorSync.Coop
             {
                 if (objects[i] == null) continue;
                 objects[i].SetActive((mask & (1 << i)) != 0);
+            }
+        }
+
+        private static void ApplyActiveMask(List<GameObject> objects, int mask)
+        {
+            if (objects == null) return;
+            for (var i = 0; i < objects.Count && i < 30; i++)
+            {
+                if (objects[i] == null) continue;
+                objects[i].SetActive((mask & (1 << i)) != 0);
+            }
+        }
+
+        private static void ApplyFoldedBoxActiveMask(PizzaBoxesManager manager, int mask)
+        {
+            var foldedBoxes = GetFieldValue<List<GameObject>>(manager, "foldedPizzaBoxes");
+            if (foldedBoxes != null)
+            {
+                var needed = HighestActiveIndex(mask) + 1;
+                if (needed > foldedBoxes.Count)
+                {
+                    CoerceFoldedBoxCount(manager, needed);
+                    foldedBoxes = GetFieldValue<List<GameObject>>(manager, "foldedPizzaBoxes");
+                }
+            }
+
+            ApplyActiveMask(foldedBoxes, mask);
+            if (mask == 0)
+            {
+                ApplyLatestFoldedBoxState(manager, false);
+            }
+        }
+
+        private static void CoerceFoldedBoxCount(PizzaBoxesManager manager, int hostCount)
+        {
+            var foldedBoxes = GetFieldValue<List<GameObject>>(manager, "foldedPizzaBoxes");
+            if (foldedBoxes == null) return;
+
+            var safeCount = Mathf.Clamp(hostCount, 0, 30);
+            while (foldedBoxes.Count > safeCount)
+            {
+                var last = foldedBoxes.Count - 1;
+                var extra = foldedBoxes[last];
+                foldedBoxes.RemoveAt(last);
+                if (extra != null)
+                {
+                    extra.SetActive(false);
+                    UnityEngine.Object.Destroy(extra);
+                }
+            }
+
+            while (foldedBoxes.Count < safeCount)
+            {
+                var created = CreateFoldedBox(manager, foldedBoxes.Count);
+                if (created == null) break;
+                foldedBoxes.Add(created);
+            }
+
+            LayoutFoldedBoxes(manager, foldedBoxes);
+
+            if (safeCount == 0)
+            {
+                SetFieldValue(manager, "latestFoldedBox", null);
+                ApplyLatestFoldedBoxState(manager, false);
+                return;
+            }
+
+            for (var i = safeCount; i < foldedBoxes.Count; i++)
+            {
+                if (foldedBoxes[i] != null)
+                {
+                    foldedBoxes[i].SetActive(false);
+                }
+            }
+
+            if (foldedBoxes.Count > 0)
+            {
+                SetFieldValue(manager, "latestFoldedBox", foldedBoxes[Mathf.Min(safeCount, foldedBoxes.Count) - 1]);
+            }
+        }
+
+        private static void ApplyAnimatedBoxState(PizzaBoxesManager manager, bool active)
+        {
+            SetObjectActive(GetFieldValue<Transform>(manager, "animatedPizzaBox"), active);
+            var animator = GetFieldValue<Animator>(manager, "animatedPizzaBoxAnimator");
+            if (animator != null)
+            {
+                animator.enabled = active;
+                SetObjectActive(animator, active);
+            }
+        }
+
+        private static void ApplyLatestFoldedBoxState(PizzaBoxesManager manager, bool active)
+        {
+            var latest = GetFieldValue<GameObject>(manager, "latestFoldedBox");
+            if (active && latest == null)
+            {
+                var foldedBoxes = GetFieldValue<List<GameObject>>(manager, "foldedPizzaBoxes");
+                if (foldedBoxes != null && foldedBoxes.Count > 0)
+                {
+                    latest = foldedBoxes[foldedBoxes.Count - 1];
+                    SetFieldValue(manager, "latestFoldedBox", latest);
+                }
+            }
+
+            SetObjectActive(latest, active);
+        }
+
+        private static int HighestActiveIndex(int mask)
+        {
+            for (var i = 29; i >= 0; i--)
+            {
+                if ((mask & (1 << i)) != 0) return i;
+            }
+
+            return -1;
+        }
+
+        private static GameObject CreateFoldedBox(PizzaBoxesManager manager, int index)
+        {
+            var prefab = GetFieldValue<GameObject>(manager, "foldedPizzaBoxPrefab");
+            var parent = GetFieldValue<Transform>(manager, "foldedStacksPosition");
+            if (prefab == null || parent == null) return null;
+
+            var heightOffset = GetFieldValue<float>(manager, "heightOffset");
+            if (heightOffset <= 0.001f) heightOffset = 0.066f;
+
+            var instance = UnityEngine.Object.Instantiate(
+                prefab,
+                parent.position + Vector3.up * (heightOffset * (index + 1)),
+                parent.rotation,
+                parent);
+            instance.name = prefab.name + "_CoopFolded_" + index;
+            instance.SetActive(false);
+            return instance;
+        }
+
+        private static void LayoutFoldedBoxes(PizzaBoxesManager manager, List<GameObject> foldedBoxes)
+        {
+            if (foldedBoxes == null || foldedBoxes.Count == 0) return;
+            var parent = GetFieldValue<Transform>(manager, "foldedStacksPosition");
+            if (parent == null) return;
+
+            var heightOffset = GetFieldValue<float>(manager, "heightOffset");
+            if (heightOffset <= 0.001f) heightOffset = 0.066f;
+
+            for (var i = 0; i < foldedBoxes.Count; i++)
+            {
+                var box = foldedBoxes[i];
+                if (box == null) continue;
+                box.transform.SetParent(parent, true);
+                box.transform.position = parent.position + Vector3.up * (heightOffset * (i + 1));
+                box.transform.rotation = parent.rotation;
             }
         }
 

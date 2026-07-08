@@ -22,7 +22,7 @@ namespace WoodburySpectatorSync.Coop
             ManualLogSource logger,
             Action<string> sessionLogWrite)
         {
-            LogIfEnabled(settings, side, scene, logger, sessionLogWrite, manual: false);
+            LogIfEnabled(settings, side, scene, logger, sessionLogWrite, "SceneDiscoveryDump");
         }
 
         public static void LogManualIfEnabled(
@@ -32,7 +32,27 @@ namespace WoodburySpectatorSync.Coop
             ManualLogSource logger,
             Action<string> sessionLogWrite)
         {
-            LogIfEnabled(settings, side, scene, logger, sessionLogWrite, manual: true);
+            LogIfEnabled(settings, side, scene, logger, sessionLogWrite, "SceneDiscoveryDumpManual");
+        }
+
+        public static void LogTimedIfEnabled(
+            Settings settings,
+            string side,
+            Scene scene,
+            ManualLogSource logger,
+            Action<string> sessionLogWrite)
+        {
+            LogIfEnabled(settings, side, scene, logger, sessionLogWrite, "SceneDiscoveryDumpTimed");
+        }
+
+        public static void LogCrawlerIfEnabled(
+            Settings settings,
+            string side,
+            Scene scene,
+            ManualLogSource logger,
+            Action<string> sessionLogWrite)
+        {
+            LogIfEnabled(settings, side, scene, logger, sessionLogWrite, "SceneDiscoveryDumpCrawler");
         }
 
         private static void LogIfEnabled(
@@ -41,7 +61,7 @@ namespace WoodburySpectatorSync.Coop
             Scene scene,
             ManualLogSource logger,
             Action<string> sessionLogWrite,
-            bool manual)
+            string prefix)
         {
             if (settings == null ||
                 settings.SceneDiscoveryDump == null ||
@@ -54,18 +74,18 @@ namespace WoodburySpectatorSync.Coop
 
             try
             {
-                LogScene(side, scene, logger, sessionLogWrite, manual);
+                LogScene(side, scene, logger, sessionLogWrite, prefix);
             }
             catch (Exception ex)
             {
-                Log(Prefix("Error", manual) + "|role=" + Escape(side) +
+                Log(Prefix("Error", prefix) + "|role=" + Escape(side) +
                     "|scene=" + Escape(scene.name) +
                     "|errorType=" + Escape(ex.GetType().Name) +
                     "|message=" + Escape(ex.Message), logger, sessionLogWrite);
             }
         }
 
-        private static void LogScene(string side, Scene scene, ManualLogSource logger, Action<string> sessionLogWrite, bool manual)
+        private static void LogScene(string side, Scene scene, ManualLogSource logger, Action<string> sessionLogWrite, string prefix)
         {
             var components = FindManagerLikeComponents(scene);
             var fieldCount = 0;
@@ -74,7 +94,7 @@ namespace WoodburySpectatorSync.Coop
                 fieldCount += GetSerializableFields(components[i].GetType()).Count;
             }
 
-            Log(Prefix("Begin", manual) + "|role=" + Escape(side) +
+            Log(Prefix("Begin", prefix) + "|role=" + Escape(side) +
                 "|scene=" + Escape(scene.name) +
                 "|sceneHandle=" + scene.handle.ToString(CultureInfo.InvariantCulture) +
                 "|components=" + components.Count.ToString(CultureInfo.InvariantCulture) +
@@ -92,7 +112,7 @@ namespace WoodburySpectatorSync.Coop
                 {
                     var field = fields[fieldIndex];
                     var fieldValue = ReadFieldValue(component, field);
-                    Log(Prefix("Field", manual) + "|role=" + Escape(side) +
+                    Log(Prefix("Field", prefix) + "|role=" + Escape(side) +
                         "|scene=" + Escape(scene.name) +
                         "|componentIndex=" + componentIndex.ToString(CultureInfo.InvariantCulture) +
                         "|componentType=" + Escape(componentType.FullName ?? componentType.Name) +
@@ -108,20 +128,20 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            Log(Prefix("End", manual) + "|role=" + Escape(side) +
+            Log(Prefix("End", prefix) + "|role=" + Escape(side) +
                 "|scene=" + Escape(scene.name) +
                 "|components=" + components.Count.ToString(CultureInfo.InvariantCulture) +
                 "|fields=" + fieldCount.ToString(CultureInfo.InvariantCulture), logger, sessionLogWrite);
 
-            LogSceneSummary(side, scene, logger, sessionLogWrite, manual);
+            LogSceneSummary(side, scene, logger, sessionLogWrite, prefix);
         }
 
-        private static string Prefix(string suffix, bool manual)
+        private static string Prefix(string suffix, string prefix)
         {
-            return manual ? "SceneDiscoveryDumpManual" + suffix : "SceneDiscoveryDump" + suffix;
+            return (string.IsNullOrEmpty(prefix) ? "SceneDiscoveryDump" : prefix) + suffix;
         }
 
-        private static void LogSceneSummary(string side, Scene scene, ManualLogSource logger, Action<string> sessionLogWrite, bool manual)
+        private static void LogSceneSummary(string side, Scene scene, ManualLogSource logger, Action<string> sessionLogWrite, string prefix)
         {
             if (scene.name == null ||
                 scene.name.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) < 0)
@@ -139,7 +159,7 @@ namespace WoodburySpectatorSync.Coop
                     ? manager.mikePizzeria
                     : UnityEngine.Object.FindObjectOfType<MikePizzeria>();
 
-                Log(Prefix("Summary", manual) +
+                Log(Prefix("Summary", prefix) +
                     "|role=" + Escape(side) +
                     "|scene=" + Escape(scene.name) +
                     "|managerState=" + Escape(manager != null ? manager.currentPlayerState.ToString() : "-") +
@@ -164,7 +184,7 @@ namespace WoodburySpectatorSync.Coop
             }
             catch (Exception ex)
             {
-                Log(Prefix("SummaryError", manual) +
+                Log(Prefix("SummaryError", prefix) +
                     "|role=" + Escape(side) +
                     "|scene=" + Escape(scene.name) +
                     "|errorType=" + Escape(ex.GetType().Name) +

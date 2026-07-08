@@ -31,8 +31,9 @@ namespace WoodburySpectatorSync.Coop
         private const float ExplicitSeatRootDrop = 0.52f;
         private const float BackSeatZ = -0.88f;
         private const float BackSeatX = 0.38f;
-        private const float PizzeriaTruckBedY = 0.62f;
-        private const float PizzeriaTruckBedZ = -1.34f;
+        private const float PizzeriaTruckBedY = 0.78f;
+        private const float PizzeriaTruckBedZ = -2.45f;
+        private const float PizzeriaTruckBedX = 1.05f;
         private const float LookUpPitch = 0f;
 
         private static readonly Dictionary<string, FieldInfo> FieldCache = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
@@ -86,7 +87,7 @@ namespace WoodburySpectatorSync.Coop
 
             var speed = 0f;
             TryReadFloat(truck, "speed", out speed);
-            return BuildSeatPose(role, requestedSide, truck.transform, speed, SeatRootHeight, BackSeatZ, "back", true, out pose);
+            return BuildSeatPose(role, requestedSide, truck.transform, speed, BackSeatX, SeatRootHeight, BackSeatZ, "back", true, out pose);
         }
 
         private static bool TryResolvePizzeriaSeat(string role, SeatSide requestedSide, out SeatPose pose)
@@ -95,31 +96,61 @@ namespace WoodburySpectatorSync.Coop
             var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
             var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ??
                           UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
-            if (driving == null || driving.transform == null || !driving.gameObject.activeInHierarchy)
-            {
-                return false;
-            }
-
             var player = UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>();
-            var drivingCameraActive = IsObjectActive(player != null ? player.playerDrivingParent : null) ||
-                                      IsObjectActive(player != null ? player.playerDrivingCam : null);
+            var drivingCameraActive = IsObjectActiveInHierarchy(player != null ? player.playerDrivingParent : null) ||
+                                      IsObjectActiveInHierarchy(player != null ? player.playerDrivingCam : null);
             var mike = manager != null && manager.mikePizzeria != null
                 ? manager.mikePizzeria
                 : UnityEngine.Object.FindObjectOfType<MikePizzeria>();
             var speed = 0f;
-            TryReadFloat(driving, "speed", out speed);
-            var startSlowDown = GetFieldValue<bool>(driving, "startSlowDown");
-            var pushBreak = GetFieldValue<bool>(driving, "pushBreak");
-            var mikeStillInIntroCar = mike != null &&
-                                      mike.state == MikePizzeria.State.InCar &&
-                                      (Mathf.Abs(speed) > 0.02f || !startSlowDown || !pushBreak);
+            var drivingActive = driving != null && driving.transform != null && driving.gameObject.activeInHierarchy;
+            if (drivingActive)
+            {
+                TryReadFloat(driving, "speed", out speed);
+            }
 
-            if (!drivingCameraActive && !mikeStillInIntroCar)
+            var startSlowDown = drivingActive && GetFieldValue<bool>(driving, "startSlowDown");
+            var pushBreak = drivingActive && GetFieldValue<bool>(driving, "pushBreak");
+            var introDrivingActive = drivingActive &&
+                                     (drivingCameraActive || Mathf.Abs(speed) > 0.02f || !startSlowDown || !pushBreak);
+            var mikeReturningToCar = mike != null &&
+                                     (mike.state == MikePizzeria.State.GoBackToCar ||
+                                      mike.state == MikePizzeria.State.WaitingInCar);
+
+            if (!introDrivingActive && !mikeReturningToCar)
             {
                 return false;
             }
 
-            return BuildSeatPose(role, requestedSide, driving.transform, speed, PizzeriaTruckBedY, PizzeriaTruckBedZ, "truck-bed", false, out pose);
+            var root = introDrivingActive ? driving.transform : ResolvePizzeriaTruckAnchor(mike);
+            if (root == null)
+            {
+                return false;
+            }
+
+            return BuildSeatPose(role, requestedSide, root, speed, PizzeriaTruckBedX, PizzeriaTruckBedY, PizzeriaTruckBedZ, "truck-bed-rear", false, out pose);
+        }
+
+        private static Transform ResolvePizzeriaTruckAnchor(MikePizzeria mike)
+        {
+            if (mike == null) return null;
+
+            if (mike.mikeTruckParent != null)
+            {
+                return mike.mikeTruckParent.parent != null ? mike.mikeTruckParent.parent : mike.mikeTruckParent;
+            }
+
+            if (mike.outsideTruck != null)
+            {
+                return mike.outsideTruck;
+            }
+
+            if (mike.outsideCarWaitingPoint != null)
+            {
+                return mike.outsideCarWaitingPoint;
+            }
+
+            return mike.transform;
         }
 
         private static bool BuildSeatPose(
@@ -127,6 +158,7 @@ namespace WoodburySpectatorSync.Coop
             SeatSide requestedSide,
             Transform root,
             float rawSpeed,
+            float fallbackX,
             float fallbackHeight,
             float fallbackZ,
             string fallbackName,
@@ -160,7 +192,7 @@ namespace WoodburySpectatorSync.Coop
                 return true;
             }
 
-            var localOffset = new Vector3(side == SeatSide.BackLeft ? -BackSeatX : BackSeatX, fallbackHeight, fallbackZ);
+            var localOffset = new Vector3(side == SeatSide.BackLeft ? -fallbackX : fallbackX, fallbackHeight, fallbackZ);
             pose = new SeatPose
             {
                 Active = true,
@@ -257,6 +289,12 @@ namespace WoodburySpectatorSync.Coop
         {
             var go = GetGameObject(target);
             return go != null && go.activeSelf;
+        }
+
+        private static bool IsObjectActiveInHierarchy(object target)
+        {
+            var go = GetGameObject(target);
+            return go != null && go.activeInHierarchy;
         }
 
         private static GameObject GetGameObject(object target)

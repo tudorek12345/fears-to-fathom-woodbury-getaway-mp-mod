@@ -33,6 +33,8 @@ namespace WoodburySpectatorSync.Coop
         private CoopVehiclePassengerSeat.SeatSide _requestedSeatSide = CoopVehiclePassengerSeat.SeatSide.Auto;
         private CoopVehiclePassengerSeat.SeatPose _lastSeatPose;
         private bool _hasLastSeatPose;
+        private PlayerTransformState _lastNetworkState;
+        private bool _hasNetworkState;
         private long _nextSeatLogMs;
 
         public Transform VisualRoot => _visualRoot != null ? _visualRoot : transform;
@@ -84,6 +86,9 @@ namespace WoodburySpectatorSync.Coop
 
         public void ApplyNetworkState(PlayerTransformState state, ref Vector3 bodyPosition, ref Quaternion bodyRotation)
         {
+            _lastNetworkState = state;
+            _hasNetworkState = true;
+
             var appliedPosition = bodyPosition;
             var appliedRotation = bodyRotation;
             var seated = TryResolveVehicleSeat(out var seatPose);
@@ -102,27 +107,12 @@ namespace WoodburySpectatorSync.Coop
             bodyPosition = appliedPosition;
             bodyRotation = appliedRotation;
 
-            var now = Time.realtimeSinceStartup;
-            if (_hasSample)
-            {
-                var deltaTime = Mathf.Max(0.001f, now - _lastSampleTime);
-                Velocity = (appliedPosition - _lastPosition) / deltaTime;
-            }
-            else
-            {
-                Velocity = Vector3.zero;
-                _hasSample = true;
-            }
-
-            _lastPosition = appliedPosition;
-            _lastSampleTime = now;
-
             if (_cameraAnchor != null)
             {
                 _cameraAnchor.SetPositionAndRotation(state.CameraPosition, state.CameraRotation);
             }
 
-            transform.SetPositionAndRotation(appliedPosition, appliedRotation);
+            ApplyPose(appliedPosition, appliedRotation);
         }
 
         private void Initialize(
@@ -189,6 +179,33 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private void LateUpdate()
+        {
+            if (!_vehicleSeatEnabled || !_seatbeltLocked || !_hasNetworkState)
+            {
+                return;
+            }
+
+            CoopVehiclePassengerSeat.SeatPose seatPose;
+            if (!TryResolveVehicleSeat(out seatPose))
+            {
+                _hasLastSeatPose = false;
+                return;
+            }
+
+            _lastSeatPose = seatPose;
+            _hasLastSeatPose = true;
+
+            var appliedPosition = PredictSeatPosition(seatPose);
+            var appliedRotation = seatPose.Rotation;
+            ApplyPose(appliedPosition, appliedRotation);
+
+            if (_cameraAnchor != null)
+            {
+                _cameraAnchor.SetPositionAndRotation(_lastNetworkState.CameraPosition, _lastNetworkState.CameraRotation);
+            }
+        }
+
         private void OnGUI()
         {
             if (!_vehicleSeatEnabled || !_vehicleSeatPrompt)
@@ -243,6 +260,25 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return pose.Position + predictedOffset;
+        }
+
+        private void ApplyPose(Vector3 position, Quaternion rotation)
+        {
+            var now = Time.realtimeSinceStartup;
+            if (_hasSample)
+            {
+                var deltaTime = Mathf.Max(0.001f, now - _lastSampleTime);
+                Velocity = (position - _lastPosition) / deltaTime;
+            }
+            else
+            {
+                Velocity = Vector3.zero;
+                _hasSample = true;
+            }
+
+            _lastPosition = position;
+            _lastSampleTime = now;
+            transform.SetPositionAndRotation(position, rotation);
         }
 
         private void CycleSeatSide()

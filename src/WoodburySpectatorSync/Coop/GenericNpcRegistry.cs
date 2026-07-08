@@ -52,8 +52,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, long> _lastAppliedMsById = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _nextMissingLogMsById = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _lastActiveById = new Dictionary<string, bool>(StringComparer.Ordinal);
-        private readonly Dictionary<string, Vector3> _smoothedPositions = new Dictionary<string, Vector3>(StringComparer.Ordinal);
-        private readonly Dictionary<string, Quaternion> _smoothedRotations = new Dictionary<string, Quaternion>(StringComparer.Ordinal);
+        private readonly NpcBrainSmoother _smoother = new NpcBrainSmoother();
         private readonly HashSet<string> _loggedPaths = new HashSet<string>(StringComparer.Ordinal);
         private readonly HashSet<string> _suppressedLogged = new HashSet<string>(StringComparer.Ordinal);
         private string _lastSceneName = string.Empty;
@@ -85,6 +84,7 @@ namespace WoodburySpectatorSync.Coop
                 sceneName.IndexOf(_scenePrefix, StringComparison.OrdinalIgnoreCase) < 0)
             {
                 _records.Clear();
+                _smoother.Clear();
                 _lastSceneName = sceneName;
                 return;
             }
@@ -280,30 +280,16 @@ namespace WoodburySpectatorSync.Coop
                 transform.gameObject.SetActive(true);
             }
 
-            var targetPosition = PredictNpcTargetPosition(state);
-            var targetRotation = state.Rotation;
             var activeToggle = _lastActiveById.TryGetValue(state.NpcId, out var lastActive) && lastActive != state.Active;
-            if (!snapshot && !activeToggle && _smoothedPositions.TryGetValue(state.NpcId, out var currentPosition))
+            if (state.Active)
             {
-                var alpha = 1f - Mathf.Exp(-18f * Mathf.Max(Time.unscaledDeltaTime, Time.deltaTime, 0.016f));
-                currentPosition = Vector3.Distance(currentPosition, targetPosition) > 4f
-                    ? targetPosition
-                    : Vector3.Lerp(currentPosition, targetPosition, alpha);
-                var currentRotation = _smoothedRotations.TryGetValue(state.NpcId, out var storedRotation)
-                    ? storedRotation
-                    : transform.rotation;
-                currentRotation = Quaternion.Slerp(currentRotation, targetRotation, alpha);
-                transform.position = currentPosition;
-                transform.rotation = currentRotation;
-                _smoothedPositions[state.NpcId] = currentPosition;
-                _smoothedRotations[state.NpcId] = currentRotation;
+                _smoother.Submit(state.NpcId, transform, state, snapshot || activeToggle);
             }
             else
             {
-                transform.position = targetPosition;
-                transform.rotation = targetRotation;
-                _smoothedPositions[state.NpcId] = targetPosition;
-                _smoothedRotations[state.NpcId] = targetRotation;
+                _smoother.Remove(state.NpcId);
+                transform.position = state.Position;
+                transform.rotation = state.Rotation;
             }
 
             ApplyVisibility(transform, state.Active && (state.Visible || ShouldForceVisibleNpcState(state)));
@@ -317,6 +303,11 @@ namespace WoodburySpectatorSync.Coop
             _lastAppliedMsById[state.NpcId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             _lastActiveById[state.NpcId] = state.Active;
             return true;
+        }
+
+        public void UpdateSmoothing()
+        {
+            _smoother.Update();
         }
 
         public void SuppressLocalBrain()
@@ -598,18 +589,6 @@ namespace WoodburySpectatorSync.Coop
             }
 
             return false;
-        }
-
-        private static Vector3 PredictNpcTargetPosition(NpcBrainState state)
-        {
-            if (state.Velocity.sqrMagnitude < 0.0001f)
-            {
-                return state.Position;
-            }
-
-            var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var ageSeconds = Mathf.Clamp((nowMs - state.UnixTimeMs) / 1000f, 0f, 0.18f);
-            return state.Position + state.Velocity * ageSeconds;
         }
 
         private void LogMissingThrottled(NpcBrainState state)

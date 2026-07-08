@@ -7,7 +7,7 @@ param(
 
     [string]$Scene = "",
 
-    [ValidateSet("Auto", "Manual", "Both")]
+    [ValidateSet("Auto", "Manual", "Timed", "Crawler", "Both")]
     [string]$DumpKind = "Both",
 
     [int]$Top = 200,
@@ -17,6 +17,8 @@ param(
     [switch]$IncludeVolatile,
 
     [switch]$FullValues,
+
+    [switch]$LatestOnly,
 
     [switch]$PassThru,
 
@@ -126,6 +128,14 @@ function Get-DumpKind {
         return "Manual"
     }
 
+    if ($RecordType -like "SceneDiscoveryDumpTimed*") {
+        return "Timed"
+    }
+
+    if ($RecordType -like "SceneDiscoveryDumpCrawler*") {
+        return "Crawler"
+    }
+
     return "Auto"
 }
 
@@ -139,13 +149,14 @@ function Read-DumpFields {
         throw "Log file not found: $Path"
     }
 
-    $fields = @{}
+    $blocks = New-Object System.Collections.Generic.List[object]
+    $currentBlock = $null
     $lineNumber = 0
-    $fieldCount = 0
+    $blockSequence = 0
 
     foreach ($line in Get-Content -LiteralPath $Path -ErrorAction Stop) {
         $lineNumber++
-        if ($line -notmatch 'SceneDiscoveryDump(Manual)?Field\|') {
+        if ($line -notmatch 'SceneDiscoveryDump(Manual|Timed|Crawler)?(Begin|Field|End)\|') {
             continue
         }
 
@@ -154,8 +165,20 @@ function Read-DumpFields {
             continue
         }
 
-        if ($record.RecordType -ne "SceneDiscoveryDumpField" -and
-            $record.RecordType -ne "SceneDiscoveryDumpManualField") {
+        $isBegin = $record.RecordType -eq "SceneDiscoveryDumpBegin" -or
+            $record.RecordType -eq "SceneDiscoveryDumpManualBegin" -or
+            $record.RecordType -eq "SceneDiscoveryDumpTimedBegin" -or
+            $record.RecordType -eq "SceneDiscoveryDumpCrawlerBegin"
+        $isField = $record.RecordType -eq "SceneDiscoveryDumpField" -or
+            $record.RecordType -eq "SceneDiscoveryDumpManualField" -or
+            $record.RecordType -eq "SceneDiscoveryDumpTimedField" -or
+            $record.RecordType -eq "SceneDiscoveryDumpCrawlerField"
+        $isEnd = $record.RecordType -eq "SceneDiscoveryDumpEnd" -or
+            $record.RecordType -eq "SceneDiscoveryDumpManualEnd" -or
+            $record.RecordType -eq "SceneDiscoveryDumpTimedEnd" -or
+            $record.RecordType -eq "SceneDiscoveryDumpCrawlerEnd"
+
+        if (-not $isBegin -and -not $isField -and -not $isEnd) {
             continue
         }
 
@@ -173,14 +196,59 @@ function Read-DumpFields {
             continue
         }
 
+        if ($isBegin) {
+            $blockSequence++
+            $currentBlock = [pscustomobject][ordered]@{
+                Sequence = $blockSequence
+                DumpKind = $kind
+                Scene = "$($record.scene)"
+                BeginLine = $lineNumber
+                EndLine = 0
+                DeclaredComponents = if ($record.PSObject.Properties.Name -contains "components") { [int]$record.components } else { 0 }
+                DeclaredFields = if ($record.PSObject.Properties.Name -contains "fields") { [int]$record.fields } else { 0 }
+                Fields = @{}
+                FieldCount = 0
+            }
+            $blocks.Add($currentBlock)
+            continue
+        }
+
+        if ($isEnd) {
+            if ($null -ne $currentBlock -and
+                "$($currentBlock.DumpKind)" -eq $kind -and
+                "$($currentBlock.Scene)" -eq "$($record.scene)") {
+                $currentBlock.EndLine = $lineNumber
+                $currentBlock = $null
+            }
+            continue
+        }
+
         if (-not $IncludeVolatile.IsPresent -and (Test-VolatileField -Record $record)) {
             continue
         }
 
-        $fieldCount++
+        if ($null -eq $currentBlock) {
+            $blockSequence++
+            $currentBlock = [pscustomobject][ordered]@{
+                Sequence = $blockSequence
+                DumpKind = $kind
+                Scene = "$($record.scene)"
+                BeginLine = 0
+                EndLine = 0
+                DeclaredComponents = 0
+                DeclaredFields = 0
+                Fields = @{}
+                FieldCount = 0
+            }
+            $blocks.Add($currentBlock)
+        }
+
+        $currentBlock.FieldCount++
         $record | Add-Member -NotePropertyName DumpKind -NotePropertyValue $kind -Force
         $record | Add-Member -NotePropertyName SourceLog -NotePropertyValue $Path -Force
         $record | Add-Member -NotePropertyName SourceLine -NotePropertyValue $lineNumber -Force
+        $record | Add-Member -NotePropertyName BlockSequence -NotePropertyValue $currentBlock.Sequence -Force
+        $record | Add-Member -NotePropertyName BlockBeginLine -NotePropertyValue $currentBlock.BeginLine -Force
         $record | Add-Member -NotePropertyName NormalizedValue -NotePropertyValue (Normalize-DumpValue "$($record.fieldValue)") -Force
 
         $key = @(
@@ -193,13 +261,36 @@ function Read-DumpFields {
             "$($record.fieldType)"
         ) -join "|"
 
-        $fields[$key] = $record
+        $currentBlock.Fields[$key] = $record
+    }
+
+    $eligibleBlocks = @($blocks | Where-Object {
+        $_.FieldCount -gt 0 -and
+        ($DumpKind -eq "Both" -or $_.DumpKind -eq $DumpKind) -and
+        ([string]::IsNullOrWhiteSpace($Scene) -or $_.Scene -eq $Scene)
+    })
+
+    $selectedBlocks = if ($LatestOnly.IsPresent) {
+        @($eligibleBlocks | Sort-Object Sequence -Descending | Select-Object -First 1)
+    } else {
+        $eligibleBlocks
+    }
+
+    $fields = @{}
+    $fieldCount = 0
+    foreach ($block in $selectedBlocks) {
+        foreach ($key in $block.Fields.Keys) {
+            $fields[$key] = $block.Fields[$key]
+            $fieldCount++
+        }
     }
 
     return [pscustomobject]@{
         Path = $Path
         Role = $ExpectedRole
         FieldCount = $fieldCount
+        BlockCount = $eligibleBlocks.Count
+        SelectedBlocks = $selectedBlocks
         Fields = $fields
     }
 }
@@ -288,8 +379,13 @@ $summary = [pscustomobject]@{
     Scene = if ([string]::IsNullOrWhiteSpace($Scene)) { $null } else { $Scene }
     DumpKind = $DumpKind
     IncludeVolatile = $IncludeVolatile.IsPresent
+    LatestOnly = $LatestOnly.IsPresent
     HostFieldCount = $hostDump.FieldCount
     ClientFieldCount = $clientDump.FieldCount
+    HostBlockCount = $hostDump.BlockCount
+    ClientBlockCount = $clientDump.BlockCount
+    HostSelectedBlock = @($hostDump.SelectedBlocks | Select-Object -First 1 | ForEach-Object { "$($_.DumpKind):$($_.Scene):seq=$($_.Sequence):lines=$($_.BeginLine)-$($_.EndLine)" }) -join ","
+    ClientSelectedBlock = @($clientDump.SelectedBlocks | Select-Object -First 1 | ForEach-Object { "$($_.DumpKind):$($_.Scene):seq=$($_.Sequence):lines=$($_.BeginLine)-$($_.EndLine)" }) -join ","
     DiffCount = $orderedDiffs.Count
     ValueMismatchCount = @($orderedDiffs | Where-Object { $_.Kind -eq "ValueMismatch" }).Count
     MissingOnHostCount = @($orderedDiffs | Where-Object { $_.Kind -eq "MissingOnHost" }).Count
@@ -300,6 +396,12 @@ $summary = [pscustomobject]@{
 Write-Host "SceneDiscoveryDump diff summary:"
 Write-Host " - Host fields: $($summary.HostFieldCount)"
 Write-Host " - Client fields: $($summary.ClientFieldCount)"
+Write-Host " - Host blocks: $($summary.HostBlockCount)"
+Write-Host " - Client blocks: $($summary.ClientBlockCount)"
+if ($LatestOnly.IsPresent) {
+    Write-Host " - Host selected: $($summary.HostSelectedBlock)"
+    Write-Host " - Client selected: $($summary.ClientSelectedBlock)"
+}
 Write-Host " - Diffs: $($summary.DiffCount)"
 Write-Host " - Value mismatches: $($summary.ValueMismatchCount)"
 Write-Host " - Missing on host: $($summary.MissingOnHostCount)"

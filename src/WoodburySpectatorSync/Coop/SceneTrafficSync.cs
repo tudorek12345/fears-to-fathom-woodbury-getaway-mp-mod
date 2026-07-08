@@ -150,6 +150,7 @@ namespace WoodburySpectatorSync.Coop
 
                 Emit(prefix + "RootActive", controller.gameObject.activeSelf ? 1 : 0, emit, ref hash);
                 Emit(prefix + "CanSpawn", GetCanSpawn(controller) ? 1 : 0, emit, ref hash);
+                Emit(prefix + "PreviousIndex", GetFieldValue<int>(controller, "previousIndex"), emit, ref hash);
                 Emit(prefix + "ActiveMask", activeMask, emit, ref hash);
             }
 
@@ -244,6 +245,12 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "CanSpawn", StringComparison.Ordinal))
             {
                 SetCanSpawn(controller, false);
+                return true;
+            }
+
+            if (string.Equals(name, "PreviousIndex", StringComparison.Ordinal))
+            {
+                SetFieldValue(controller, "previousIndex", value);
                 return true;
             }
 
@@ -414,7 +421,7 @@ namespace WoodburySpectatorSync.Coop
                 if (car == null || car.gameObject == null) continue;
                 var active = (mask & (1 << i)) != 0;
                 car.gameObject.SetActive(active);
-                car.carIsActive = false;
+                car.carIsActive = active;
                 car.enabled = false;
             }
         }
@@ -427,7 +434,6 @@ namespace WoodburySpectatorSync.Coop
             var current = instances[slot];
             if (current != null && StableNameHash(GetBaseCarName(current.name)) == expectedHash)
             {
-                current.carIsActive = false;
                 current.enabled = false;
                 return true;
             }

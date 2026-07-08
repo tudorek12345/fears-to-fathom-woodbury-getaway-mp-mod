@@ -70,8 +70,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, long> _lastAppliedMsById = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _lastApplyLogHashById = new Dictionary<string, int>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _lastApplyLogMsById = new Dictionary<string, long>(StringComparer.Ordinal);
-        private readonly Dictionary<string, Vector3> _smoothedPositions = new Dictionary<string, Vector3>(StringComparer.Ordinal);
-        private readonly Dictionary<string, Quaternion> _smoothedRotations = new Dictionary<string, Quaternion>(StringComparer.Ordinal);
+        private readonly NpcBrainSmoother _smoother = new NpcBrainSmoother();
         private string _lastSceneName = string.Empty;
         private float _lastRefreshTime = -10f;
         private int _lastMissingCount;
@@ -105,6 +104,7 @@ namespace WoodburySpectatorSync.Coop
                 sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 _records.Clear();
+                _smoother.Clear();
                 _lastSceneName = sceneName ?? string.Empty;
                 _lastMissingCount = 0;
                 _lastCriticalMissingCount = 0;
@@ -301,7 +301,7 @@ namespace WoodburySpectatorSync.Coop
             if (!_records.TryGetValue(state.NpcId, out var record) || record.Component == null)
             {
                 MaybeLogMissing(state.NpcId, state.Critical);
-                return false;
+                return !state.Critical;
             }
 
             SuppressLocalBrain(record);
@@ -316,36 +316,17 @@ namespace WoodburySpectatorSync.Coop
             var deferMotionToAi = ShouldDeferMotionToAi(state, snapshot);
             if (deferMotionToAi)
             {
-                _smoothedPositions[state.NpcId] = transform.position;
-                _smoothedRotations[state.NpcId] = transform.rotation;
+                _smoother.Remove(state.NpcId);
             }
-            else if (!snapshot && _smoothedPositions.TryGetValue(state.NpcId, out var currentPosition))
+            else if (state.Active)
             {
-                var alpha = 1f - Mathf.Exp(-18f * Time.deltaTime);
-                if (Vector3.Distance(currentPosition, targetPosition) > 4f)
-                {
-                    currentPosition = targetPosition;
-                }
-                else
-                {
-                    currentPosition = Vector3.Lerp(currentPosition, targetPosition, alpha);
-                }
-
-                var currentRotation = _smoothedRotations.TryGetValue(state.NpcId, out var storedRotation)
-                    ? storedRotation
-                    : transform.rotation;
-                currentRotation = Quaternion.Slerp(currentRotation, targetRotation, alpha);
-                transform.position = currentPosition;
-                transform.rotation = currentRotation;
-                _smoothedPositions[state.NpcId] = currentPosition;
-                _smoothedRotations[state.NpcId] = currentRotation;
+                _smoother.Submit(state.NpcId, transform, state, snapshot);
             }
             else
             {
                 transform.position = targetPosition;
                 transform.rotation = targetRotation;
-                _smoothedPositions[state.NpcId] = targetPosition;
-                _smoothedRotations[state.NpcId] = targetRotation;
+                _smoother.Remove(state.NpcId);
             }
 
             ApplyVisibility(transform, state.Active && state.Visible);
@@ -361,6 +342,11 @@ namespace WoodburySpectatorSync.Coop
             _lastAppliedMsById[state.NpcId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             LogInfoThrottledApply(state);
             return true;
+        }
+
+        public void UpdateSmoothing()
+        {
+            _smoother.Update();
         }
 
         private static bool ShouldDeferMotionToAi(NpcBrainState state, bool snapshot)
@@ -487,8 +473,10 @@ namespace WoodburySpectatorSync.Coop
             if (manager == null) return active;
 
             var sequence = manager.CurrentSequence;
+            var darkScene = IsDarkScene(manager);
             if (npcId == "Cabin/Mike/Cook")
             {
+                if (darkScene && component == null) return false;
                 return active || sequence == SequenceType.Cooking ||
                        sequence == SequenceType.PickingBoardGame ||
                        sequence == SequenceType.PlayingJenga ||
@@ -499,21 +487,28 @@ namespace WoodburySpectatorSync.Coop
 
             if (npcId == "Cabin/Mike/Fishing")
             {
+                if (darkScene && component == null) return false;
                 return active || sequence == SequenceType.Fishing;
             }
 
             if (npcId == "Cabin/Mike/PostEating")
             {
+                if (darkScene && component == null && manager.currentMike != CabinGameManager.CurrentMike.PostEating)
+                {
+                    return false;
+                }
+
                 return active || manager.currentMike == CabinGameManager.CurrentMike.PostEating ||
-                       sequence == SequenceType.HikerSequence ||
-                       sequence == SequenceType.HostAtDoor ||
-                       sequence == SequenceType.HostHittingDoor;
+                       (!darkScene && (sequence == SequenceType.HikerSequence ||
+                                      sequence == SequenceType.HostAtDoor ||
+                                      sequence == SequenceType.HostHittingDoor));
             }
 
             if (npcId == "Cabin/Mike/AfterHiding" ||
                 npcId == "Cabin/Host/Hiding" ||
                 npcId == "Cabin/Host/FixingSink")
             {
+                if (darkScene && component == null) return false;
                 return active || sequence == SequenceType.HostAtDoor || sequence == SequenceType.HostHittingDoor;
             }
 
@@ -534,7 +529,7 @@ namespace WoodburySpectatorSync.Coop
                 npcId == "Cabin/Nora/End" ||
                 npcId == "Cabin/Cat/EndGame")
             {
-                return active || manager.currentCabinSceneType == CabinGameManager.CabinSceneType.CabinSceneDark;
+                return active || darkScene;
             }
 
             return active;
@@ -545,6 +540,26 @@ namespace WoodburySpectatorSync.Coop
             if (manager == null) return false;
 
             var sequence = manager.CurrentSequence;
+            if (IsDarkScene(manager))
+            {
+                if (npcId == "Cabin/Hiker/Bridge" || npcId == "Cabin/Hiker/Window")
+                {
+                    return sequence == SequenceType.HikerSequence ||
+                           sequence == SequenceType.HostAtDoor ||
+                           sequence == SequenceType.HostHittingDoor;
+                }
+
+                if (npcId == "Cabin/Mike/PostEating")
+                {
+                    return manager.currentMike == CabinGameManager.CurrentMike.PostEating;
+                }
+
+                return npcId == "Cabin/Mike/End" ||
+                       npcId == "Cabin/Host/EndGame" ||
+                       npcId == "Cabin/Nora/End" ||
+                       npcId == "Cabin/Cat/EndGame";
+            }
+
             if (npcId == "Cabin/Mike/Main" ||
                 npcId == "Cabin/Mike/Fishing" ||
                 npcId == "Cabin/Mike/Cook" ||
@@ -574,10 +589,16 @@ namespace WoodburySpectatorSync.Coop
                 npcId == "Cabin/Nora/End" ||
                 npcId == "Cabin/Cat/EndGame")
             {
-                return manager.currentCabinSceneType == CabinGameManager.CabinSceneType.CabinSceneDark;
+                return IsDarkScene(manager);
             }
 
             return false;
+        }
+
+        private static bool IsDarkScene(CabinGameManager manager)
+        {
+            return manager != null &&
+                   manager.currentCabinSceneType == CabinGameManager.CabinSceneType.CabinSceneDark;
         }
 
         private void SuppressLocalBrain(CabinNpcRecord record)
