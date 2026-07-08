@@ -12,6 +12,7 @@
 ### Co-op Cabin
 
 - Shared chaser/death: Cabin Rick/HostEndGame now soft-targets the nearest fresh player anchor on the host, so the connected client can be chased/caught instead of Rick only measuring the local host player. A catch on either player resolves through the host's real `DeathManager` and mirrors the native death sequence on the client.
+- Diagnostics: Cabin chaser/death flow now logs explicit host target selection, host/client death triggers, mirrored native death starts, and return-to-main-menu markers so manual catch passes can be verified from session logs.
 - Cabin-dark cleanup: inactive optional board-game/Ouija object flags now count as applied when the target object is absent in `CabinSceneDark`, missing scalar Ouija state no longer blocks snapshot health, and normal Cabin-only NPCs are no longer expected/critical in dark-scene phases where they are not loaded.
 - Scene transition reliability: fixed dark-cabin scene matching to use the real `CabinSceneDark` key from decompiled `SceneNameKeys`, so Cabin-dark readiness, retry backoff, manager flags, and NPC brain adapters no longer miss the scene because of the older `CabinDarkScene` alias.
 - NPC interpolation: Cabin and generic scene `NpcBrainState` receivers now feed a shared per-frame receive-time smoother with short bounded prediction, so Pizzeria/RoadTrip/Office/ParkingLot NPC brain actors no longer only move when lower-rate state packets arrive. Moving Cabin Mike still defers to the existing high-frequency `AiTransform` smoother.
