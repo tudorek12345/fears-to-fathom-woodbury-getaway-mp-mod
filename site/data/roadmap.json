@@ -83,6 +83,18 @@
   ],
   "recentCommits": [
     {
+      "sha": "e0db822",
+      "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
+    },
+    {
+      "sha": "ddd7a1a",
+      "subject": "chaser determination update"
+    },
+    {
+      "sha": "79033a5",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "f3fd3f2",
       "subject": "docs: record changelog maintenance rule"
     },
@@ -101,18 +113,6 @@
     {
       "sha": "b941d4b",
       "subject": "site: refresh 0.4.43 metadata"
-    },
-    {
-      "sha": "0301703",
-      "subject": "coop: stabilize npc dialogue and cabin sync"
-    },
-    {
-      "sha": "1034f3c",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "72f9579",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }
