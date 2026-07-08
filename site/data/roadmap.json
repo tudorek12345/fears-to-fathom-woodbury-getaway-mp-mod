@@ -83,6 +83,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "f3fd3f2",
+      "subject": "docs: record changelog maintenance rule"
+    },
+    {
+      "sha": "f41e439",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "14891fa",
       "subject": "coop: add cabin death diagnostics"
     },
@@ -104,14 +112,6 @@
     },
     {
       "sha": "72f9579",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "a6634da",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "39f870b",
       "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
