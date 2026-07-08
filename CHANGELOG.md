@@ -2,14 +2,19 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.24, wire protocol 5.
+> Current iteration: Plugin 0.4.43, wire protocol 5.
 
-> Plugin 0.3.0 → 0.4.24 · wire protocol 3 → 5.
+> Plugin 0.3.0 -> 0.4.43 - wire protocol 3 -> 5.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
+
+- Steamworks launch setup: F11 now exposes a clear local/test/custom selector; source defaults direct/Steam launches to Steamworks test mode while the local two-instance script continues to force LAN/local mode.
 
 ### Co-op Cabin
 
+- Shared chaser/death: Cabin Rick/HostEndGame now soft-targets the nearest fresh player anchor on the host, so the connected client can be chased/caught instead of Rick only measuring the local host player. A catch on either player resolves through the host's real `DeathManager` and mirrors the native death sequence on the client.
+- Cabin-dark cleanup: inactive optional board-game/Ouija object flags now count as applied when the target object is absent in `CabinSceneDark`, missing scalar Ouija state no longer blocks snapshot health, and normal Cabin-only NPCs are no longer expected/critical in dark-scene phases where they are not loaded.
 - Scene transition reliability: fixed dark-cabin scene matching to use the real `CabinSceneDark` key from decompiled `SceneNameKeys`, so Cabin-dark readiness, retry backoff, manager flags, and NPC brain adapters no longer miss the scene because of the older `CabinDarkScene` alias.
+- NPC interpolation: Cabin and generic scene `NpcBrainState` receivers now feed a shared per-frame receive-time smoother with short bounded prediction, so Pizzeria/RoadTrip/Office/ParkingLot NPC brain actors no longer only move when lower-rate state packets arrive. Moving Cabin Mike still defers to the existing high-frequency `AiTransform` smoother.
 - Prediction: client-side AI/NPC visual smoothing now extrapolates briefly from buffered host samples, bounded by the existing remote-player prediction settings, so Mike and other host-authored actors move with less visible packet-step snapping while host packets remain authoritative.
 
 - NPC brains: host-authoritative `NpcBrainState` sync for Mike variants (MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController), hiker/window (CabinHiker + HikerCabinController + HostFixingSink), Nora, and cat — registry-based actor IDs, client-side local brain suppression, snapshot buffering, stale-sequence drops, throttled diagnostics.gated on `CurrentSequence` (HikerSequence / HostAtDoor / HostHittingDoor) instead of `gameObject.activeSelf` to stop client clumping.
@@ -24,6 +29,16 @@
 
 ### Co-op Pizzeria
 
+- Pizzeria prop/dialogue fix: client-side pizza-box manager coroutines are now stopped during local brain suppression, folded box lists are coerced to the host count instead of only hidden, animated box state can re-enable cleanly, and mirrored dialogue menus support arrow/WASD or mouse-wheel selection with Enter/click confirmation.
+- Dialogue menu mirror: client response menus now stay in the co-op mirrored choice UI instead of being cleared through native subtitle display, and the same confirmation click no longer also fires a world interact request.
+- Pizzeria visual stability: synthetic passenger seats now sit farther back/outboard in the truck bed so the second-player body no longer merges into the active driving camera, and the pizza-box folding manager now force-hides client-only folded/animated box leftovers when the host has no folded boxes.
+- Props/traffic drift: Pizzeria pizza-box manager and traffic visuals now get a narrow live heartbeat, and folded pizza-box stack masks/counts actively hide client-only leftovers seen in SceneDiscoveryDump diffs.
+- Dialogue input: host response menus now keep native PixelCrushers input unlocked/repaired while choices are visible, and client mirrored choices can route a host-authored `DialogueChoice` intent when interaction routing is enabled.
+- Vehicle seats: return-to-truck passenger anchors now survive the `MikeDrivingInPizzeriaScene` -> `MikePizzeria.mikeTruckParent` handoff, so the second-player proxy keeps following the truck during `GoBackToCar` / `WaitingInCar` instead of dropping in the snowy Pizzeria lot while the host transitions.
+- Vehicle seats: Pizzeria synthetic truck-bed passenger anchors now use wider/deeper left/right offsets and remain valid through Mike's `GoBackToCar` / `WaitingInCar` handoff, reducing host/client body merging during the drive intro and Moe's return-to-truck transition.
+- Phone/UI: native notification pulses now include the host active edge in their mirror signature and explicitly clear inactive toast objects, so repeated or re-used message notifications can replay on the client instead of waiting for a later phone state settle.
+- Phone/UI: phone mirror payload now carries native notification pulse signatures and retries/applies more quickly, so Pizzeria message toasts and chat surfaces reach the client closer to the host timing instead of only settling after the next half-second poll.
+- Vehicle seats: locked passenger-seat proxies refresh from the local truck/seat resolver every frame while packets remain authoritative, reducing packet-step lag and host/client body merging during the Moe's Pizzeria driving intro.
 - Visual stability: Pizzeria driving intro now ignores in-cab child seat transforms and uses synthetic rear/truck-bed offsets for second-player bodies, with camera-proximity hiding so the remote anchor/nametag stays alive without blocking the active view.
 - NPC smoothing/diagnostics: generic multi-NPC IDs now normalize by component type + object name, noncritical unresolved Pizzeria actors are throttled diagnostics instead of pending spam, and NPC brain application extrapolates briefly from receive-time samples before interpolation.
 - Discovery diagnostics: Pizzeria F10 dumps now include a compact summary line for manager/player/Mike/driving/pizza/truck-key state so the next host/client diff points at changed sync fields faster.
@@ -78,14 +93,19 @@
 ### Co-op lifecycle / protocol
 
 - Host wait gate: co-op host can pause gameplay while a connected client loads scenes or applies snapshots, with slow SceneChange/snapshot catch-up retries and a `HostWait` overlay diagnostic so the host does not progress into a desynced scene.
+- Compatibility: hosts/clients with the same wire protocol now accept compatible patch-version plugin strings instead of rejecting only because the patch label differs; protocol mismatches are still rejected cleanly.
 - Explicit `SessionState` machine + `Hello`/`HelloAck` negotiation + session/generation-aware `SceneChange`/`SceneReady` + `SnapshotBegin`/`SnapshotEnd`/`SnapshotAck`. UDP apply gated until `Live`. Bounded `SceneChange` retry + structured pre-Live drop logs.
+- Client scene-sync guard: the latest host-transform fast path now drops and logs pre-`Live` transforms instead of applying old-scene host positions while the client is loading or snapshot-applying a new scene.
 - Scene-readiness probes for RoadTripLoop, CabinSceneDark, OfficeLayout, ParkingLotScene wait for the real scene managers instead of treating them as managerless. Client `SceneReady` waits up to 15s for scene-specific managers (CabinGameManager, PizzeriaGameManager, RoadTripGameManager) before falling back to `ReadyPartial`. Snapshot state buffered/applied before `Live`.
 - Host snapshot emission bracketed; normal world/story/door/holdable/AI deltas gated until `SnapshotAck` moves to `Live`; blind 5-second full-state spam removed in favor of emergency/manual resync paths.
-- Wire protocol bumped to 5 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`, and `VoiceFrame`. Plugin compatibility 0.3.0 → 0.4.24.
+- Wire protocol bumped to 5 with typed `SceneActionIntent`, `UiMirrorState`, `CameraRigState`, `PathVehicleState`, `SceneEventState`, and `VoiceFrame`. Plugin compatibility 0.3.0 -> 0.4.43.
 
 ### Co-op UI
 
+- Steam identity fallback: co-op display names now fall back to Steam's local `loginusers.vdf` most-recent persona when the live Facepunch Steam API is unavailable, so nametags can still use Steam names on installs where the bundled native Steam DLL does not expose manual-dispatch exports.
+- Steamworks launch compatibility: normal direct/Steam launches default to the public Steamworks test app, while the local two-instance LAN launcher defaults the override off unless explicitly requested; the app-id mode can be selected from the F11 menu, environment variables, launch arguments, or the local pair launcher.
 - Host waiting spinner: small themed IMGUI indicator for waiting-to-join, scene-load, snapshot-sync, and reconnect waits; driven by realtime so it keeps animating while host gameplay is paused.
+- Dialogue UI mirror: host-authored response menus now mirror through `UiMirrorState` in every scene that raises `DialogueSystemEvents`, rendering through the game's subtitle surface when available while keeping client choices view-only.
 - F11 main-menu co-op setup panel: mode selection, host/client connect, LAN endpoint settings, display name, avatar source/id tuning, overlay toggle, SceneDiscoveryDump toggle — no longer need to edit `BepInEx/config/com.woodbury.spectatorsync.cfg` by hand.
 - Overlay: `Session: <state> sid=<id> gen=<n>` line plus snapshot ack/retry or pending/missing counts. Compacted into styled two-column-sized panel; sync labels shortened. Always-on bottom-center `F2F WOODBURY CO:OP` brand mark. Expanded host/client connect logs (bind endpoint, session id, remote endpoint, retry reason, disconnect events).
 - Dialogue: remote dialogue routed through the game's native subtitle UI when available; client UI conversation suppressed; drift detection retained. Dialogue camera locks forcibly released during Mike conversations.
@@ -98,6 +118,8 @@
 ### Tooling / diagnostics
 
 - `scripts/Compare-SceneDiscoveryDump.ps1` diffs host/client SceneDiscoveryDump logs by scene/component/field and produces parseable `SceneDumpDiff` lines for identifying remaining unsynced state. F10 manual `SceneDiscoveryDump` hotkey gated by `[Debug] SceneDiscoveryDump`; the diagnostic is enabled by default for current iteration runs.
+- SceneDiscoveryDump timed diagnostics: optional `[Debug] SceneDiscoveryDumpIntervalSeconds` emits parseable `SceneDiscoveryDumpTimed*` blocks at a fixed realtime interval, and `Launch-CoopPair.ps1` can write the interval into host/client configs for long parity runs.
+- Experimental scene dump crawler: optional host-side `[Debug] SceneDiscoveryDumpCrawler` cycles through a configured scene list, emits parseable `SceneDiscoveryDumpCrawler*` blocks, waits for the co-op peer to be `Live` by default, and can be launched through `scripts/Launch-SceneDumpCrawler.ps1` for faster all-scene field inventory collection.
 - `Run-CoopSmoke.ps1` end-to-end smoke flow + `Launch-CoopPair.ps1` per-instance Unity log files + instance-cap safety + default windowed launch args. Default to manual co-op startup unless `-AutoStartHost` / `-AutoConnectClient`.
 - Session log filenames include mode + ms timestamp + pid so same-PC host/client runs don't collide. Throttled overlay/status logging. Mike-sync-target log throttled on `Transform.GetInstanceID()`. Client "runtime state held local" log bucketed per-reason. Shutdown retry noise quieted after intentional disconnects.
 - Avatar diagnostics: source, fallback reason, renderer count, bounds, animator count, enabled-collider count in BepInEx + session logs.

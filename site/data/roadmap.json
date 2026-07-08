@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-07-06",
+    "compiled": "2026-07-08",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "0301703",
+      "subject": "coop: stabilize npc dialogue and cabin sync"
+    },
+    {
       "sha": "72f9579",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -109,10 +113,6 @@
     {
       "sha": "4fd45bf",
       "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "024f7a9",
-      "subject": "site: harden showcase fallback"
     }
   ]
 }
