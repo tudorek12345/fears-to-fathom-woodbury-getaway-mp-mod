@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-07-08",
+    "compiled": "2026-07-13",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "6298035",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "e0db822",
       "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
     },
@@ -109,10 +113,6 @@
     {
       "sha": "93531aa",
       "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "b941d4b",
-      "subject": "site: refresh 0.4.43 metadata"
     }
   ]
 }
