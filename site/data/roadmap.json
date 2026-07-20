@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-07-13",
+    "compiled": "2026-07-20",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "2b17237",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "6298035",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -109,10 +113,6 @@
     {
       "sha": "14891fa",
       "subject": "coop: add cabin death diagnostics"
-    },
-    {
-      "sha": "93531aa",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }
