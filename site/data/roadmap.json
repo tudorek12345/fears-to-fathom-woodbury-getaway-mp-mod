@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-07-27",
+    "compiled": "2026-08-03",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "0c6727f",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "4afcebb",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -109,10 +113,6 @@
     {
       "sha": "f3fd3f2",
       "subject": "docs: record changelog maintenance rule"
-    },
-    {
-      "sha": "f41e439",
-      "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
 }
