@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-08-17",
+    "compiled": "2026-08-24",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "e1ce8c6",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "f4227db",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -109,10 +113,6 @@
     {
       "sha": "e0db822",
       "subject": "Merge branch 'main' of https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway..."
-    },
-    {
-      "sha": "ddd7a1a",
-      "subject": "chaser determination update"
     }
   ]
 }
