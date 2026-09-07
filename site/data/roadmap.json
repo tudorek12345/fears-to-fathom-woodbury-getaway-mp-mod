@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-08-31",
+    "compiled": "2026-09-07",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -83,6 +83,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "42cff35",
+      "subject": "site: auto-refresh data + badge [skip ci]"
+    },
+    {
       "sha": "0ee9d40",
       "subject": "site: auto-refresh data + badge [skip ci]"
     },
@@ -108,10 +112,6 @@
     },
     {
       "sha": "2b17237",
-      "subject": "site: auto-refresh data + badge [skip ci]"
-    },
-    {
-      "sha": "6298035",
       "subject": "site: auto-refresh data + badge [skip ci]"
     }
   ]
