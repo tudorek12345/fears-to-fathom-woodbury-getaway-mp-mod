@@ -95,6 +95,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "d206164",
+      "subject": "SiteData"
+    },
+    {
       "sha": "f3fd3f2",
       "subject": "docs: record changelog maintenance rule"
     },
@@ -121,10 +125,6 @@
     {
       "sha": "024f7a9",
       "subject": "site: harden showcase fallback"
-    },
-    {
-      "sha": "4f73afc",
-      "subject": "site: fix showcase gallery rendering"
     }
   ]
 }
