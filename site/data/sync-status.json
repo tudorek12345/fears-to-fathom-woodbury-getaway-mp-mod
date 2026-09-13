@@ -1,21 +1,21 @@
 {
   "meta": {
-    "plugin": "0.4.43",
+    "plugin": "0.4.44",
     "protocol": 5,
     "bepInEx": "5 (Mono)",
     "targetFramework": "net472",
-    "lastCommit": "42cff35 \"site: auto-refresh data + badge [skip ci]\"",
-    "lastUpdated": "2026-09-07",
+    "lastCommit": "14891fa \"coop: add cabin death diagnostics\"",
+    "lastUpdated": "2026-07-08",
     "overallPercent": 76,
     "headline": "Co-op for Fears to Fathom: Woodbury Getaway",
     "subhead": "Play Fears to Fathom: Woodbury Getaway with a friend. An unofficial co-op mod for the Steam game — one of you hosts, the other connects, and the scary parts happen to both of you at the same time.",
     "repo": "https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod",
     "download": {
-      "label": "Woodbury Co-op 0.4.43 test build",
+      "label": "Woodbury Co-op 0.4.44 test build",
       "url": "downloads/woodbury-coop-latest.7z",
-      "sizeMb": 7.6,
+      "sizeMb": 7.7,
       "protocol": 5,
-      "note": "All-in-one BepInEx overlay. Extract into a valid Fears to Fathom: Woodbury Getaway install."
+      "note": "Release build and snapshot/log regression checks passed; full gameplay pass pending."
     },
     "reVerification": {
       "date": "2026-05-30",
@@ -25,6 +25,12 @@
       "fieldsConfirmed": 266,
       "fieldRatePercent": 93.7,
       "note": "Every FindObjectOfType<T> across the non-Cabin sync modules names a real type declared in decompiled/. 93.7% of named field reflections resolve to declared fields in the matching class; misses concentrate on ParkingLotManager and fail safe (the GetField cache returns null and the lookup no-ops)."
+    },
+    "validation": {
+      "lastGameplayEvidence": "2026-07-08",
+      "gameplayEvidenceVersion": "0.4.43",
+      "currentBuildGameplay": "Pending a full host/client story run",
+      "note": "Historical logs confirm a CabinSceneDark client catch and native death mirror. Menu-only sessions are not gameplay validation."
     }
   },
   "scenes": [
@@ -56,12 +62,13 @@
         "Seated proxies (couch / Ouija table / board-game seats / bed)",
         "Opening RV/truck driving intro: state, lights, brake/turn, bobblehead, radio (clip + playback), bag/door/light actives, truck visual transforms",
         "Randomized traffic pool: pool active state + AiTransform correction",
-        "Mike animation-state replication (StateHash/Loop/Phase10/Transition/NextStateHash)"
+        "Mike animation-state replication (StateHash/Loop/Phase10/Transition/NextStateHash)",
+        "Shared Cabin chaser/death: host targets a fresh nearby client anchor; a July 8 run recorded client catch and native death mirroring"
       ],
       "notSynced": [
         "Cross-scene save/load checkpoint parity",
         "Late-game endgame sequence edge cases (still being playtested)",
-        "Mid-session reconnect (Reconnecting state scaffolded only)"
+        "Mid-session recovery still needs gameplay validation; TCP retries and snapshot catch-up are implemented"
       ]
     },
     {
@@ -134,7 +141,7 @@
       "name": "Office",
       "percent": 68,
       "status": "Broad",
-      "summary": "Most recent deep coverage. Full game/player state + every subcontroller. Least playtested.",
+      "summary": "Broad manager, appliance, UI, and NPC implementation. Full story validation is still pending.",
       "syncedFiles": [
         "src/WoodburySpectatorSync/Coop/OfficeSceneStateSync.cs",
         "src/WoodburySpectatorSync/Coop/VendingMachineSceneSync.cs"

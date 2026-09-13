@@ -2,8 +2,8 @@
   "systems": [
     {
       "name": "Session lifecycle",
-      "status": "done",
-      "note": "Hello/HelloAck handshake, SceneChange + SceneReady, SnapshotBegin/End/Ack, UDP gated until Live."
+      "status": "partial",
+      "note": "Hello/scene/snapshot handshakes implemented. 0.4.44 rejects failed/incomplete acknowledgements and retries full state; recovery needs a fresh paired gameplay pass."
     },
     {
       "name": "NPC brains",
@@ -48,12 +48,12 @@
     {
       "name": "Avatars",
       "status": "done",
-      "note": "Auto → GameModel → AssetBundle → Capsule fallback chain. HOST/CLIENT nametags; render-only AnimController filtered."
+      "note": "Auto prefers safe scene humans and optional AssetBundle avatars. Capsule is explicit-only; Auto can remain invisible if no valid model is available."
     },
     {
       "name": "Diagnostics",
       "status": "done",
-      "note": "Per-process session logs, F10 SceneDiscoveryDump, Compare-SceneDiscoveryDump.ps1, Run-CoopSmoke.ps1."
+      "note": "Session logs, F10 scene dumps, comparisons, stricter gameplay smoke checks, and standalone snapshot/log regressions."
     },
     {
       "name": "Co-op setup UI",
@@ -93,7 +93,7 @@
     {
       "name": "Mid-session reconnect",
       "status": "partial",
-      "note": "Reconnecting enum exists in SessionState; resume-snapshot + replay-missed-flags path not finished."
+      "note": "TCP automatically retries and the scene handshake can resend snapshots. Complete mid-story recovery and persistent save restoration are not yet validated."
     },
     {
       "name": "Menu / loading scenes",

@@ -906,8 +906,7 @@ namespace WoodburySpectatorSync.Coop
 
         private void RetrySnapshotAckWait(long nowMs)
         {
-            if (!IsHostWaitEnabled() ||
-                !_server.IsClientConnected ||
+            if (!_server.IsClientConnected ||
                 _lifecycle.State != SessionState.SnapshotApplying ||
                 _sceneHandshake.IsSnapshotAcknowledged() ||
                 _sceneHandshake.LastSnapshotEndGeneration != _sceneHandshake.Generation)
@@ -1557,11 +1556,13 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
 
-            if (!_sceneHandshake.AcknowledgeSnapshot(ack.Generation))
+            if (ack.Generation != _sceneHandshake.Generation ||
+                !string.Equals(ack.SceneName, _sceneHandshake.SceneName, StringComparison.Ordinal) ||
+                _lifecycle.State != SessionState.SnapshotApplying)
             {
                 if (_settings.VerboseLogging.Value)
                 {
-                    _logger.LogInfo("Co-op session host: SnapshotAck duplicate gen=" + ack.Generation +
+                    _logger.LogInfo("Co-op session host: SnapshotAck stale/duplicate gen=" + ack.Generation +
                         " current=" + _sceneHandshake.Generation + " ignored");
                 }
                 return;
@@ -1612,6 +1613,20 @@ namespace WoodburySpectatorSync.Coop
                     " appliedCustom=" + ack.AppliedCustomCount +
                     " pending=" + ack.PendingObjectCount +
                     " missing=" + ack.MissingObjectCount);
+            }
+
+            var complete = SceneHandshakeState.CanCompleteSnapshot(
+                ack.Ok, ack.PendingObjectCount, ack.MissingObjectCount,
+                ack.AppliedDoorCount, _lastSnapshotCounts.Door,
+                ack.AppliedHoldableCount, _lastSnapshotCounts.Holdable,
+                ack.AppliedCustomCount, _lastSnapshotCounts.Custom);
+            if (!_sceneHandshake.AcknowledgeSnapshot(ack.Generation, complete))
+            {
+                // Keep the generation unacknowledged so the catch-up timer retries,
+                // including when the user has disabled pausing the host.
+                if (_hostWaitNextSnapshotRetryMs <= 0)
+                    _hostWaitNextSnapshotRetryMs = nowMs + HostWaitSnapshotRetryMs;
+                return;
             }
 
             _lifecycle.TryTransition(
@@ -3939,6 +3954,8 @@ namespace WoodburySpectatorSync.Coop
                 _cabinGameFlags.Clear();
                 _pizzeriaFlags.Clear();
                 _roadTripFlags.Clear();
+                _officeFlags.Clear();
+                _parkingLotFlags.Clear();
             }
 
             var counts = new SnapshotCounts();

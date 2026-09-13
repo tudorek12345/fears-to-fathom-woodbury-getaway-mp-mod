@@ -10,7 +10,7 @@ on:
       - "site/badges/**"
   workflow_dispatch:
   schedule:
-    - cron: "0 6 * * 1"   # weekly Mon 06:00 UTC — keeps lastUpdated honest
+    - cron: "0 6 * * 1"   # weekly integrity check; source date only changes with source
 
 # Single in-flight deploy at a time, but never cancel one mid-flight.
 concurrency:
@@ -36,7 +36,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Refresh site data
+      - name: Check snapshot and smoke regressions
+        shell: pwsh
+        run: ./scripts/Test-SyncRegression.ps1
+
+      - name: Verify package and refresh site data
         shell: pwsh
         run: ./scripts/Update-SiteData.ps1
 

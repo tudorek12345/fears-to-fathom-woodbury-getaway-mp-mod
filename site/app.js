@@ -8,22 +8,28 @@
   // ---------- 0. Theme toggle ---------------------------------
   const root = document.documentElement;
   const themeBtn = document.getElementById("theme-toggle");
-  const savedTheme = localStorage.getItem("wbc-theme");
+  function readPreference(key) {
+    try { return localStorage.getItem(key); } catch (_) { return null; }
+  }
+  function savePreference(key, value) {
+    try { localStorage.setItem(key, value); } catch (_) { /* Preferences are optional. */ }
+  }
+  const savedTheme = readPreference("wbc-theme");
   if (savedTheme === "light" || savedTheme === "dark") {
     root.setAttribute("data-theme", savedTheme);
   }
   themeBtn?.addEventListener("click", () => {
     const next = root.getAttribute("data-theme") === "light" ? "dark" : "light";
     root.setAttribute("data-theme", next);
-    localStorage.setItem("wbc-theme", next);
+    savePreference("wbc-theme", next);
   });
 
   // ---------- 0a. FX / reading-mode toggle (persists) -----------
   const fxBtn = document.getElementById("fx-toggle");
-  if (localStorage.getItem("wbc-fx") === "off") document.body.classList.add("fx-off");
+  if (readPreference("wbc-fx") === "off") document.body.classList.add("fx-off");
   fxBtn?.addEventListener("click", () => {
     const off = document.body.classList.toggle("fx-off");
-    localStorage.setItem("wbc-fx", off ? "off" : "on");
+    savePreference("wbc-fx", off ? "off" : "on");
   });
 
   // ---------- 0a. REC found-footage timestamp ticker ------------
@@ -38,30 +44,17 @@
     }, 1000);
   })();
 
-  // ---------- 0b. Visitor counter + gallery (run independently) ----
-  initVisitorCounter();
-  initGallery();
-
-  function initVisitorCounter() {
-    var el = document.getElementById("visit-count");
-    var pill = document.getElementById("visit-pill");
-    if (!el || !pill) return;
-    var base = "https://api.counterapi.dev/v1/woodbury-coop/site-visits";
-    var counted = false;
-    try { counted = localStorage.getItem("wbc_visited") === "1"; } catch (e) {}
-    // Increment once per browser (dedupe); on return visits just read the total.
-    var url = counted ? base + "/" : base + "/up";
-    fetch(url)
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d && typeof d.count === "number") {
-          el.textContent = d.count.toLocaleString();
-          pill.hidden = false;
-          try { localStorage.setItem("wbc_visited", "1"); } catch (e) {}
-        }
-      })
-      .catch(function () { pill.hidden = true; });
+  const topbar = document.querySelector(".topbar");
+  if (topbar) {
+    const updateScrollOffset = () => {
+      root.style.scrollPaddingTop = `${Math.ceil(topbar.getBoundingClientRect().height) + 16}px`;
+    };
+    updateScrollOffset();
+    if (typeof ResizeObserver !== "undefined") new ResizeObserver(updateScrollOffset).observe(topbar);
   }
+
+  // ---------- 0b. Gallery (runs independently) ------------------
+  initGallery();
 
   function initGallery() {
     var gallery = document.getElementById("gallery");
@@ -135,7 +128,7 @@
       addBadge(badges, "badge-bep", `${meta.bepInEx}`.toUpperCase());
       addBadge(badges, "badge-target", String(meta.targetFramework).toUpperCase());
       addBadge(badges, "badge-status", "WIP");
-      addBadge(badges, "badge-updated", `UPDATED ${meta.lastUpdated}`);
+      addBadge(badges, "badge-updated", `SOURCE ${meta.lastUpdated}`);
     }
 
     const ringPct = document.getElementById("ring-percent");
@@ -150,12 +143,12 @@
 
     const repo = document.getElementById("hero-repo");
     if (repo && meta.repo) {
-      repo.href = meta.repo;
+      repo.href = meta.download?.url || meta.repo;
     }
 
     const hmeta = document.getElementById("hero-meta");
     if (hmeta) {
-      hmeta.innerHTML = `Last commit <code>${escapeHtml(meta.lastCommit)}</code> · updated <b>${escapeHtml(meta.lastUpdated)}</b>`;
+      hmeta.innerHTML = `Last source commit <code>${escapeHtml(meta.lastCommit)}</code> · ${escapeHtml(meta.lastUpdated)}`;
     }
   }
 
@@ -442,19 +435,21 @@
       const el = document.getElementById(id);
       if (el) el.href = href;
     };
-    set("hero-repo",         base);
+    set("hero-repo",         meta.download?.url || base);
     set("get-card-gh",       base);
     set("gh-link-code",      base);
     set("gh-link-commits",   base + "/commits/main");
     set("gh-link-issues",    base + "/issues");
     set("gh-link-pulls",     base + "/pulls");
-    set("gh-link-releases",  base + "/releases");
+    set("gh-link-releases",  "downloads/build-info.json");
     set("gh-link-readme",    base + "#readme");
     set("gh-link-changelog", base + "/blob/main/CHANGELOG.md");
     set("gh-link-actions",   base + "/actions");
     set("gh-more",           base + "/commits/main");
 
     if (meta.download && meta.download.url) {
+      const note = document.getElementById("download-note");
+      if (note) note.textContent = `${meta.download.label} / protocol ${meta.download.protocol}. ${meta.download.note}`;
       const dl = document.getElementById("download-build");
       if (dl) {
         dl.href = meta.download.url;

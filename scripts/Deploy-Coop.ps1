@@ -15,6 +15,7 @@ if (-not $resolvedProject) {
 
 if ($Build) {
     dotnet build $resolvedProject -c $Configuration
+    if ($LASTEXITCODE -ne 0) { throw "Plugin build failed (exit $LASTEXITCODE); deployment cancelled." }
 }
 
 $projectDir = Split-Path -Parent $resolvedProject

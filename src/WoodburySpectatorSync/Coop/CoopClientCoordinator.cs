@@ -276,6 +276,7 @@ namespace WoodburySpectatorSync.Coop
         private long _hostTransformsDroppedPreLive;
         private int _lastSnapshotPendingObjectCount;
         private int _lastSnapshotMissingObjectCount;
+        private bool _snapshotInProgress;
         private float _nextManagerWaitLogTime;
         private float _managerWaitStartTime;
         private string _lastStartPrefScene = string.Empty;
@@ -1282,6 +1283,22 @@ namespace WoodburySpectatorSync.Coop
                     " active=" + _activeHostSessionId + " ignoring");
                 return;
             }
+            if (begin.Generation != _activeSceneGeneration ||
+                !string.Equals(begin.SceneName, SceneManager.GetActiveScene().name, StringComparison.Ordinal) ||
+                (_lifecycle.State != SessionState.SceneSyncing &&
+                 _lifecycle.State != SessionState.SceneReady &&
+                 _lifecycle.State != SessionState.SnapshotApplying && !_lifecycle.IsLive))
+            {
+                _logger.LogWarning("Co-op session client: SnapshotBegin stale or not ready gen=" + begin.Generation +
+                    " active=" + _activeSceneGeneration + " scene=" + begin.SceneName);
+                return;
+            }
+            if (_lifecycle.IsLive)
+            {
+                _lifecycle.TryTransition(SessionState.SceneSyncing, "snapshot-retry",
+                    begin.SceneName, begin.Generation, begin.SessionId, nowMs);
+            }
+            _snapshotInProgress = true;
             _activeSceneGeneration = begin.Generation;
             _hostStateAppliedAtSnapshotBegin = Interlocked.Read(ref _hostStateAppliedCount);
             ClearSnapshotBuffers();
@@ -1313,6 +1330,8 @@ namespace WoodburySpectatorSync.Coop
         private void HandleSnapshotEnd(SnapshotEndMessage end)
         {
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (!_snapshotInProgress || _lifecycle.State != SessionState.SnapshotApplying ||
+                !string.Equals(end.SceneName, SceneManager.GetActiveScene().name, StringComparison.Ordinal)) return;
             if (end.SessionId != 0 && _activeHostSessionId != 0 && end.SessionId != _activeHostSessionId)
             {
                 _logger.LogWarning("Co-op session client: SnapshotEnd stale session=" + end.SessionId +
@@ -1329,10 +1348,12 @@ namespace WoodburySpectatorSync.Coop
 
             // Best-effort: drain any pending state we can apply now.
             var counts = SnapshotApplyCounts.Empty();
+            var applied = false;
             try
             {
                 counts = ApplySnapshotBuffers();
                 ApplyPendingStates();
+                applied = true;
             }
             catch (Exception ex)
             {
@@ -1342,9 +1363,18 @@ namespace WoodburySpectatorSync.Coop
             _lastSnapshotPendingObjectCount = CountPendingObjects();
             _lastSnapshotMissingObjectCount = _lastSnapshotPendingObjectCount;
 
-            var ok = _lastSnapshotMissingObjectCount == 0;
+            _snapshotInProgress = false;
+            var ok = SceneHandshakeState.CanCompleteSnapshot(applied,
+                _lastSnapshotPendingObjectCount, _lastSnapshotMissingObjectCount,
+                counts.Door, end.DoorCount, counts.Holdable, end.HoldableCount,
+                counts.Custom, end.CustomCount);
             var ackReason = ok ? "ok" :
-                "pending=" + _lastSnapshotPendingObjectCount + " missing=" + _lastSnapshotMissingObjectCount;
+                "applied=" + applied + " pending=" + _lastSnapshotPendingObjectCount +
+                " missing=" + _lastSnapshotMissingObjectCount +
+                " doors=" + counts.Door + "/" + end.DoorCount +
+                " holdables=" + counts.Holdable + "/" + end.HoldableCount +
+                " custom=" + counts.Custom + "/" + end.CustomCount;
+            var ackQueued = false;
             try
             {
                 _client.Enqueue(new SnapshotAckMessage(
@@ -1362,6 +1392,7 @@ namespace WoodburySpectatorSync.Coop
                     _lastSnapshotMissingObjectCount,
                     ok,
                     ackReason));
+                ackQueued = true;
                 _logger.LogInfo("Co-op session client: SnapshotAck sent gen=" + end.Generation +
                     " story=" + counts.Story +
                     " doors=" + counts.Door +
@@ -1382,7 +1413,7 @@ namespace WoodburySpectatorSync.Coop
                 _logger.LogWarning("Co-op session client: SnapshotAck send failed: " + ex.Message);
             }
 
-            if (_lifecycle.State == SessionState.SnapshotApplying)
+            if (ok && ackQueued && _lifecycle.State == SessionState.SnapshotApplying)
             {
                 _lifecycle.TryTransition(
                     SessionState.Live,
@@ -1861,6 +1892,7 @@ namespace WoodburySpectatorSync.Coop
             ClearSnapshotBuffers();
             _lastSnapshotPendingObjectCount = 0;
             _lastSnapshotMissingObjectCount = 0;
+            _snapshotInProgress = false;
             _pendingDoorFirstSeen.Clear();
             _pendingHoldableFirstSeen.Clear();
             _pendingAiFirstSeen.Clear();

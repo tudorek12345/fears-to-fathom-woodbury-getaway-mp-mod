@@ -114,6 +114,7 @@ pre code { background: transparent; padding: 0; }
   color: var(--fg);
   text-decoration: none;
   letter-spacing: -0.2px;
+  flex-shrink: 0;
 }
 .brand:hover { text-decoration: none; }
 .brand-mark {
@@ -660,27 +661,6 @@ pre code { background: transparent; padding: 0; }
   font-size: 13.5px;
   color: var(--fg-soft);
 }
-
-/* ----------------------------------------------------------- VISITOR PILL (nav) */
-.visit-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 13px;
-  border-radius: 999px;
-  background: var(--bg-alt);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  color: var(--fg);
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  margin-right: 4px;
-}
-.visit-pill svg { width: 16px; height: 16px; opacity: 0.85; color: var(--accent); }
-.visit-pill strong { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 15px; }
-.visit-label { color: var(--fg-soft); font-weight: 600; font-size: 12.5px; letter-spacing: 0.3px; }
-@media (max-width: 700px) { .visit-label { display: none; } }
-@media (max-width: 480px) { .visit-pill { display: none; } }
 
 /* ---- MORE PROJECTS ---- */
 .proj-grid {
@@ -1509,7 +1489,7 @@ body.fx-off .btn-discord::after { display: none; }
   .topnav a { font-size: 13px; }
   .brand-name { display: none; }
   .hero { padding: 56px 0 40px; }
-  .hero-cta-row { flex-direction: column; align-items: flex-start; gap: 24px; }
+  .hero-cta-row { flex-direction: column-reverse; align-items: flex-start; gap: 24px; }
   .progress-ring { width: 140px; height: 140px; }
   .section { padding: 56px 0; }
   .timeline { padding-left: 22px; }
@@ -1802,4 +1782,20 @@ body.fx-off .fx-toggle { color: var(--fg-mute); }
 }
 @media (max-width: 520px) {
   .brand-tape { display: none; }
+}
+
+/* Keep navigation compact on smaller screens and preserve every destination. */
+@media (max-width: 1320px) {
+  .topbar { flex-wrap: wrap; gap: 8px 12px; }
+  .brand { margin-right: auto; }
+  .topnav {
+    order: 4;
+    flex: 0 0 100%;
+    min-width: 0;
+    margin: 0;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 18px;
+  }
+  .topnav a { flex-shrink: 0; white-space: nowrap; }
 }

@@ -1,0 +1,704 @@
+- generic [active] [ref=f2e1]:
+  - generic [aria-hidden]:
+    - text: REC
+    - generic: 01:14:44
+  - banner [ref=f2e2]:
+    - link "Woodbury Co-op" [ref=f2e3] [cursor=pointer]:
+      - /url: "#hero"
+    - navigation "Primary" [ref=f2e6]:
+      - link "Status" [ref=f2e7] [cursor=pointer]:
+        - /url: "#sync"
+      - link "Systems" [ref=f2e8] [cursor=pointer]:
+        - /url: "#systems"
+      - link "Roadmap" [ref=f2e9] [cursor=pointer]:
+        - /url: "#roadmap"
+      - link "Updates" [ref=f2e10] [cursor=pointer]:
+        - /url: "#changes"
+      - link "Showcase" [ref=f2e11] [cursor=pointer]:
+        - /url: "#gallery"
+      - link "Game guide" [ref=f2e12] [cursor=pointer]:
+        - /url: "#wiki"
+      - link "Get the mod" [ref=f2e13] [cursor=pointer]:
+        - /url: "#source"
+      - link "Support" [ref=f2e14] [cursor=pointer]:
+        - /url: "#support"
+      - link "FAQ" [ref=f2e15] [cursor=pointer]:
+        - /url: "#faq"
+      - link "Projects" [ref=f2e16] [cursor=pointer]:
+        - /url: "#projects"
+    - button "Toggle visual effects (reading mode)" [ref=f2e17] [cursor=pointer]: FX
+    - button "Toggle theme" [ref=f2e18] [cursor=pointer]
+  - main [ref=f2e20]:
+    - generic [ref=f2e22]:
+      - generic [ref=f2e23]: Unofficial fan co-op mod · Source available
+      - generic [aria-hidden] [ref=f2e24]:
+        - generic [ref=f2e25]: FEARS
+        - generic [ref=f2e26]: TO
+        - generic [ref=f2e27]: FATHOM
+      - heading "Woodbury Getaway Multiplayer Co:op" [level=1] [ref=f2e28]: Woodbury GetawayMultiplayer Co:op
+      - paragraph [ref=f2e29]: "Play Fears to Fathom: Woodbury Getaway with a friend. An unofficial co-op mod for the Steam game — one of you hosts, the other connects, and the scary parts happen to both of you at the same time."
+      - generic [ref=f2e30]:
+        - generic [ref=f2e31]: PLUGIN 0.4.44
+        - generic [ref=f2e32]: PROTOCOL v5
+        - generic [ref=f2e33]: 5 (MONO)
+        - generic [ref=f2e34]: NET472
+        - generic [ref=f2e35]: WIP
+        - generic [ref=f2e36]: SOURCE 2026-07-08
+      - generic [ref=f2e37]:
+        - img "Estimated sync implementation coverage" [ref=f2e38]:
+          - generic [ref=f2e42]:
+            - generic [ref=f2e43]: 76%
+            - generic [ref=f2e44]: built
+        - generic [ref=f2e45]:
+          - generic [ref=f2e46]:
+            - link "Watch development videos" [ref=f2e47] [cursor=pointer]:
+              - /url: https://www.youtube.com/heperkoo
+            - link "Download test build" [ref=f2e50] [cursor=pointer]:
+              - /url: downloads/woodbury-coop-latest.7z
+            - link "Join the Discord" [ref=f2e51] [cursor=pointer]:
+              - /url: https://discord.gg/tyEhwgSxzV
+          - link "See what works today →" [ref=f2e54] [cursor=pointer]:
+            - /url: "#sync"
+          - generic [ref=f2e55]:
+            - text: Last source commit
+            - code [ref=f2e56]: "14891fa \"coop: add cabin death diagnostics\""
+            - text: · 2026-07-08
+    - region "Follow the project" [ref=f2e57]:
+      - generic [ref=f2e59]:
+        - generic [ref=f2e60]:
+          - strong [ref=f2e61]: Want in when it drops?
+          - text: Solo project. Stars and subs tell me what to build next and who's actually waiting. Takes two seconds.
+        - generic [ref=f2e62]:
+          - link "Star the repo" [ref=f2e63] [cursor=pointer]:
+            - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod
+          - link "Follow for the build" [ref=f2e66] [cursor=pointer]:
+            - /url: https://www.youtube.com/heperkoo?sub_confirmation=1
+    - generic [ref=f2e70]:
+      - generic [ref=f2e71]:
+        - generic [ref=f2e72]: See it in action
+        - heading "Development build showcase" [level=2] [ref=f2e73]
+        - paragraph [ref=f2e74]: "Current test-build screenshots: two-player Cabin and Pizzeria runs, vehicle seats, UI mirroring, synced NPCs, and debug overlays. Press F11 in-game to host or connect."
+      - generic [ref=f2e75]:
+        - figure "Latest development showcase — Cabin, Pizzeria, driving, UI, and two-player sync tests" [ref=f2e76]:
+          - link "Open the Woodbury Co-op development showcase album" [ref=f2e77] [cursor=pointer]:
+            - /url: https://imgur.com/a/JlH4ppj
+        - link "Dev album More test-run screenshots The live page uses local screenshots so it does not depend on Imgur embeds. Open the album for the full dev screenshot set. Open album →" [ref=f2e80] [cursor=pointer]:
+          - /url: https://imgur.com/a/JlH4ppj
+          - generic [ref=f2e81]:
+            - generic [ref=f2e82]: Dev album
+            - heading "More test-run screenshots" [level=3] [ref=f2e83]
+            - paragraph [ref=f2e84]: The live page uses local screenshots so it does not depend on Imgur embeds. Open the album for the full dev screenshot set.
+            - strong [ref=f2e85]: Open album →
+      - generic [ref=f2e86]:
+        - link "Download current test build" [ref=f2e87] [cursor=pointer]:
+          - /url: downloads/woodbury-coop-latest.7z
+        - link "Open the full showcase album →" [ref=f2e88] [cursor=pointer]:
+          - /url: https://imgur.com/a/JlH4ppj
+    - generic [ref=f2e90]:
+      - generic [ref=f2e91]:
+        - generic [ref=f2e92]: What works today
+        - heading "Status by chapter" [level=2] [ref=f2e93]
+        - paragraph [ref=f2e94]: Five chapters have sync implementations. These percentages estimate code coverage; they are not measured playthrough completion rates. Open a card for implemented features and remaining gaps. A complete two-player run of the current build is still pending.
+      - generic [ref=f2e95]:
+        - group [ref=f2e96]:
+          - generic "Cabin 82% Deep Most playtested. Full NPC brain coverage, mini-games, cooking, ambient, opening drive. Show details ▾" [ref=f2e665] [cursor=pointer]:
+            - generic [ref=f2e98]:
+              - heading "Cabin" [level=3] [ref=f2e99]
+              - generic [ref=f2e100]: 82%
+            - generic [ref=f2e101]: Deep
+            - paragraph [ref=f2e102]: Most playtested. Full NPC brain coverage, mini-games, cooking, ambient, opening drive.
+            - generic [ref=f2e104]:
+              - generic [ref=f2e105]: Show details
+              - text: ▾
+        - group [ref=f2e106]:
+          - generic "Pizzeria 64% Broad Opening drive-in, Moe's Pizzeria visit, props/media, phone/UI, vending, triggers, passenger-seat handoffs, and NPC registry coverage. Latest build improves truck-bed passenger placement and pizza-box visual parity. Show details ▾" [ref=f2e667] [cursor=pointer]:
+            - generic [ref=f2e108]:
+              - heading "Pizzeria" [level=3] [ref=f2e109]
+              - generic [ref=f2e110]: 64%
+            - generic [ref=f2e111]: Broad
+            - paragraph [ref=f2e112]: Opening drive-in, Moe's Pizzeria visit, props/media, phone/UI, vending, triggers, passenger-seat handoffs, and NPC registry coverage. Latest build improves truck-bed passenger placement and pizza-box visual parity.
+            - generic [ref=f2e114]:
+              - generic [ref=f2e115]: Show details
+              - text: ▾
+        - group [ref=f2e116]:
+          - generic "RoadTrip 0% Broad Shared truck ride, camera + manager timers, vehicles, bobblehead, traffic, triggers, and typed vehicle smoothing. Show details ▾" [ref=f2e117] [cursor=pointer]:
+            - generic [ref=f2e118]:
+              - heading "RoadTrip" [level=3] [ref=f2e119]
+              - generic [ref=f2e120]: 0%
+            - generic [ref=f2e121]: Broad
+            - paragraph [ref=f2e122]: Shared truck ride, camera + manager timers, vehicles, bobblehead, traffic, triggers, and typed vehicle smoothing.
+            - generic [ref=f2e124]:
+              - generic [ref=f2e125]: Show details
+              - text: ▾
+        - group [ref=f2e126]:
+          - generic "Office 0% Broad Broad manager, appliance, UI, and NPC implementation. Full story validation is still pending. Show details ▾" [ref=f2e127] [cursor=pointer]:
+            - generic [ref=f2e128]:
+              - heading "Office" [level=3] [ref=f2e129]
+              - generic [ref=f2e130]: 0%
+            - generic [ref=f2e131]: Broad
+            - paragraph [ref=f2e132]: Broad manager, appliance, UI, and NPC implementation. Full story validation is still pending.
+            - generic [ref=f2e134]:
+              - generic [ref=f2e135]: Show details
+              - text: ▾
+        - group [ref=f2e136]:
+          - generic "ParkingLot 0% Moderate Game/player state, elevator, walking cop, anti-throw, intro/call. Some subcontrollers still discovery-only. Show details ▾" [ref=f2e137] [cursor=pointer]:
+            - generic [ref=f2e138]:
+              - heading "ParkingLot" [level=3] [ref=f2e139]
+              - generic [ref=f2e140]: 0%
+            - generic [ref=f2e141]: Moderate
+            - paragraph [ref=f2e142]: Game/player state, elevator, walking cop, anti-throw, intro/call. Some subcontrollers still discovery-only.
+            - generic [ref=f2e144]:
+              - generic [ref=f2e145]: Show details
+              - text: ▾
+    - generic [ref=f2e147]:
+      - generic [ref=f2e148]:
+        - generic [ref=f2e149]: Under the hood
+        - heading "Features & systems" [level=2] [ref=f2e150]
+        - paragraph [ref=f2e151]: The pieces that make co-op work across every chapter — voice, NPCs, doors, dialogue, vehicles, save state. Filter to see what's done, partial, or missing.
+      - tablist [ref=f2e152]:
+        - tab "All" [selected] [ref=f2e153] [cursor=pointer]
+        - tab "Done" [ref=f2e154] [cursor=pointer]
+        - tab "Partial" [ref=f2e155] [cursor=pointer]
+        - tab "Missing" [ref=f2e156] [cursor=pointer]
+      - generic [ref=f2e157]:
+        - generic [ref=f2e158]:
+          - generic [ref=f2e159]:
+            - generic [ref=f2e160]: Session lifecycle
+            - generic [ref=f2e161]: Hello/scene/snapshot handshakes implemented. 0.4.44 rejects failed/incomplete acknowledgements and retries full state; recovery needs a fresh paired gameplay pass.
+          - generic [ref=f2e162]: partial
+        - generic [ref=f2e163]:
+          - generic [ref=f2e164]:
+            - generic [ref=f2e165]: NPC brains
+            - generic [ref=f2e166]: Cabin (Mike variants, hiker, host, Nora, cat) deep; Pizzeria + RoadTrip via GenericNpcRegistry.
+          - generic [ref=f2e167]: done
+        - generic [ref=f2e168]:
+          - generic [ref=f2e169]:
+            - generic [ref=f2e170]: Doors / Holdables
+            - generic [ref=f2e171]: CabinDoor + NOTLonely_Door.DoorScript + Holdable replicated across all synced scenes.
+          - generic [ref=f2e172]: done
+        - generic [ref=f2e173]:
+          - generic [ref=f2e174]:
+            - generic [ref=f2e175]: Story flags
+            - generic [ref=f2e176]: Per-scene flag dictionaries (cabinHouse, cabinGame, pizzeria, roadTrip, office, parkingLot).
+          - generic [ref=f2e177]: done
+        - generic [ref=f2e178]:
+          - generic [ref=f2e179]:
+            - generic [ref=f2e180]: Dialogue mirroring
+            - generic [ref=f2e181]: Host dialogue events mirrored; native subtitle UI used when available; client UI suppressed.
+          - generic [ref=f2e182]: done
+        - generic [ref=f2e183]:
+          - generic [ref=f2e184]:
+            - generic [ref=f2e185]: Camera / FOV
+            - generic [ref=f2e186]: Deep Cabin/Pizzeria/RoadTrip; Office/Parking land FOV + dialogue camera at least.
+          - generic [ref=f2e187]: done
+        - generic [ref=f2e188]:
+          - generic [ref=f2e189]:
+            - generic [ref=f2e190]: Vehicles
+            - generic [ref=f2e191]: RoadTrip and Pizzeria passenger seats are in active testing with F12 seatbelt toggles, synthetic rear/truck-bed anchors, and typed vehicle smoothing. Cabin intro seating still needs polish.
+          - generic [ref=f2e192]: partial
+        - generic [ref=f2e193]:
+          - generic [ref=f2e194]:
+            - generic [ref=f2e195]: Traffic
+            - generic [ref=f2e196]: Cabin + Pizzeria + RoadTrip traffic pool/active state + AiTransform correction.
+          - generic [ref=f2e197]: done
+        - generic [ref=f2e198]:
+          - generic [ref=f2e199]:
+            - generic [ref=f2e200]: UI mirror
+            - generic [ref=f2e201]: Pizzeria + RoadTrip + Office UI managers mirrored (intro/fade canvases, dialogue cameras, phone state).
+          - generic [ref=f2e202]: done
+        - generic [ref=f2e203]:
+          - generic [ref=f2e204]:
+            - generic [ref=f2e205]: Avatars
+            - generic [ref=f2e206]: Auto prefers safe scene humans and optional AssetBundle avatars. Capsule is explicit-only; Auto can remain invisible if no valid model is available.
+          - generic [ref=f2e207]: done
+        - generic [ref=f2e208]:
+          - generic [ref=f2e209]:
+            - generic [ref=f2e210]: Diagnostics
+            - generic [ref=f2e211]: Session logs, F10 scene dumps, comparisons, stricter gameplay smoke checks, and standalone snapshot/log regressions.
+          - generic [ref=f2e212]: done
+        - generic [ref=f2e213]:
+          - generic [ref=f2e214]:
+            - generic [ref=f2e215]: Co-op setup UI
+            - generic [ref=f2e216]: F11 main-menu panel for mode/host/client/avatar/overlay config (no more editing the .cfg by hand).
+          - generic [ref=f2e217]: done
+        - generic [ref=f2e218]:
+          - generic [ref=f2e219]:
+            - generic [ref=f2e220]: Cabin Mike sync
+            - generic [ref=f2e221]: MikeCabin, MikeFishing, MikePostEating, MikeAfterHiding, MikeCabinCookController all wired through NpcBrainState.
+          - generic [ref=f2e222]: done
+        - generic [ref=f2e223]:
+          - generic [ref=f2e224]:
+            - generic [ref=f2e225]: Mini-game state
+            - generic [ref=f2e226]: Jenga + Ouija controller + planchette + dining-table colliders + initial-position state synced.
+          - generic [ref=f2e227]: done
+        - generic [ref=f2e228]:
+          - generic [ref=f2e229]:
+            - generic [ref=f2e230]: Cooking props
+            - generic [ref=f2e231]: Casserole/oven/plate/fish/cooking-hand props gated by story flags; client visuals suppressed before Eating.
+          - generic [ref=f2e232]: done
+        - generic [ref=f2e233]:
+          - generic [ref=f2e234]:
+            - generic [ref=f2e235]: Vending machines
+            - generic [ref=f2e236]: Shared between Office + Pizzeria. Cameras, triggers, slot/sliding colliders, soda-can state, audio.
+          - generic [ref=f2e237]: done
+        - generic [ref=f2e238]:
+          - generic [ref=f2e239]:
+            - generic [ref=f2e240]: Generic triggers
+            - generic [ref=f2e241]: OnTriggerSub + OnTriggerDisplaySub + OnTrigger + TriggerEventInvoker mirrored across all 4 non-Cabin scenes.
+          - generic [ref=f2e242]: done
+        - generic [ref=f2e243]:
+          - generic [ref=f2e244]:
+            - generic [ref=f2e245]: Save / load parity
+            - generic [ref=f2e246]: Game's ES3 save state not synced across host/client. Sessions assume both start from the same point.
+          - generic [ref=f2e247]: missing
+        - generic [ref=f2e248]:
+          - generic [ref=f2e249]:
+            - generic [ref=f2e250]: Mid-session reconnect
+            - generic [ref=f2e251]: TCP automatically retries and the scene handshake can resend snapshots. Complete mid-story recovery and persistent save restoration are not yet validated.
+          - generic [ref=f2e252]: partial
+        - generic [ref=f2e253]:
+          - generic [ref=f2e254]:
+            - generic [ref=f2e255]: Menu / loading scenes
+            - generic [ref=f2e256]: Client menu cursor/input kept usable; nothing actively synced in menu/loading.
+          - generic [ref=f2e257]: partial
+        - generic [ref=f2e258]:
+          - generic [ref=f2e259]:
+            - generic [ref=f2e260]: IL2CPP migration
+            - generic [ref=f2e261]: Game ships as Mono. Plugin has a TODO marker for an eventual IL2CPP chainloader swap.
+          - generic [ref=f2e262]: missing
+    - generic [ref=f2e264]:
+      - generic [ref=f2e265]:
+        - generic [ref=f2e266]: What's next
+        - heading "Roadmap" [level=2] [ref=f2e267]
+        - paragraph [ref=f2e268]: What's coming and what's still being worked on. No promises on timing — it ships when it's solid.
+      - heading "Coming next" [level=3] [ref=f2e269]
+      - generic [ref=f2e270]:
+        - article [ref=f2e271]:
+          - generic [ref=f2e272]: In progress — RoadTrip + Pizzeria in testing
+          - heading "Passenger seat — ride together in vehicles" [level=4] [ref=f2e273]
+          - paragraph [ref=f2e274]: Both players in the same vehicle during driving parts. Road Trip and Moe's Pizzeria ride-along are in active testing with F12 seatbelt toggles; Cabin intro seating is the remaining polish target.
+          - generic [ref=f2e275]: Road Trip · Pizzeria · Cabin
+        - article [ref=f2e277]:
+          - generic [ref=f2e278]: Planned
+          - heading "Mid-game save & resume" [level=4] [ref=f2e279]
+          - paragraph [ref=f2e280]: Save together and pick up later from the same point, instead of both starting a chapter from the start.
+          - generic [ref=f2e281]: All chapters
+        - article [ref=f2e283]:
+          - generic [ref=f2e284]: Partial — Cabin death implemented; endings need validation
+          - heading "Synced death & ending" [level=4] [ref=f2e285]
+          - paragraph [ref=f2e286]: Cabin client-catch and native death mirroring are implemented with July 8 log evidence. Other death/ending paths and credits still need a complete paired run.
+          - generic [ref=f2e287]: All chapters
+      - heading "The road to full co-op" [level=3] [ref=f2e289]
+      - generic [ref=f2e290]:
+        - generic [ref=f2e291]:
+          - generic [ref=f2e292]: v0.4.44
+          - heading "Validate the repaired test build" [level=4] [ref=f2e293]
+          - paragraph [ref=f2e294]: Snapshot recovery and package fixes are implemented; gameplay validation remains
+          - list [ref=f2e295]:
+            - listitem [ref=f2e296]: Exercise failed snapshot recovery with a delayed scene object
+            - listitem [ref=f2e297]: Run Cabin host catch and client catch through return to menu
+            - listitem [ref=f2e298]: Complete Pizzeria dialogue, pizza props, passenger exit and scene handoff
+            - listitem [ref=f2e299]: Verify Office/ParkingLot full snapshots after disconnect/reconnect
+            - listitem [ref=f2e300]: Record a complete paired story run before marking end-to-end playable
+        - generic [ref=f2e301]:
+          - generic [ref=f2e302]: v0.6
+          - heading "Playable end to end" [level=4] [ref=f2e303]
+          - paragraph [ref=f2e304]: A full, clean run you can stream
+          - list [ref=f2e305]:
+            - listitem [ref=f2e306]: Reconnect handling
+            - listitem [ref=f2e307]: Synced death + end credits
+            - listitem [ref=f2e308]: Menu / loading hand-off
+            - listitem [ref=f2e309]: Office + Parking Lot polish
+            - listitem [ref=f2e310]: One-button host / join
+        - generic [ref=f2e311]:
+          - generic [ref=f2e312]: v0.7
+          - heading "Ride-along" [level=4] [ref=f2e313]
+          - paragraph [ref=f2e314]: Both players in the same vehicle for the drives
+          - list [ref=f2e315]:
+            - listitem [ref=f2e316]: Passenger seat — Road Trip
+            - listitem [ref=f2e317]: Passenger seat — Pizzeria drive-in / return-to-truck
+            - listitem [ref=f2e318]: Passenger seat — Cabin intro drive polish
+            - listitem [ref=f2e319]: Shared in-car camera & dialogue
+        - generic [ref=f2e320]:
+          - generic [ref=f2e321]: v1.0
+          - heading "Full co-op" [level=4] [ref=f2e322]
+          - paragraph [ref=f2e323]: Save state, drop-in join, polish
+          - list [ref=f2e324]:
+            - listitem [ref=f2e325]: Save & resume together
+            - listitem [ref=f2e326]: Drop-in join mid-session
+            - listitem [ref=f2e327]: Smoother play on higher-latency connections
+            - listitem [ref=f2e328]: Voice indicator + host controls
+      - group [ref=f2e329]:
+        - generic "What's not synced yet▾" [ref=f2e330] [cursor=pointer]
+    - generic [ref=f2e332]:
+      - generic [ref=f2e333]:
+        - generic [ref=f2e334]: Live changelog
+        - heading "Recent updates" [level=2] [ref=f2e335]
+        - paragraph [ref=f2e336]: What's been added in the latest build, organised by chapter. Older versions stay below for the full history.
+      - generic [ref=f2e337]:
+        - group [ref=f2e338]:
+          - generic "0.4.44 development test build Implementation notes; a full gameplay pass of 0.4.44 is pending." [ref=f2e339] [cursor=pointer]:
+            - generic [ref=f2e340]:
+              - heading "0.4.44 development test build" [level=3] [ref=f2e341]
+              - generic [ref=f2e342]: Implementation notes; a full gameplay pass of 0.4.44 is pending.
+          - generic [ref=f2e343]:
+            - heading "Recovery, validation, and download" [level=4] [ref=f2e344]
+            - list [ref=f2e345]:
+              - listitem [ref=f2e346]: Failed or incomplete snapshots keep the session out of Live and trigger full-state retries, including Office and ParkingLot caches.
+              - listitem [ref=f2e347]: Smoke checks parse current applied-state counters and require host/client gameplay evidence; stale logs and menu-only runs cannot pass.
+              - listitem [ref=f2e348]: The download now contains the stated DLL version with loader files at archive root, a build manifest, and checksums.
+            - heading "Cabin" [level=4] [ref=f2e349]
+            - list [ref=f2e350]:
+              - listitem [ref=f2e351]: "The whole opening plays together: the drive in, the hiker at the window, cooking, and the Jenga + Ouija mini-games all stay in sync."
+              - listitem [ref=f2e352]: Mike and every cabin character — the hiker, Nora, the cat — move and act the same on both screens.
+              - listitem [ref=f2e353]: Now covers the dark return-to-cabin run, not just the first visit.
+            - heading "Pizzeria" [level=4] [ref=f2e354]
+            - list [ref=f2e355]:
+              - listitem [ref=f2e356]: Mike drives in and the whole order plays out shared — the booth, the pizza, the phone, the truck.
+              - listitem [ref=f2e357]: Mike now hands off cleanly the whole visit through — driving in, parking, sitting, eating, grabbing the pizza, leaving.
+              - listitem [ref=f2e358]: The cashier, the hobo, the hiker and the box-folding worker are all synced.
+            - heading "Road Trip" [level=4] [ref=f2e359]
+            - list [ref=f2e360]:
+              - listitem [ref=f2e361]: The full highway drive is shared — the radio, the deer, the school bus and the final conversation hit both players at the same time.
+              - listitem [ref=f2e362]: "You can now ride together: the second player buckles into the back of the truck (press F12). Early, but it's in."
+            - heading "Office" [level=4] [ref=f2e363]
+            - list [ref=f2e364]:
+              - listitem [ref=f2e365]: Desks, the computers and their on-screen windows, the coffee machine, vending, fridge and bathrooms all stay in sync.
+              - listitem [ref=f2e366]: The office workers and the janitor act the same for both players.
+            - heading "Parking Lot" [level=4] [ref=f2e367]
+            - list [ref=f2e368]:
+              - listitem [ref=f2e369]: The phone call, the elevator and the parking-lot beats are shared.
+              - listitem [ref=f2e370]: The stranger, Mike and the walking cop are synced.
+            - heading "Both players" [level=4] [ref=f2e371]
+            - list [ref=f2e372]:
+              - listitem [ref=f2e373]: You see each other as real in-game characters with name tags, not floating capsules.
+              - listitem [ref=f2e374]: The host now waits for the second player during loading screens, so you stay together through every scene change.
+              - listitem [ref=f2e375]: Built-in F11 menu to host or join — no config files to touch.
+        - group [ref=f2e376]:
+          - generic "v0.4.x 1 change" [ref=f2e377] [cursor=pointer]:
+            - generic [ref=f2e378]:
+              - heading "v0.4.x" [level=3] [ref=f2e379]
+              - generic [ref=f2e380]: 1 change
+        - group [ref=f2e381]:
+          - generic "v0.3.x 1 change" [ref=f2e382] [cursor=pointer]:
+            - generic [ref=f2e383]:
+              - heading "v0.3.x" [level=3] [ref=f2e384]
+              - generic [ref=f2e385]: 1 change
+        - group [ref=f2e386]:
+          - generic "v0.2.x 1 change" [ref=f2e387] [cursor=pointer]:
+            - generic [ref=f2e388]:
+              - heading "v0.2.x" [level=3] [ref=f2e389]
+              - generic [ref=f2e390]: 1 change
+        - group [ref=f2e391]:
+          - generic "v0.1.0 1 change" [ref=f2e392] [cursor=pointer]:
+            - generic [ref=f2e393]:
+              - heading "v0.1.0" [level=3] [ref=f2e394]
+              - generic [ref=f2e395]: 1 change
+    - generic [ref=f2e397]:
+      - generic [ref=f2e398]:
+        - generic [ref=f2e399]: Chapter guide
+        - heading "What you'll find in each chapter" [level=2] [ref=f2e400]
+        - paragraph [ref=f2e401]: "Quick overview of the people, places and props in each chapter of Fears to Fathom: Woodbury Getaway — and how much of each one currently works in co-op."
+      - generic [ref=f2e402]:
+        - article [ref=f2e403]:
+          - generic [ref=f2e404]:
+            - heading "Cabin scene" [level=3] [ref=f2e405]
+            - generic [ref=f2e406]: deep
+          - paragraph [ref=f2e407]: CabinGameManager drives the scripted sequence (HikerSequence, HostAtDoor, Eating, BoardGame, Ouija…). CabinHouseManager owns the persistent room/door/story booleans. Together they're the source of truth for almost everything in the cabin.
+          - paragraph [ref=f2e408]:
+            - text: "Sync:"
+            - link "CabinAmbientSync.cs" [ref=f2e409] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinAmbientSync.cs
+            - text: ","
+            - link "CabinBoardGameSync.cs" [ref=f2e410] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinBoardGameSync.cs
+        - article [ref=f2e411]:
+          - generic [ref=f2e412]:
+            - heading "Mike (Cabin variants)" [level=3] [ref=f2e413]
+            - generic [ref=f2e414]: deep
+          - paragraph [ref=f2e415]: "Mike is split into stage-specific behaviour scripts: MikeCabin, MikeFishing, MikeCabinCookController, MikePostEating, MikeAfterHiding. Each runs its own NavMesh + dialogue cues; the mod treats them as one logical actor and the host's chosen variant wins."
+          - paragraph [ref=f2e416]:
+            - text: "Sync:"
+            - link "CabinNpcRegistry.cs" [ref=f2e417] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinNpcRegistry.cs
+            - text: via NpcBrainState
+        - article [ref=f2e418]:
+          - generic [ref=f2e419]:
+            - heading "Hiker window" [level=3] [ref=f2e420]
+            - generic [ref=f2e421]: done
+          - paragraph [ref=f2e422]: "CabinHiker and HikerCabinController stage the \"hiker at the window\" sequence: walk-up, knock, force entry, and the player's host response (HostFixingSink, hide etc.). Most jumpscare-style horror beats hang off these two."
+          - paragraph [ref=f2e423]: "Sync: hiker state enums + go/moving/reachedPos/followingHost flags; lock window gated on CurrentSequence to prevent client clumping."
+        - article [ref=f2e424]:
+          - generic [ref=f2e425]:
+            - heading "Board games — Jenga + Ouija" [level=3] [ref=f2e426]
+            - generic [ref=f2e427]: done
+          - paragraph [ref=f2e428]: JengaController tracks pieces, drag/place state, and the dining-table collider mask. OuijaController runs the planchette target / timer / input fields and the audio bed. Both used to drift between peers; now both are host-authoritative with transform correction on the planchette + table.
+          - paragraph [ref=f2e429]:
+            - text: "Sync:"
+            - link "CabinBoardGameSync.cs" [ref=f2e430] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/CabinBoardGameSync.cs
+        - article [ref=f2e431]:
+          - generic [ref=f2e432]:
+            - heading "Pizzeria scene" [level=3] [ref=f2e433]
+            - generic [ref=f2e434]: broad
+          - paragraph [ref=f2e435]: PizzeriaGameManager owns the player mode, conversation timers, pizza/burp gates, phone UI state, and the soda-can seating flow. The scene starts with MikeDrivingInPizzeriaScene handling the cinematic drive-in.
+          - paragraph [ref=f2e436]:
+            - text: "Sync:"
+            - link "PizzeriaSceneStateSync.cs" [ref=f2e437] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/PizzeriaSceneStateSync.cs
+        - article [ref=f2e438]:
+          - generic [ref=f2e439]:
+            - heading "Mike (Pizzeria)" [level=3] [ref=f2e440]
+            - generic [ref=f2e441]: done
+          - paragraph [ref=f2e442]: MikePizzeria handles in-restaurant Mike (table, dialogue, pizza handoff). Joined by PizzeriaHiker and the generic PizzeriaNPC patrons through a registry that mirrors the Cabin recipe.
+          - paragraph [ref=f2e443]:
+            - text: "Sync: GenericNpcRegistry (Pizzeria) — see"
+            - link "SceneSyncRegistries.cs" [ref=f2e444] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/SceneSyncRegistries.cs
+        - article [ref=f2e445]:
+          - generic [ref=f2e446]:
+            - heading "RoadTrip scene" [level=3] [ref=f2e447]
+            - generic [ref=f2e448]: broad
+          - paragraph [ref=f2e449]: RoadTripGameManager drives the long highway sequence — auto-conversation timing, road-bump events, phone moments, the deer encounter, and the school-bus cinematic. Most of the camera FOV / zoom drama lives here.
+          - paragraph [ref=f2e450]:
+            - text: "Sync:"
+            - link "RoadTripSceneStateSync.cs" [ref=f2e451] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/RoadTripSceneStateSync.cs
+        - article [ref=f2e452]:
+          - generic [ref=f2e453]:
+            - heading "Mike (RoadTrip)" [level=3] [ref=f2e454]
+            - generic [ref=f2e455]: done
+          - paragraph [ref=f2e456]: MikeInCar for passenger-seat Mike. MikeTruckInLoopScene, MikeTruckGoingToNora, and MikeTruckInParking for the truck-mounted variants used through the highway loop + handoffs.
+          - paragraph [ref=f2e457]: "Sync: PathVehicleState (typed) since wire proto 4."
+        - article [ref=f2e458]:
+          - generic [ref=f2e459]:
+            - heading "Office scene" [level=3] [ref=f2e460]
+            - generic [ref=f2e461]: broad
+          - paragraph [ref=f2e462]: OfficeLayoutGameManager + YellowIntroManager stage the office intro and end-scene yellow text. Subcontrollers cover every desk surface (Table / Computer / Coffee / Phone / TypeMaster / TypingShooter), appliances (radio, fridge, microwave), and restrooms.
+          - paragraph [ref=f2e463]:
+            - text: "Sync:"
+            - link "OfficeSceneStateSync.cs" [ref=f2e464] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/OfficeSceneStateSync.cs
+        - article [ref=f2e465]:
+          - generic [ref=f2e466]:
+            - heading "OfficeWorkerMonitor" [level=3] [ref=f2e467]
+            - generic [ref=f2e468]: done
+          - paragraph [ref=f2e469]: The cubicle monitor sequence that plays scripted clips behind the worker. Used to pick clips locally on each peer; now the host's clip identity and playback time win, with local monitor brain suppressed.
+          - paragraph [ref=f2e470]:
+            - text: "Sync key:"
+            - code [ref=f2e471]: SceneState.WorkerMonitor.*
+        - article [ref=f2e472]:
+          - generic [ref=f2e473]:
+            - heading "ParkingLot scene" [level=3] [ref=f2e474]
+            - generic [ref=f2e475]: moderate
+          - paragraph [ref=f2e476]: ParkingLotGameManager sequences the parking-lot beats — call timing, intro, phone ringing, talk/hug mode, elevator travel. The setting drops you between scripted vehicle and elevator beats.
+          - paragraph [ref=f2e477]:
+            - text: "Sync:"
+            - link "ParkingLotSceneStateSync.cs" [ref=f2e478] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/ParkingLotSceneStateSync.cs
+        - article [ref=f2e479]:
+          - generic [ref=f2e480]:
+            - heading "WalkingCopController" [level=3] [ref=f2e481]
+            - generic [ref=f2e482]: done
+          - paragraph [ref=f2e483]: Scripted walking-cop NPC who paces the parking lot. Used to run his NavMesh and animator locally on every peer, drifting hard; now host-authored with NavMesh brain suppressed on client.
+          - paragraph [ref=f2e484]:
+            - text: "Sync key:"
+            - code [ref=f2e485]: SceneState.WalkingCop.*
+        - article [ref=f2e486]:
+          - generic [ref=f2e487]:
+            - heading "ParkingLotElevatorManager" [level=3] [ref=f2e488]
+            - generic [ref=f2e489]: done
+          - paragraph [ref=f2e490]: The freight elevator — travel state, door open/close, audio cues, and the anti-throw zones that prevent items from being thrown out of bounds. Door + tailgate transforms are corrected directly.
+          - paragraph [ref=f2e491]:
+            - text: "Sync key:"
+            - code [ref=f2e492]: SceneState.Elevator.*
+            - text: ·
+            - code [ref=f2e493]: SceneState.AntiThrow.*
+        - article [ref=f2e494]:
+          - generic [ref=f2e495]:
+            - heading "VendingMachineManager" [level=3] [ref=f2e496]
+            - generic [ref=f2e497]: done
+          - paragraph [ref=f2e498]: Shared between Office and Pizzeria. Owns the vending dialogue camera, machine triggers, slot/sliding colliders, current soda-can visibility + kinematic state, vending audio, and player-camera FOV during the interaction.
+          - paragraph [ref=f2e499]:
+            - text: "Sync:"
+            - link "VendingMachineSceneSync.cs" [ref=f2e500] [cursor=pointer]:
+              - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/src/WoodburySpectatorSync/Coop/VendingMachineSceneSync.cs
+    - generic [ref=f2e502]:
+      - generic [ref=f2e503]:
+        - generic [ref=f2e504]: Try it
+        - heading "Get the mod" [level=2] [ref=f2e505]
+        - paragraph [ref=f2e506]: "Development test build for Windows. Each player needs their own copy of Fears to Fathom: Woodbury Getaway. BepInEx 5 (Mono) is included. Extract the archive contents beside the game executable, launch, and press F11 to host or join. Internet play needs reachable TCP 27055 and UDP 27056, or a virtual LAN."
+      - generic [ref=f2e507]:
+        - link "Download test build Woodbury Co-op 0.4.44 test build / protocol 5. Release build and snapshot/log regression checks passed; full gameplay pass pending. downloads/woodbury-coop-latest.7z" [ref=f2e508] [cursor=pointer]:
+          - /url: downloads/woodbury-coop-latest.7z
+          - generic [ref=f2e512]:
+            - heading "Download test build" [level=3] [ref=f2e513]
+            - paragraph [ref=f2e514]: Woodbury Co-op 0.4.44 test build / protocol 5. Release build and snapshot/log regression checks passed; full gameplay pass pending.
+            - generic [ref=f2e515]: downloads/woodbury-coop-latest.7z
+        - link "Watch on YouTube Gameplay clips and demo runs from the mod's developer. youtube.com/heperkoo →" [ref=f2e516] [cursor=pointer]:
+          - /url: https://www.youtube.com/heperkoo
+          - generic [ref=f2e520]:
+            - heading "Watch on YouTube" [level=3] [ref=f2e521]
+            - paragraph [ref=f2e522]: Gameplay clips and demo runs from the mod's developer.
+            - generic [ref=f2e523]: youtube.com/heperkoo →
+        - link "Source on GitHub Install instructions, latest release, full code. Open an issue if something doesn't work. tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod →" [ref=f2e524] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod
+          - generic [ref=f2e528]:
+            - heading "Source on GitHub" [level=3] [ref=f2e529]
+            - paragraph [ref=f2e530]: Install instructions, latest release, full code. Open an issue if something doesn't work.
+            - generic [ref=f2e531]: tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod →
+        - link "Join the Discord Get help, report bugs, and find a co-op partner to play through Woodbury with. discord.gg/tyEhwgSxzV →" [ref=f2e532] [cursor=pointer]:
+          - /url: https://discord.gg/tyEhwgSxzV
+          - generic [ref=f2e536]:
+            - heading "Join the Discord" [level=3] [ref=f2e537]
+            - paragraph [ref=f2e538]: Get help, report bugs, and find a co-op partner to play through Woodbury with.
+            - generic [ref=f2e539]: discord.gg/tyEhwgSxzV →
+      - generic [ref=f2e540]:
+        - navigation "Repository views" [ref=f2e541]:
+          - link "Install guide (README)" [ref=f2e542] [cursor=pointer]:
+            - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod#readme
+          - link "Build version & checksums" [ref=f2e543] [cursor=pointer]:
+            - /url: downloads/build-info.json
+          - link "Report an issue" [ref=f2e544] [cursor=pointer]:
+            - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/issues
+          - link "Full changelog" [ref=f2e545] [cursor=pointer]:
+            - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/CHANGELOG.md
+          - link "All commits" [ref=f2e546] [cursor=pointer]:
+            - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commits/main
+        - generic [ref=f2e547]:
+          - heading "Latest commits" [level=4] [ref=f2e548]
+          - list [ref=f2e549]:
+            - listitem [ref=f2e550]:
+              - link "ddd7a1a" [ref=f2e551] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/ddd7a1a
+              - generic [ref=f2e552]: chaser determination update
+            - listitem [ref=f2e553]:
+              - link "f3fd3f2" [ref=f2e554] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/f3fd3f2
+              - generic [ref=f2e555]: "docs: record changelog maintenance rule"
+            - listitem [ref=f2e556]:
+              - link "14891fa" [ref=f2e557] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/14891fa
+              - generic [ref=f2e558]: "coop: add cabin death diagnostics"
+            - listitem [ref=f2e559]:
+              - link "b941d4b" [ref=f2e560] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/b941d4b
+              - generic [ref=f2e561]: "site: refresh 0.4.43 metadata"
+            - listitem [ref=f2e562]:
+              - link "0301703" [ref=f2e563] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/0301703
+              - generic [ref=f2e564]: "coop: stabilize npc dialogue and cabin sync"
+            - listitem [ref=f2e565]:
+              - link "97c0816" [ref=f2e566] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/97c0816
+              - generic [ref=f2e567]: "site: keep published build metadata current"
+            - listitem [ref=f2e568]:
+              - link "18aaaae" [ref=f2e569] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/18aaaae
+              - generic [ref=f2e570]: "site: refresh showcase and build metadata"
+            - listitem [ref=f2e571]:
+              - link "024f7a9" [ref=f2e572] [cursor=pointer]:
+                - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/commit/024f7a9
+              - generic [ref=f2e573]: "site: harden showcase fallback"
+    - generic [ref=f2e575]:
+      - generic [ref=f2e576]:
+        - generic [ref=f2e577]: Very early access
+        - heading "Play it early. Back it if it earns it." [level=2] [ref=f2e578]
+        - paragraph [ref=f2e579]: Built in the open, shipping fast. Back it on Patreon and you play new builds first — everyone gets them after. Tip if it earned it. Your call, no nagging.
+      - generic [ref=f2e580]:
+        - link "Back it on Patreon — builds first" [ref=f2e581] [cursor=pointer]:
+          - /url: https://www.patreon.com/heperkoo
+        - link "Tip the dev" [ref=f2e584] [cursor=pointer]:
+          - /url: https://streamlabs.com/heperkoo1g/tip
+      - paragraph [ref=f2e587]: "Each player still needs their own copy of Fears to Fathom: Woodbury Getaway on Steam. The mod isn't locked behind a paywall — supporters just get builds earlier."
+    - generic [ref=f2e589]:
+      - generic [ref=f2e590]:
+        - generic [ref=f2e591]: Common questions
+        - heading "Co-op & multiplayer FAQ" [level=2] [ref=f2e592]
+      - generic [ref=f2e593]:
+        - group [ref=f2e594]:
+          - 'generic "Is there a co-op or multiplayer mod for Fears to Fathom: Woodbury Getaway? +" [ref=f2e595] [cursor=pointer]'
+          - paragraph [ref=f2e596]: "Yes — Woodbury Co-op is an unofficial mod that adds 2-player online co-op multiplayer to Fears to Fathom: Woodbury Getaway. One player hosts the real game and a friend connects, so the same Mike, the same scares, and the same scripted moments happen to both players at once."
+        - group [ref=f2e597]:
+          - 'generic "How do you play Fears to Fathom: Woodbury Getaway in co-op? +" [ref=f2e598] [cursor=pointer]'
+        - group [ref=f2e599]:
+          - 'generic "Is Fears to Fathom: Woodbury Getaway multiplayer? +" [ref=f2e600] [cursor=pointer]'
+        - group [ref=f2e601]:
+          - generic "What do I need to play the Woodbury Getaway co-op mod? +" [ref=f2e602] [cursor=pointer]
+    - generic [ref=f2e604]:
+      - generic [ref=f2e605]:
+        - generic [ref=f2e606]: Also by me
+        - heading "My Winter Car — Multiplayer (MWCMP)" [level=2] [ref=f2e607]
+        - paragraph [ref=f2e608]: "My other co-op mod, and the most popular one. Online multiplayer for My Winter Car — one host, friends join, the car and the world stay in sync. Same deal as Woodbury: back it to play new builds first."
+      - generic [ref=f2e609]:
+        - link "Get MWCMP on GitHub" [ref=f2e610] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345/my-winter-car-mp-mod
+        - link "MWCMP Discord" [ref=f2e613] [cursor=pointer]:
+          - /url: https://discord.gg/GQeC5tCH2w
+    - generic [ref=f2e617]:
+      - generic [ref=f2e618]:
+        - generic [ref=f2e619]: Hire me
+        - heading "Services" [level=2] [ref=f2e620]
+        - paragraph [ref=f2e621]: I build co-op/multiplayer mods and the tooling that makes them. Two shipped and playable — Woodbury and My Winter Car. Want one built, or need the reverse-engineering work behind it? Find me on Discord.
+      - generic [ref=f2e622]:
+        - article [ref=f2e623]:
+          - heading "Co-op / multiplayer mods" [level=3] [ref=f2e625]
+          - paragraph [ref=f2e626]: Turning singleplayer games into 2+ player co-op — host-authoritative sync, in-game lobby, real player avatars. The hard part, done properly.
+        - article [ref=f2e627]:
+          - heading "Modding tools & reverse engineering" [level=3] [ref=f2e629]
+          - paragraph [ref=f2e630]: Injectors, memory tools, asset ripping, BepInEx plugins. See RipperForge and AssetRipper in the projects below.
+      - paragraph [ref=f2e631]:
+        - link "Get in touch on Discord →" [ref=f2e632] [cursor=pointer]:
+          - /url: https://discord.gg/tyEhwgSxzV
+    - generic [ref=f2e634]:
+      - generic [ref=f2e635]:
+        - generic [ref=f2e636]: By the same developer
+        - heading "More projects" [level=2] [ref=f2e637]
+        - paragraph [ref=f2e638]: Other things I've built — mostly game mods, multiplayer, and modding tools.
+      - generic [ref=f2e639]:
+        - link [ref=f2e640] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345/my-winter-car-mp-mod
+          - heading "My Winter Car — Multiplayer (MWCMP)" [level=3] [ref=f2e641]
+          - paragraph [ref=f2e642]: Online multiplayer mod for My Winter Car. C# / BepInEx, same host-authoritative co-op approach.
+          - text: C# · multiplayer mod · ★ 21
+        - link [ref=f2e643] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345/ripperforge
+          - heading "RipperForge" [level=3] [ref=f2e644]
+          - paragraph [ref=f2e645]: Native C++20 Windows modding toolkit — injector, memory tools, and asset ripping.
+          - text: C++20 · modding toolkit
+        - link [ref=f2e646] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345/AssetRIpper
+          - heading "AssetRipper (Injector + Capture)" [level=3] [ref=f2e647]
+          - paragraph [ref=f2e648]: Runtime asset capture via injector + capture DLL.
+          - text: C++ · tooling
+        - link [ref=f2e649] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345/2.5D-FPS-Doom-like-Engine
+          - heading "2.5D Doom-like FPS Engine" [level=3] [ref=f2e650]
+          - paragraph [ref=f2e651]: A raycasting-style 2.5D first-person engine written from scratch in C.
+          - text: C · game engine
+      - paragraph [ref=f2e652]:
+        - link "See all projects on GitHub →" [ref=f2e653] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345?tab=repositories
+  - contentinfo [ref=f2e654]:
+    - generic [ref=f2e655]:
+      - paragraph [ref=f2e656]: "Woodbury Co-op is an unofficial fan project. Not affiliated with the developer or publisher of Fears to Fathom: Woodbury Getaway."
+      - paragraph [ref=f2e657]:
+        - text: Built by
+        - link "tudorek12345" [ref=f2e658] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345
+        - text: (Heperkoo) ·
+        - link "YouTube" [ref=f2e659] [cursor=pointer]:
+          - /url: https://www.youtube.com/heperkoo
+        - text: ·
+        - link "GitHub" [ref=f2e660] [cursor=pointer]:
+          - /url: https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod
+        - text: ·
+        - link "Discord" [ref=f2e661] [cursor=pointer]:
+          - /url: https://discord.gg/tyEhwgSxzV
+        - text: ·
+        - link "Patreon" [ref=f2e662] [cursor=pointer]:
+          - /url: https://www.patreon.com/heperkoo
+        - text: ·
+        - link "Tip" [ref=f2e663] [cursor=pointer]:
+          - /url: https://streamlabs.com/heperkoo1g/tip
+      - paragraph [ref=f2e664]: © 2026 tudorek12345 (Heperkoo). The Woodbury Co-op mod and this website are original works created and owned by their author. Fears to Fathom and Woodbury Getaway are trademarks of their respective owner; this is an unofficial, non-commercial fan project and is not affiliated with or endorsed by them.

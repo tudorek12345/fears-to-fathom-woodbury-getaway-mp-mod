@@ -1,8 +1,16 @@
 {
   "unreleased": {
-    "label": "What works in co-op right now",
-    "rangeNote": "Very early access — growing every week.",
+    "label": "0.4.44 development test build",
+    "rangeNote": "Implementation notes; a full gameplay pass of 0.4.44 is pending.",
     "groups": [
+      {
+        "section": "Recovery, validation, and download",
+        "bullets": [
+          "Failed or incomplete snapshots keep the session out of Live and trigger full-state retries, including Office and ParkingLot caches.",
+          "Smoke checks parse current applied-state counters and require host/client gameplay evidence; stale logs and menu-only runs cannot pass.",
+          "The download now contains the stated DLL version with loader files at archive root, a build manifest, and checksums."
+        ]
+      },
       {
         "section": "Cabin",
         "bullets": [
@@ -51,9 +59,29 @@
     ]
   },
   "history": [
-    {"version": "0.4.x", "bullets": ["Office and Parking Lot added; deeper Cabin, Pizzeria and Road Trip coverage; in-game host/join menu; real player avatars with name tags."]},
-    {"version": "0.3.x", "bullets": ["Full join handshake so the second player loads straight into the host's exact state; Cabin characters and mini-games synced."]},
-    {"version": "0.2.x", "bullets": ["First working co-op: host and client connect, scenes sync, world / doors / dialogue mirror between both players."]},
-    {"version": "0.1.0", "bullets": ["Initial build: host and spectator, scene and camera sync."]}
+    {
+      "version": "0.4.x",
+      "bullets": [
+        "Office and Parking Lot added; deeper Cabin, Pizzeria and Road Trip coverage; in-game host/join menu; real player avatars with name tags."
+      ]
+    },
+    {
+      "version": "0.3.x",
+      "bullets": [
+        "Full join handshake so the second player loads straight into the host's exact state; Cabin characters and mini-games synced."
+      ]
+    },
+    {
+      "version": "0.2.x",
+      "bullets": [
+        "First working co-op: host and client connect, scenes sync, world / doors / dialogue mirror between both players."
+      ]
+    },
+    {
+      "version": "0.1.0",
+      "bullets": [
+        "Initial build: host and spectator, scene and camera sync."
+      ]
+    }
   ]
 }

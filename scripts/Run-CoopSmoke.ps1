@@ -21,13 +21,14 @@ Write-Host "Smoke start: $startedAt"
 Write-Host "Game dir    : $GameDir"
 Write-Host "UDP enabled : $UdpEnabled"
 
-& $buildScript
+& $buildScript -Configuration $Configuration
 $deployInfo = & $deployScript -GameDir $GameDir -Configuration $Configuration
 
 $launchInfo = $null
 try {
-    $launchInfo = & $launchScript -GameDir $GameDir -StartupDelaySeconds $StartupDelaySeconds -UdpEnabled $UdpEnabled -AutoStartHost -AutoConnectClient -ForceStopExisting
+    $launchInfo = & $launchScript -GameDir $GameDir -StartupDelaySeconds $StartupDelaySeconds -UdpEnabled $UdpEnabled -AutoStartHost -AutoConnectClient -EnableSessionLog -ForceStopExisting
     Write-Host "Runtime window: $RuntimeSeconds seconds"
+    Write-Host "Enter gameplay on the host during this window; menu-only sessions do not pass."
     Start-Sleep -Seconds ([Math]::Max(10, $RuntimeSeconds))
 }
 finally {
@@ -53,7 +54,7 @@ $runDir = Join-Path $ArchiveRoot $runStamp
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
 $summaryJson = Join-Path $runDir "summary.json"
-$check = & $checkScript -GameDir $GameDir -Since $startedAt -MaxSessionLogs 2 -RequireTraffic -OutputJson $summaryJson -NoFail | Select-Object -First 1
+$check = & $checkScript -GameDir $GameDir -Since $startedAt -MaxSessionLogs 2 -RequireTraffic -RequireGameplay -OutputJson $summaryJson -NoFail | Select-Object -First 1
 
 $logIndex = 0
 foreach ($logPath in $check.SelectedLogs) {

@@ -1,0 +1,11 @@
+{
+  "plugin": "0.4.44",
+  "protocol": 5,
+  "builtAtUtc": "2026-09-13T00:43:35.0236893Z",
+  "sourceCommit": "1dea8ff6f70e410c217bad15507c0a7174fe1cac",
+  "sourceHasLocalChanges": true,
+  "pluginSha256": "c645f55b1cc43ac9763f64683e4ea975962fa92df87e62b04cb48b89856f7cfe",
+  "validation": "Release build and snapshot/log regression checks passed; full gameplay pass pending.",
+  "archiveSha256": "7af9ec6487d39c145d8e4ada9fd00632c04b03fe5ebc1c18e9057a4fd4c7374d",
+  "sizeBytes": 8043044
+}

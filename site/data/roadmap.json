@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-09-07",
+    "compiled": "2026-09-13",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -24,11 +24,11 @@
     },
     {
       "title": "Synced death & ending",
-      "summary": "If one of you dies or reaches the credits, the other follows — no one gets left stranded.",
+      "summary": "Cabin client-catch and native death mirroring are implemented with July 8 log evidence. Other death/ending paths and credits still need a complete paired run.",
       "scenes": [
         "All chapters"
       ],
-      "status": "Planned"
+      "status": "Partial — Cabin death implemented; endings need validation"
     }
   ],
   "unsyncedScenes": [
@@ -38,7 +38,7 @@
     },
     {
       "name": "Death & end credits",
-      "impact": "If one player dies or finishes, the other doesn't follow automatically yet."
+      "impact": "Cabin shared death is implemented. Remaining ending/cinematic paths and end-credit handoff are not yet verified end to end."
     },
     {
       "name": "Dark cabin — deeper beats",
@@ -46,6 +46,18 @@
     }
   ],
   "milestones": [
+    {
+      "id": "0.4.44",
+      "title": "Validate the repaired test build",
+      "subtitle": "Snapshot recovery and package fixes are implemented; gameplay validation remains",
+      "items": [
+        "Exercise failed snapshot recovery with a delayed scene object",
+        "Run Cabin host catch and client catch through return to menu",
+        "Complete Pizzeria dialogue, pizza props, passenger exit and scene handoff",
+        "Verify Office/ParkingLot full snapshots after disconnect/reconnect",
+        "Record a complete paired story run before marking end-to-end playable"
+      ]
+    },
     {
       "id": "0.6",
       "title": "Playable end to end",
@@ -83,36 +95,36 @@
   ],
   "recentCommits": [
     {
-      "sha": "42cff35",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "f3fd3f2",
+      "subject": "docs: record changelog maintenance rule"
     },
     {
-      "sha": "0ee9d40",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "14891fa",
+      "subject": "coop: add cabin death diagnostics"
     },
     {
-      "sha": "e1ce8c6",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "b941d4b",
+      "subject": "site: refresh 0.4.43 metadata"
     },
     {
-      "sha": "f4227db",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "0301703",
+      "subject": "coop: stabilize npc dialogue and cabin sync"
     },
     {
-      "sha": "2e79ed9",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "97c0816",
+      "subject": "site: keep published build metadata current"
     },
     {
-      "sha": "0c6727f",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "18aaaae",
+      "subject": "site: refresh showcase and build metadata"
     },
     {
-      "sha": "4afcebb",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "024f7a9",
+      "subject": "site: harden showcase fallback"
     },
     {
-      "sha": "2b17237",
-      "subject": "site: auto-refresh data + badge [skip ci]"
+      "sha": "4f73afc",
+      "subject": "site: fix showcase gallery rendering"
     }
   ]
 }

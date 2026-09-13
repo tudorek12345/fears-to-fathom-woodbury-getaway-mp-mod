@@ -102,9 +102,22 @@ namespace WoodburySpectatorSync.Coop
             return true;
         }
 
-        public bool AcknowledgeSnapshot(int generation)
+        // Only the object categories with one entry per network key are compared.
+        // Story/UI/vehicle messages may be coalesced or counted in different buckets.
+        public static bool CanCompleteSnapshot(bool applied, int pending, int missing,
+            int doors, int expectedDoors, int holdables, int expectedHoldables,
+            int custom, int expectedCustom)
         {
+            return applied && pending == 0 && missing == 0 &&
+                   doors >= expectedDoors && holdables >= expectedHoldables &&
+                   custom >= expectedCustom;
+        }
+
+        public bool AcknowledgeSnapshot(int generation, bool complete)
+        {
+            if (!complete) return false;
             if (generation != Generation) return false;
+            if (LastSnapshotBeginGeneration != generation || LastSnapshotEndGeneration != generation) return false;
             if (LastAcknowledgedSnapshotGeneration == generation) return false;
             LastAcknowledgedSnapshotGeneration = generation;
             return true;

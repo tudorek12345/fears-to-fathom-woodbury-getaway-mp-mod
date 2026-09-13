@@ -79,7 +79,7 @@
     {
       "@type": "Question",
       "name": "What do I need to play the Woodbury Getaway co-op mod?",
-      "acceptedAnswer": {"@type": "Answer", "text": "Your own copy of Fears to Fathom: Woodbury Getaway on Steam, the BepInEx 5 (Mono) mod loader, and the mod itself. The mod is open source on GitHub."}
+      "acceptedAnswer": {"@type": "Answer", "text": "Your own copy of Fears to Fathom: Woodbury Getaway on Steam, the BepInEx 5 (Mono) mod loader, and the mod itself. The source is available for reference on GitHub."}
     }
   ]
 }
@@ -118,11 +118,6 @@
     <a href="#faq">FAQ</a>
     <a href="#projects">Projects</a>
   </nav>
-  <span class="visit-pill" id="visit-pill" title="Visitors — counted once per device, updates live" hidden>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm0-6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
-    <strong id="visit-count">—</strong>
-    <span class="visit-label">visitors</span>
-  </span>
   <button class="fx-toggle" id="fx-toggle" type="button" aria-label="Toggle visual effects (reading mode)" title="Toggle VHS effects / reading mode">FX</button>
   <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
     <span class="theme-icon" aria-hidden="true"></span>
@@ -178,7 +173,7 @@
     <path d="M0 565 Q300 548 600 562 T1200 558 L1200 600 L0 600 Z" fill="#1b2735"/>
   </svg>
   <div class="container">
-    <div class="hero-eyebrow">Unofficial fan co-op mod · Open source</div>
+    <div class="hero-eyebrow">Unofficial fan co-op mod · Source available</div>
     <div class="f2f-logotype" aria-hidden="true"><span>FEARS</span><span>TO</span><span>FATHOM</span></div>
     <h1 class="hero-title"><span class="grad">Woodbury Getaway</span><br>Multiplayer Co<span class="co-colon">:</span>op</h1>
     <p class="hero-sub" id="hero-subhead">Play the Steam horror game with a friend — one of you hosts, the other connects, and the scares happen to both of you at the same time.</p>
@@ -188,25 +183,22 @@
     </div>
 
     <div class="hero-cta-row">
-      <div class="progress-ring" role="img" aria-label="Overall mod completion">
+      <div class="progress-ring" role="img" aria-label="Estimated sync implementation coverage">
         <svg viewBox="0 0 120 120" aria-hidden="true">
           <circle class="ring-track" cx="60" cy="60" r="52"></circle>
           <circle class="ring-fill" cx="60" cy="60" r="52" id="ring-fill"></circle>
         </svg>
         <div class="ring-label">
           <div class="ring-percent" id="ring-percent">60<span>%</span></div>
-          <div class="ring-caption">built</div>
+          <div class="ring-caption">estimated</div>
         </div>
       </div>
       <div class="hero-actions">
         <div class="cta-row">
+          <a class="btn btn-primary" id="hero-repo" href="downloads/woodbury-coop-latest.7z" download>Download test build</a>
           <a class="btn btn-youtube" id="hero-youtube" href="https://www.youtube.com/heperkoo" target="_blank" rel="noopener noreferrer">
             <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1c.5-1.9.5-5.8.5-5.8s0-3.9-.5-5.8zM9.6 15.6V8.4l6.3 3.6-6.3 3.6z"/></svg>
-            Watch demo on YouTube
-          </a>
-          <a class="btn btn-primary" id="hero-repo" href="#" target="_blank" rel="noopener noreferrer">
-            <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 0a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 0z"/></svg>
-            Get the mod on GitHub
+            Watch development videos
           </a>
           <a class="btn btn-discord" href="https://discord.gg/tyEhwgSxzV" target="_blank" rel="noopener noreferrer">
             <svg class="btn-ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.317 4.369A19.79 19.79 0 0 0 15.885 3c-.21.375-.45.885-.615 1.287a18.27 18.27 0 0 0-5.54 0C9.565 3.885 9.318 3.375 9.107 3A19.79 19.79 0 0 0 4.677 4.369C2.06 8.27 1.347 12.06 1.703 15.797a19.94 19.94 0 0 0 6.062 3.06c.49-.66.927-1.365 1.302-2.106-.717-.27-1.402-.602-2.05-.993.172-.126.34-.258.503-.39 3.94 1.84 8.21 1.84 12.105 0 .166.135.334.267.503.39-.65.39-1.336.723-2.053.993.375.74.81 1.446 1.302 2.106a19.86 19.86 0 0 0 6.063-3.06c.418-4.327-.713-8.085-3.123-11.428zM8.02 13.78c-1.183 0-2.157-1.085-2.157-2.42 0-1.334.955-2.42 2.157-2.42 1.21 0 2.176 1.096 2.157 2.42 0 1.335-.955 2.42-2.157 2.42zm7.96 0c-1.182 0-2.157-1.085-2.157-2.42 0-1.334.955-2.42 2.157-2.42 1.21 0 2.176 1.096 2.157 2.42 0 1.335-.946 2.42-2.157 2.42z"/></svg>
@@ -282,7 +274,7 @@
     <header class="section-head">
       <span class="eyebrow">What works today</span>
       <h2>Status by chapter</h2>
-      <p>Five chapters in the game. The number on each card is how much of that chapter is fully co-op playable right now. Click a card to see what's working and what's still on the to-do list.</p>
+      <p>Five chapters have sync implementations. These percentages estimate code coverage; they are not measured playthrough completion rates. Open a card for implemented features and remaining gaps. A complete two-player run of the current build is still pending.</p>
     </header>
     <div class="scene-grid" id="scene-grid">
       <!-- rendered by app.js -->
@@ -457,7 +449,7 @@
     <header class="section-head">
       <span class="eyebrow">Try it</span>
       <h2>Get the mod</h2>
-      <p>Open source. Requires a copy of <i>Fears to Fathom: Woodbury Getaway</i> on Steam plus the BepInEx 5 (Mono) mod loader. The README on GitHub walks through install in a couple of minutes.</p>
+      <p>Development test build for Windows. Each player needs their own copy of <i>Fears to Fathom: Woodbury Getaway</i>. BepInEx 5 (Mono) is included. Extract the archive contents beside the game executable, launch, and press F11 to host or join. Internet play needs reachable TCP 27055 and UDP 27056, or a virtual LAN.</p>
     </header>
 
     <div class="get-wrap">
@@ -467,7 +459,7 @@
         </div>
         <div class="get-card-body">
           <h3>Download test build</h3>
-          <p>All-in-one BepInEx overlay for the current 0.4.43 / protocol 5 test build. Extract into a valid game install.</p>
+          <p id="download-note">All-in-one BepInEx overlay. Check the build manifest for the packaged version and validation status.</p>
           <span class="get-card-cta">downloads/woodbury-coop-latest.7z</span>
         </div>
       </a>
@@ -489,7 +481,7 @@
         </div>
         <div class="get-card-body">
           <h3>Source on GitHub</h3>
-          <p>Install instructions, latest release, full code. Open an issue if something doesn't work.</p>
+          <p>Install instructions, development history, and source code. Open an issue if something doesn't work.</p>
           <span class="get-card-cta">tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod →</span>
         </div>
       </a>
@@ -509,7 +501,7 @@
     <div class="gh-secondary">
       <nav class="gh-links" aria-label="Repository views">
         <a class="gh-link" id="gh-link-readme"    target="_blank" rel="noopener noreferrer">Install guide (README)</a>
-        <a class="gh-link" id="gh-link-releases"  target="_blank" rel="noopener noreferrer">Latest release</a>
+        <a class="gh-link" id="gh-link-releases" href="downloads/build-info.json" target="_blank" rel="noopener noreferrer">Build version &amp; checksums</a>
         <a class="gh-link" id="gh-link-issues"    target="_blank" rel="noopener noreferrer">Report an issue</a>
         <a class="gh-link" id="gh-link-changelog" target="_blank" rel="noopener noreferrer">Full changelog</a>
         <a class="gh-link" id="gh-link-commits"   target="_blank" rel="noopener noreferrer">All commits</a>
@@ -566,7 +558,7 @@
       </details>
       <details class="faq-item">
         <summary>What do I need to play the Woodbury Getaway co-op mod?</summary>
-        <p>Your own copy of Fears to Fathom: Woodbury Getaway on Steam, the BepInEx 5 (Mono) mod loader, and the mod itself (open source on GitHub). Grab it from the <a href="#source">Get the mod</a> section above.</p>
+        <p>Your own copy of Fears to Fathom: Woodbury Getaway on Steam, the BepInEx 5 (Mono) mod loader, and the mod itself (source available on GitHub). Grab it from the <a href="#source">Get the mod</a> section above.</p>
       </details>
     </div>
   </div>

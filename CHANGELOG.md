@@ -2,12 +2,18 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.43, wire protocol 5.
+> Current iteration: Plugin 0.4.44, wire protocol 5.
 
-> Plugin 0.3.0 -> 0.4.43 - wire protocol 3 -> 5.
+- Snapshot recovery: failed, incomplete, stale, or unbracketed snapshots no longer open the Live gate; host catch-up retries also run with host pausing disabled, and forced snapshots clear Office/ParkingLot delta caches before resending state. Wire format remains protocol 5.
+- Validation: smoke checks require applied state and both roles Live in the same gameplay scene/session/generation, reject stale log fallback, and flag failed snapshots and unresolved objects older than 15 seconds. Build/deploy helpers stop on compiler failure. Added standalone snapshot/log regression checks.
+
+> Plugin 0.3.0 -> 0.4.44 - wire protocol 3 -> 5.
 > Old < 0.3 / proto < 2 clients/hosts are rejected cleanly via Hello/HelloAck.
 
 - Steamworks launch setup: F11 now exposes a clear local/test/custom selector; source defaults direct/Steam launches to Steamworks test mode while the local two-instance script continues to force LAN/local mode.
+
+- Distribution: added `Build-TestPackage.ps1` to compile, run regressions, verify DLL metadata, and package the loader at archive root with a clean co-op config, checksums, and build manifest. Replaced the mislabeled 0.4.39 archive with a 0.4.44 test package; full gameplay validation is pending.
+- Site/status: source dates and recent changes exclude automated refresh noise; deployment verifies the archive hash/version against its manifest. Download copy is generated from package metadata, coverage is explicitly estimated, and shared Cabin death is marked implemented with historical log evidence. Removed the failed visitor counter, compacted mobile navigation, and kept anchor headings below the sticky header.
 
 ### Co-op Cabin
 

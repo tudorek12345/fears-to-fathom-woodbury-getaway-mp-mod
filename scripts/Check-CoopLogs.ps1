@@ -4,6 +4,7 @@ param(
     [datetime]$Since = [datetime]::MinValue,
     [string]$OutputJson = "",
     [switch]$RequireTraffic,
+    [switch]$RequireGameplay,
     [switch]$NoFail
 )
 
@@ -24,10 +25,7 @@ function Get-RecentLogs {
     $items = Get-ChildItem -LiteralPath $Root -Filter $Filter -File -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending
     if ($Since -gt [datetime]::MinValue) {
-        $recent = $items | Where-Object { $_.LastWriteTime -ge $Since }
-        if ($recent.Count -gt 0) {
-            $items = $recent
-        }
+        $items = @($items | Where-Object { $_.LastWriteTime -ge $Since })
     }
 
     return @($items | Select-Object -First $MaxCount)
@@ -106,7 +104,9 @@ $problemPatterns = @(
     '(?i)\bProtocol\b.*\b(error|fail|mismatch)\b',
     '(?i)\bpayload too large\b',
     '(?i)\bfailed to parse\b',
-    '(?i)\bfailed to decode\b'
+    '(?i)\bfailed to decode\b',
+    '(?i)SnapshotAck (reported failure|incomplete|send failed)',
+    '(?i)SnapshotEnd ApplyPendingStates threw'
 )
 
 $exceptionPattern = '(?i)\bException\b'
@@ -135,6 +135,12 @@ foreach ($log in $allLogs) {
             $isProblem = $true
         }
 
+        if ($line -match 'Pending retry age: max=([\d.]+)s' -and
+            [double]::Parse($Matches[1], [Globalization.CultureInfo]::InvariantCulture) -ge 15 -and
+            $line -match '\b(doors|holdables|ai|npc|cabinHouse|cabinGame|pizzeria|roadTrip|office|parkingLot)=[1-9]\d*') {
+            $isProblem = $true
+        }
+
         if ($isProblem) {
             $problemLines.Add([pscustomobject]@{
                     File = $log.FullName
@@ -147,8 +153,8 @@ foreach ($log in $allLogs) {
 
 $allText = $allTextBuilder.ToString()
 $counters = [ordered]@{
-    HostStateAppliedMax = Get-MaxRegexValue -Text $allText -Pattern 'HostState:\s*read=\d+,\s*enq=\d+,\s*applied=(\d+)'
-    HostAppliedCountMax = Get-MaxRegexValue -Text $allText -Pattern 'HostApplied:\s*count=(\d+)'
+    HostStateAppliedMax = Get-MaxRegexValue -Text $allText -Pattern '(?:HostState:\s*read=\d+,\s*enq=\d+,\s*applied=|Sync:\s*state\s+\d+/\d+/)(\d+)'
+    HostAppliedCountMax = Get-MaxRegexValue -Text $allText -Pattern '(?:HostApplied|Applied):\s*count=(\d+)'
     HostRxCountMax = Get-MaxRegexValue -Text $allText -Pattern 'HostRx:\s*count=(\d+)'
     HostTxCountMax = Get-MaxRegexValue -Text $allText -Pattern 'HostTx:.*count=(\d+)'
     DuplicateReadyIgnored = [regex]::Matches($allText, 'duplicate SceneReady ignored').Count
@@ -156,15 +162,33 @@ $counters = [ordered]@{
     PendingRetryWarnings = [regex]::Matches($allText, 'Pending retry age:').Count
 }
 
-$trafficSignal = ($counters.HostStateAppliedMax -gt 0 -or $counters.HostAppliedCountMax -gt 0 -or $counters.HostTxCountMax -gt 0 -or $counters.HostRxCountMax -gt 0)
-$trafficFailed = $RequireTraffic.IsPresent -and -not $trafficSignal
+$trafficSignal = ($counters.HostStateAppliedMax -gt 0 -or $counters.HostAppliedCountMax -gt 0)
+$trafficFailed = ($RequireTraffic.IsPresent -or $RequireGameplay.IsPresent) -and -not $trafficSignal
 
 if ($trafficFailed) {
     $problemLines.Add([pscustomobject]@{
             File = "-"
             Line = 0
-            Text = "No sync traffic counters were observed in selected logs."
+            Text = "No applied host-state counters were observed; receiving or sending packets alone does not prove sync."
         })
+}
+
+$gameplayRoles = @{}
+foreach ($match in [regex]::Matches($allText, 'Co-op session (host|client): \S+ -> Live [^\r\n]*?scene=(\S+) gen=(\d+) sid=(\d+)')) {
+    $sceneName = $match.Groups[2].Value
+    if ($sceneName -notmatch '(?i)(Cabin|Pizzeria|RoadTrip|Office|Parking)') { continue }
+    $key = $sceneName + '|' + $match.Groups[3].Value + '|' + $match.Groups[4].Value
+    if (-not $gameplayRoles.ContainsKey($key)) { $gameplayRoles[$key] = @{} }
+    $gameplayRoles[$key][$match.Groups[1].Value] = $true
+}
+$gameplaySessions = @($gameplayRoles.Keys | Where-Object {
+    $gameplayRoles[$_].ContainsKey('host') -and $gameplayRoles[$_].ContainsKey('client')
+})
+if ($RequireGameplay.IsPresent -and $gameplaySessions.Count -eq 0) {
+    $problemLines.Add([pscustomobject]@{
+        File = '-'; Line = 0
+        Text = 'Host and client did not both reach Live in the same gameplay scene, generation, and session.'
+    })
 }
 
 $summary = [pscustomobject]@{
@@ -174,6 +198,7 @@ $summary = [pscustomobject]@{
     BepInExLogCount = $bepLogs.Count
     SelectedLogs = @($allLogs | ForEach-Object { $_.FullName })
     Counters = $counters
+    GameplaySessions = $gameplaySessions
     ProblemCount = $problemLines.Count
     Problems = @($problemLines | Select-Object -First 80)
 }
