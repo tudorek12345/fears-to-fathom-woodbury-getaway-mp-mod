@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Transport regression failures now include the actual connection status, retained reason and captured transport logs so clean-runner failures can be diagnosed.
+
 - Publication: concise README and website separate implemented sync from verified story parity, remove estimated percentages from the primary status views, and show six actual 0.4.49 menu/character captures. Keep lazy gallery images visible while loading and prevent status badges from overflowing phone layouts. Run the managed regression gate on Windows before Pages deployment.
 
 > Current iteration: Plugin 0.4.49, wire protocol 7. Update both players together.

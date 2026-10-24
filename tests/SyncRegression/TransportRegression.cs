@@ -28,7 +28,7 @@ static class TransportRegression
             try
             {
                 Until(()=>!client.IsRunning);
-                expect(!client.IsConnected && client.LastDisconnectReason.Contains("fixture route failure 5008"),"client retains Spacewar join failure");
+                expect(!client.IsConnected && client.LastDisconnectReason.Contains("fixture route failure 5008"),"client retains Spacewar join failure; actual: " + client.LastDisconnectReason + "; status: " + client.Status);
                 Thread.Sleep(200);
                 expect(client.Status.Contains("fixture route failure 5008"),"client cleanup does not erase failure");
             } finally { client.Disconnect(); }
@@ -36,7 +36,7 @@ static class TransportRegression
             try
             {
                 Until(()=>!server.IsRunning);
-                expect(!server.IsClientConnected && server.ConnectionStatus.Contains("fixture route failure 5008"),"host retains Spacewar join failure");
+                expect(!server.IsClientConnected && server.ConnectionStatus.Contains("fixture route failure 5008"),"host retains Spacewar join failure; actual: " + server.LastDisconnectReason + "; status: " + server.ConnectionStatus);
             } finally { server.Stop(); }
             Environment.SetEnvironmentVariable("WSS_FAKE_SPACEWAR","disconnect");
             client=new CoopClient(logger,settings); client.Connect();
@@ -96,6 +96,7 @@ static class TransportRegression
                 finally { client.Disconnect(); }
             } finally { server.Stop(); }
         }
+        catch { foreach (var line in logger.Lines) Console.Error.WriteLine("Transport fixture: " + line); throw; }
         finally { Environment.SetEnvironmentVariable("WSS_FAKE_SPACEWAR",null); }
     }
 }
