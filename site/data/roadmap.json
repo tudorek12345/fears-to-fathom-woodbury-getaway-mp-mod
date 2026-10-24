@@ -97,6 +97,10 @@
   ],
   "recentCommits": [
     {
+      "sha": "4aa6c84",
+      "subject": "Fix UTF-8 Spacewar startup"
+    },
+    {
       "sha": "4e9b736",
       "subject": "Expose transport test failures"
     },
@@ -123,10 +127,6 @@
     {
       "sha": "0301703",
       "subject": "coop: stabilize npc dialogue and cabin sync"
-    },
-    {
-      "sha": "97c0816",
-      "subject": "site: keep published build metadata current"
     }
   ]
 }
