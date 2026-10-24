@@ -1,7 +1,7 @@
 {
   "plugin": "0.4.49",
   "protocol": 7,
-  "builtAtUtc": "2026-10-24T00:09:25.3456646Z",
+  "builtAtUtc": "2026-10-24T00:34:16.0105688Z",
   "sourceCommit": "f94a6b1fdb4f2aa6b35c56541bc989c1011cb94e",
   "sourceHasLocalChanges": true,
   "pluginSha256": "5e31a5e6a711923f5fb5059aaf461395f03c175f184ee389dfdc8836d6b8dd47",
@@ -36,6 +36,8 @@
       ]
     }
   ],
-  "archiveSha256": "2b9c22f5ee18f469363e5d9a1bcd2bafdee742ee121490da6eecd065877e4d37",
-  "sizeBytes": 8296852
+  "helperPatch": "UTF-8 Windows startup preamble repair; validated game DLL retained unchanged.",
+  "helperSha256": "4d70e11b9ddf6662bc65df99662c31974ffdfb15808eb8cd88958b104800050e",
+  "archiveSha256": "9a90e3146f478cc32efdd47d90d9374a5682046e789fbdf754903d1abc4f756a",
+  "sizeBytes": 8297078
 }

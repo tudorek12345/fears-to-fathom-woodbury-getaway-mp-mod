@@ -503,7 +503,7 @@ int main(int argc,char** argv) {
     try { out=isolateIpcOutput(); }
     catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; CloseHandle(parent); return 1; }
     auto reader=std::thread([&] {
-        try { while(!stop) { auto prefix=readExact(in,4); auto size=frameLength(prefix); input.push(decode(readExact(in,size))); } }
+        try { bool first=true; while(!stop) { auto size=inputFrameLength([&](size_t count) { return readExact(in,count); },first); input.push(decode(readExact(in,size))); } }
         catch(const std::exception& e) { if(!stop) std::cerr<<e.what()<<'\n'; stop=true; }
     });
     auto writer=std::thread([&] {

@@ -97,6 +97,14 @@
   ],
   "recentCommits": [
     {
+      "sha": "4e9b736",
+      "subject": "Expose transport test failures"
+    },
+    {
+      "sha": "cf64f21",
+      "subject": "Update co-op characters and status"
+    },
+    {
       "sha": "d206164",
       "subject": "SiteData"
     },
@@ -119,14 +127,6 @@
     {
       "sha": "97c0816",
       "subject": "site: keep published build metadata current"
-    },
-    {
-      "sha": "18aaaae",
-      "subject": "site: refresh showcase and build metadata"
-    },
-    {
-      "sha": "024f7a9",
-      "subject": "site: harden showcase fallback"
     }
   ]
 }

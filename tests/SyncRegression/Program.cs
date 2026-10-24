@@ -13,6 +13,8 @@ static class Program
     static void Expect(bool ok,string name) { if (!ok) throw new Exception(name); checks++; }
     static void Main(string[] args)
     {
+        // Exercise Framework redirected-input BOM behavior on every Windows locale.
+        Console.InputEncoding = new System.Text.UTF8Encoding(true);
         if (args.Length == 2 && args[0] == "--probe")
         {
             try

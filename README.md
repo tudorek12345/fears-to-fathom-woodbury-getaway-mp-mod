@@ -17,7 +17,7 @@ Scene smoke tests pass; complete story parity and two-PC Spacewar gameplay remai
 - Native **Multiplayer** entry with Co-op and Character tabs.
 - Original animated traveler: face, skin, hair, clothing and accessories; rotating preview and saved looks shared with your partner.
 - Head/body/limb poses, movement and seating; scene-specific world, NPC, dialogue and selected story-state synchronization.
-- LAN/IP and Spacewar transports. **The reported Spacewar join-then-disconnect problem is not confirmed fixed on two PCs.**
+- LAN/IP and Spacewar transports, including a UTF-8 Windows helper startup fix. **The reported Spacewar join-then-disconnect problem is not confirmed fixed on two PCs.**
 
 **Verified in 0.4.49:** 873 managed/log checks, both native helper suites, and paired TCP-only / TCP+UDP scene-entry sweeps across all ten build scenes (Disclaimer boot only). Focused graphics checks cover the menus, previews and remote character changes. These are smoke tests, not completed story playthroughs.
 

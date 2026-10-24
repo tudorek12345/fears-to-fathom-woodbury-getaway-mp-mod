@@ -19,3 +19,5 @@ The helper uses App ID 480 only in its process and directory. The mod sends its 
 ```powershell
 .\tests\SyncRegression\bin\Release\net472\SyncRegression.exe --probe "<absolute-path-to-built-Spacewar-directory>"
 ```
+
+Startup input accepts one UTF-8 BOM emitted by .NET Framework on UTF-8 Windows. Later frames remain strictly binary; repeated/midstream preambles and invalid lengths are rejected. The native core suite covers this without a Steamworks SDK.

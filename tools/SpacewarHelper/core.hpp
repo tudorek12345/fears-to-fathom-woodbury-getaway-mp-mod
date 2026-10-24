@@ -50,6 +50,20 @@ inline uint32_t frameLength(const Bytes& prefix) {
     if(size<9 || size>MaxFrame) throw std::runtime_error("Invalid IPC frame size");
     return size;
 }
+// .NET Framework's redirected StandardInput writer can emit a UTF-8 BOM
+// when the Windows input code page is UTF-8, even through BaseStream.
+// Accept that preamble only at process startup; all later framing stays strict.
+template<class ReadExact>
+uint32_t inputFrameLength(ReadExact read, bool& first) {
+    auto prefix=read(4);
+    bool startup=first; first=false;
+    if(startup && prefix.size()==4 && prefix[0]==0xef && prefix[1]==0xbb && prefix[2]==0xbf) {
+        auto tail=read(3);
+        Bytes length{prefix[3]}; length.insert(length.end(),tail.begin(),tail.end());
+        return frameLength(length);
+    }
+    return frameLength(prefix);
+}
 inline Frame decode(const Bytes& body) {
     if(body.size()<9 || body.size()>MaxFrame) throw std::runtime_error("Invalid IPC frame size");
     Reader r{body};

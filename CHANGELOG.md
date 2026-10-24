@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Spacewar helper accepts one UTF-8 byte-order mark at process startup, fixing binary IPC corruption caused by .NET Framework on UTF-8 Windows. Native tests reject repeated/midstream preambles and invalid sizes; managed transport regressions force UTF-8 input encoding. CI also runs the native framing suite without requiring the Steamworks SDK. The tester's two-PC disconnect still requires verification.
+
 - Transport regression failures now include the actual connection status, retained reason and captured transport logs so clean-runner failures can be diagnosed.
 
 - Publication: concise README and website separate implemented sync from verified story parity, remove estimated percentages from the primary status views, and show six actual 0.4.49 menu/character captures. Keep lazy gallery images visible while loading and prevent status badges from overflowing phone layouts. Run the managed regression gate on Windows before Pages deployment.

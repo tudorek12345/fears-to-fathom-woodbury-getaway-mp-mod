@@ -18,7 +18,7 @@ The tests execute production serialization, session/revision handling, draft beh
 
 Both native suites passed: `SpacewarCoreTests` and `SpacewarOutputIsolation`.
 
-The complete local package is `site/downloads/woodbury-coop-latest.7z` (8,296,852 bytes), SHA256 `2b9c22f5ee18f469363e5d9a1bcd2bafdee742ee121490da6eecd065877e4d37`. Independent extraction verified all 30 listed file checksums, both runtime report entries, the actual native helper and agreement between built, installed and packaged DLL hashes. No game reference assemblies are included. PlayerPrefs compare byte-for-byte with the pre-sweep backup. Evidence: `build/package-049-verification.json`.
+The complete local package is `site/downloads/woodbury-coop-latest.7z` (8,297,078 bytes), SHA256 `9a90e3146f478cc32efdd47d90d9374a5682046e789fbdf754903d1abc4f756a`. Independent extraction verified all 30 listed file checksums, both runtime report entries, the actual native helper and agreement between built, installed and packaged DLL hashes. No game reference assemblies are included. PlayerPrefs compare byte-for-byte with the pre-sweep backup. Evidence: `build/package-049-verification.json`.
 
 | Route | Result | Local report |
 | --- | --- | --- |
@@ -42,6 +42,12 @@ The final graphics report uses the same DLL hash above and has zero mod runtime 
 - The numbered pose frames exercise visible skeleton deformation. Diagnostic cameras and lighting differ from the normal game view; this is not all-scene visual calibration.
 
 Earlier captures exposed blank portraits after outfit changes: Unity reported a skinning buffer-size mismatch. The failing captures/logs remain under `build/menu-049-20261024-013814` and `build/menu-049-20261024-014021`. The corrected render timing is verified in `build/menu-049-20261024-014346` and the final paired graphics report. The error classifier now fails on this renderer error, even when Unity does not throw a managed exception.
+
+## Publication helper repair
+
+The clean GitHub Windows runner exposed a UTF-8 byte-order mark before the first helper input packet (`EF BB BF`, reported as invalid frame size 499104751). The native helper now permits one startup preamble only. Seven native checks cover valid, missing, repeated, midstream, truncated and oversized forms; managed transport checks force UTF-8 input encoding. All 873 managed/log checks and both native helper suites pass locally. A real signed-in helper probe under UTF-8 input reached lobby creation and relay readiness (`build/publication-utf8-native-probe.log`). This remains a single-account probe.
+
+The download was repacked with the repaired helper while preserving the exact game DLL from the completed scene sweeps. A post-checkout rebuild had a different binary hash and was not substituted for the scene-tested DLL. Helper SHA256: `4d70e11b9ddf6662bc65df99662c31974ffdfb15808eb8cd88958b104800050e`. The archive and all file checksums were reverified. This repair does not certify the tester's two-PC disconnect as fixed.
 
 ## Spacewar and logs
 

@@ -9,7 +9,8 @@
           "Modern Co-op and Character pages keep the native Multiplayer entry. A rotating 3D preview offers face, skin, hair, outerwear, colors and accessories with explicit Apply/Discard and saved profiles.",
           "Auto uses an original skinned winter traveler across gameplay and the additive Office typing world. Reliable session/revision-checked catalog messages share live edits; explicit legacy avatar overrides retain their own visuals.",
           "Preview rendering waits for Unity skinning after a geometry change, preventing blank portraits. Changed meshes and preview resources are released; unchanged profiles avoid rebuilds and settings parsing.",
-          "873 managed/log checks and two native helper suites pass. Same-DLL TCP-only and TCP+UDP routes cover all ten build scenes, with visible menu/remote-body graphics checks and zero mod runtime errors. Full story and two-account Spacewar testing remain pending."
+          "873 managed/log checks and two native helper suites pass. Same-DLL TCP-only and TCP+UDP routes cover all ten build scenes, with visible menu/remote-body graphics checks and zero mod runtime errors. Full story and two-account Spacewar testing remain pending.",
+          "Publication testing exposed UTF-8 Windows adding a byte-order mark to helper input. Startup parsing now accepts one preamble; malformed or midstream preambles remain rejected. Two-PC tester confirmation is still pending."
         ]
       },
       {
@@ -63,22 +64,22 @@
         "section": "Cabin",
         "bullets": [
           "The whole opening plays together: the drive in, the hiker at the window, cooking, and the Jenga + Ouija mini-games all stay in sync.",
-          "Mike and every cabin character — the hiker, Nora, the cat — move and act the same on both screens.",
+          "Mike and every cabin character \u2014 the hiker, Nora, the cat \u2014 move and act the same on both screens.",
           "Now covers the dark return-to-cabin run, not just the first visit."
         ]
       },
       {
         "section": "Pizzeria",
         "bullets": [
-          "Mike drives in and the whole order plays out shared — the booth, the pizza, the phone, the truck.",
-          "Mike now hands off cleanly the whole visit through — driving in, parking, sitting, eating, grabbing the pizza, leaving.",
+          "Mike drives in and the whole order plays out shared \u2014 the booth, the pizza, the phone, the truck.",
+          "Mike now hands off cleanly the whole visit through \u2014 driving in, parking, sitting, eating, grabbing the pizza, leaving.",
           "The cashier, the hobo, the hiker and the box-folding worker are all synced."
         ]
       },
       {
         "section": "Road Trip",
         "bullets": [
-          "The full highway drive is shared — the radio, the deer, the school bus and the final conversation hit both players at the same time.",
+          "The full highway drive is shared \u2014 the radio, the deer, the school bus and the final conversation hit both players at the same time.",
           "You can now ride together: the second player buckles into the back of the truck (press F12). Early, but it's in."
         ]
       },
@@ -101,7 +102,7 @@
         "bullets": [
           "You see each other as real in-game characters with name tags, not floating capsules.",
           "The host now waits for the second player during loading screens, so you stay together through every scene change.",
-          "Built-in F11 menu to host or join — no config files to touch."
+          "Built-in F11 menu to host or join \u2014 no config files to touch."
         ]
       }
     ]

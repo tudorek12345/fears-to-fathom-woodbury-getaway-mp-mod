@@ -34,6 +34,16 @@ jobs:
         shell: pwsh
         run: ./scripts/Test-SyncRegression.ps1
 
+      - name: Check native helper framing
+        shell: pwsh
+        run: |
+          cmake -S tools/SpacewarHelper -B build/helper-core -DSPACEWAR_BUILD_HELPER=OFF
+          if ($LASTEXITCODE -ne 0) { throw 'Native test configure failed' }
+          cmake --build build/helper-core --config Release
+          if ($LASTEXITCODE -ne 0) { throw 'Native test build failed' }
+          ctest --test-dir build/helper-core -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Native test failed' }
+
   refresh-and-deploy:
     needs: regression
     runs-on: ubuntu-latest

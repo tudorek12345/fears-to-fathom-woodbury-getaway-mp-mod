@@ -14,6 +14,20 @@ int main() {
         Frame original{Op::Send,0x12345678,true,{1,2,3}};
         auto bytes=encode(original);
         check(bytes==Bytes({12,0,0,0,6,0,7,0,0x78,0x56,0x34,0x12,1,1,2,3}),"canonical C#/native wire vector");
+        auto parseInput=[](const Bytes& data,bool first=true) {
+            size_t offset=0;
+            return inputFrameLength([&](size_t requested) {
+                if(requested>data.size()-offset) throw std::runtime_error("Truncated input");
+                Bytes result(data.begin()+offset,data.begin()+offset+requested); offset+=requested; return result;
+            },first);
+        };
+        check(parseInput({12,0,0,0})==12,"startup without preamble");
+        check(parseInput({0xef,0xbb,0xbf,12,0,0,0})==12,"UTF-8 startup preamble accepted");
+        check(parseInput({12,0,0,0},false)==12,"later unprefixed frame");
+        rejects([&] { parseInput({0xef,0xbb,0xbf,12,0,0,0},false); },"midstream preamble rejected");
+        rejects([&] { parseInput({0xef,0xbb,0xbf,12,0}); },"truncated preamble frame rejected");
+        rejects([&] { parseInput({0xef,0xbb,0xbf,0xff,0xff,0xff,0x7f}); },"prefixed oversize rejected");
+        rejects([&] { parseInput({0xef,0xbb,0xbf,0xef,0xbb,0xbf,12}); },"repeated preamble rejected");
         auto frame=decode(Bytes(bytes.begin()+4,bytes.end()));
         check(frame.op==original.op && frame.request==original.request && frame.data==original.data && frame.reliable,"wire roundtrip");
         rejects([] { frameLength({0xff,0xff,0xff,0x7f}); },"oversized prefix rejected before allocation");
