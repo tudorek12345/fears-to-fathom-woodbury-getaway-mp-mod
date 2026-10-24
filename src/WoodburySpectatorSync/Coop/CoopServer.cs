@@ -20,7 +20,12 @@ namespace WoodburySpectatorSync.Coop
 
         private TcpListener _listener;
         private TcpClient _client;
-        private NetworkStream _stream;
+        private Stream _stream;
+        private bool _useSpacewar;
+        private SpacewarStream _spacewar;
+        public string ConnectionStatus { get; private set; } = string.Empty;
+        public string LastDisconnectReason { get; private set; } = string.Empty;
+        public ulong SpacewarLobbyId => _spacewar != null ? _spacewar.LobbyId : 0;
         private Thread _acceptThread;
         private Thread _sendThread;
         private Thread _receiveThread;
@@ -92,14 +97,21 @@ namespace WoodburySpectatorSync.Coop
         public void Start()
         {
             if (_running) return;
+            JoinWorker(_acceptThread); JoinWorker(_sendThread); JoinWorker(_receiveThread);
+            LastDisconnectReason = string.Empty;
+            ConnectionStatus = string.Empty;
 
             _running = true;
             _clientConnected = false;
             var bindIp = ParseBindIp(_settings.HostBindIP.Value);
-            _listener = new TcpListener(bindIp, _settings.HostPort.Value);
-            _listener.Start();
+            _useSpacewar = _settings.Transport.Value == CoopTransport.Spacewar;
+            if (!_useSpacewar)
+            {
+                _listener = new TcpListener(bindIp, _settings.HostPort.Value);
+                try { _listener.Start(); } catch { _running = false; throw; }
+            }
 
-            if (_settings.UdpEnabled.Value)
+            if (!_useSpacewar && _settings.UdpEnabled.Value)
             {
                 try
                 {
@@ -128,9 +140,12 @@ namespace WoodburySpectatorSync.Coop
 
             _running = false;
             try { _listener?.Stop(); } catch { }
+            try { _spacewar?.Dispose(); } catch { }
             _udpChannel?.Stop();
             _udpChannel = null;
             DisconnectClient();
+            JoinWorker(_acceptThread); JoinWorker(_sendThread); JoinWorker(_receiveThread);
+            ConnectionStatus = "Stopped";
             _logger.LogInfo("Co-op host server stopped");
         }
 
@@ -188,20 +203,35 @@ namespace WoodburySpectatorSync.Coop
                         continue;
                     }
 
-                    var client = _listener.AcceptTcpClient();
-                    client.NoDelay = true;
+                    TcpClient client = null;
+                    Stream connection;
+                    if (_useSpacewar)
+                    {
+                        var steam = new SpacewarStream(Path.Combine(BepInEx.Paths.PluginPath, "Spacewar"), true, 0,
+                            text => { ConnectionStatus = text; _logger.LogInfo(text); });
+                        _spacewar = steam;
+                        try { steam.WaitForPeer(() => _running); } catch { steam.Dispose(); throw; }
+                        connection = steam;
+                    }
+                    else
+                    {
+                        client = _listener.AcceptTcpClient();
+                        client.NoDelay = true;
+                        connection = client.GetStream();
+                    }
+                    if (!_running) { connection.Dispose(); client?.Close(); return; }
 
                     lock (_clientLock)
                     {
                         _client = client;
-                        _stream = client.GetStream();
+                        _stream = connection;
                         _clientConnected = true;
                         _activeClientSession = new ClientSessionInfo
                         {
                             SessionId = Interlocked.Increment(ref _nextSessionId),
-                            RemoteEndpoint = client.Client != null && client.Client.RemoteEndPoint != null
+                            RemoteEndpoint = client != null && client.Client != null && client.Client.RemoteEndPoint != null
                                 ? client.Client.RemoteEndPoint.ToString()
-                                : string.Empty,
+                                : "Spacewar lobby " + SpacewarLobbyId,
                             ConnectedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                         };
                     }
@@ -217,7 +247,7 @@ namespace WoodburySpectatorSync.Coop
                         });
                     }
 
-                    _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-CoopReceive" };
+                    _receiveThread = new Thread(() => ReceiveLoop(connection)) { IsBackground = true, Name = "WSS-CoopReceive" };
                     _receiveThread.Start();
 
                     _logger.LogInfo("Co-op client connected session=" +
@@ -234,30 +264,41 @@ namespace WoodburySpectatorSync.Coop
                 }
                 catch (Exception ex)
                 {
+                    if (!_running) return;
+                    LastDisconnectReason = "Connection failed: " + ex.Message;
+                    ConnectionStatus = LastDisconnectReason;
                     _logger.LogWarning("Co-op accept loop error: " + ex.Message);
+                    if (_useSpacewar) { _running = false; return; }
                     Thread.Sleep(200);
                 }
             }
+        }
+
+        private static void JoinWorker(Thread thread)
+        {
+            if (thread != null && thread != Thread.CurrentThread && thread.IsAlive) thread.Join(1000);
         }
 
         private void SendLoop()
         {
             while (_running)
             {
+                Stream connection;
+                lock (_clientLock) connection = _stream;
                 try
                 {
-                    if (!_clientConnected)
+                    if (!_clientConnected || connection == null)
                     {
                         Thread.Sleep(50);
                         continue;
                     }
 
                     var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                    MaybeSendHostTransform(nowMs);
+                    MaybeSendHostTransform(nowMs, connection);
 
                     while (_outgoing.TryDequeue(out var outbound))
                     {
-                        SendFrame(outbound.Frame);
+                        SendFrame(outbound.Frame, connection);
                         if (outbound.IsHostState)
                         {
                             Interlocked.Increment(ref _hostStateSent);
@@ -274,13 +315,13 @@ namespace WoodburySpectatorSync.Coop
                     {
                         _logger.LogWarning("Co-op send loop error: " + ex.Message);
                     }
-                    DisconnectClient();
+                    if (connection != null) DisconnectClient(connection, "Send failed: " + ex.Message);
                     Thread.Sleep(200);
                 }
             }
         }
 
-        private void MaybeSendHostTransform(long nowMs)
+        private void MaybeSendHostTransform(long nowMs, Stream connection)
         {
             if (!_hasHostTransform) return;
 
@@ -304,42 +345,40 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var frame = Protocol.BuildFrame(payload);
-            SendFrame(frame);
+            SendFrame(frame, connection);
             Interlocked.Exchange(ref _lastTransformSentTcpMs, nowMs);
             Interlocked.Increment(ref _transformSendCount);
         }
 
-        private void ReceiveLoop()
+        private void ReceiveLoop(Stream stream)
         {
+            string reason = "Peer closed the connection.";
             try
             {
                 var lengthBuffer = new byte[4];
                 while (_running && _clientConnected)
                 {
-                    NetworkStream stream;
-                    lock (_clientLock)
-                    {
-                        stream = _stream;
-                    }
-                    if (stream == null) break;
+                    lock (_clientLock) { if (!ReferenceEquals(stream, _stream)) return; }
 
                     var readResult = TcpFraming.TryReadFrame(stream, lengthBuffer, out var payload);
                     if (readResult == FrameReadResult.Disconnected) break;
                     if (readResult == FrameReadResult.PayloadTooLarge)
                     {
                         _logger.LogWarning("Co-op protocol error code=PayloadTooLarge detail=tcp-frame");
+                        reason = "Peer sent a frame larger than the protocol limit.";
                         break;
                     }
                     if (readResult == FrameReadResult.BadFrame)
                     {
                         _logger.LogWarning("Co-op receive bad frame length");
+                        reason = "Peer sent an invalid frame length. Install the same complete mod package on both PCs.";
                         break;
                     }
 
                     if (Protocol.TryParsePayload(payload, out var message, out var errorCode, out var error))
                     {
                         Interlocked.Exchange(ref _lastTcpReceiveMs, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-                        _incoming.Enqueue(message);
+                        lock (_clientLock) { if (ReferenceEquals(stream, _stream)) _incoming.Enqueue(message); }
                     }
                     else
                     {
@@ -347,6 +386,7 @@ namespace WoodburySpectatorSync.Coop
                         if (IsFatalProtocolError(errorCode))
                         {
                             _logger.LogWarning("Co-op host disconnecting client on fatal protocol error code=" + errorCode);
+                            reason = "Protocol error " + errorCode + ": " + error;
                             break;
                         }
                     }
@@ -354,6 +394,7 @@ namespace WoodburySpectatorSync.Coop
             }
             catch (Exception ex)
             {
+                reason = "Receive failed: " + ex.Message;
                 if (_running && !IsExpectedDisconnectException(ex))
                 {
                     _logger.LogWarning("Co-op receive loop error: " + ex.Message);
@@ -361,39 +402,52 @@ namespace WoodburySpectatorSync.Coop
             }
             finally
             {
-                DisconnectClient();
+                DisconnectClient(stream, reason);
             }
         }
 
-        private void SendFrame(byte[] frame)
+        private void SendFrame(byte[] frame, Stream connection)
         {
             if (frame == null || frame.Length == 0) return;
 
             lock (_clientLock)
             {
-                if (_stream == null) return;
-                _stream.Write(frame, 0, frame.Length);
+                if (connection == null || !ReferenceEquals(connection, _stream)) throw new IOException("Co-op session changed before send.");
+                connection.Write(frame, 0, frame.Length);
             }
         }
 
-        private void DisconnectClient()
+        private void DisconnectClient(Stream expected = null, string reason = null)
         {
             ClientSessionInfo disconnectedSession;
             lock (_clientLock)
             {
+                // A late receiver/send failure belongs to its original stream. It must
+                // never close a replacement session accepted by the other worker.
+                if (expected != null && !ReferenceEquals(expected, _stream)) return;
                 disconnectedSession = _activeClientSession;
                 try { _stream?.Close(); } catch { }
                 try { _client?.Close(); } catch { }
                 _stream = null;
+                _spacewar = null;
                 _client = null;
                 _clientConnected = false;
                 _activeClientSession = null;
+                while (_outgoing.TryDequeue(out _)) { }
+                while (_incoming.TryDequeue(out _)) { }
+                lock (_hostTransformLock) _hasHostTransform = false;
+                if (_running && reason != null)
+                {
+                    LastDisconnectReason = reason;
+                    ConnectionStatus = reason;
+                    if (_useSpacewar) _running = false;
+                }
             }
 
             if (disconnectedSession != null)
             {
                 _logger.LogInfo("Co-op client disconnected session=" +
-                    disconnectedSession.SessionId + " remote=" + disconnectedSession.RemoteEndpoint);
+                    disconnectedSession.SessionId + " remote=" + disconnectedSession.RemoteEndpoint + " reason=" + (reason ?? "host-stopped"));
             }
 
             Interlocked.Exchange(ref _lastTcpReceiveMs, 0);
@@ -475,6 +529,7 @@ namespace WoodburySpectatorSync.Coop
         {
             switch (message.Type)
             {
+                case MessageType.CharacterAppearance: return Protocol.BuildCharacterAppearance((CharacterAppearanceMessage)message);
                 case MessageType.SceneChange:
                 {
                     var msg = (SceneChangeMessage)message;

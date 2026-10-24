@@ -39,24 +39,24 @@ namespace WoodburySpectatorSync.Coop
             if (emit == null) return 0;
 
             var hash = 47;
-            EmitManager(fullPrefix + ManagerPrefix, UnityEngine.Object.FindObjectOfType<ParkingLotManager>(), emit, ref hash);
-            EmitGame(fullPrefix + GamePrefix, UnityEngine.Object.FindObjectOfType<ParkingLotGameManager>(), emit, ref hash);
-            EmitPlayer(fullPrefix + PlayerPrefix, UnityEngine.Object.FindObjectOfType<ParkingLotPlayerController>(), emit, ref hash);
-            EmitStranger(fullPrefix + StrangerPrefix, UnityEngine.Object.FindObjectOfType<ElevatorStranger>(), emit, ref hash);
-            EmitMike(fullPrefix + MikePrefix, UnityEngine.Object.FindObjectOfType<MikeParkingLot>(), emit, ref hash);
-            EmitWalkingCop(fullPrefix + WalkingCopPrefix, UnityEngine.Object.FindObjectOfType<WalkingCopController>(), emit, ref hash);
-            EmitMikeTruck(fullPrefix + MikeTruckPrefix, UnityEngine.Object.FindObjectOfType<MikeTruckInParking>(), emit, ref hash);
-            EmitStrangerCar(fullPrefix + StrangerCarPrefix, UnityEngine.Object.FindObjectOfType<StrangerCar>(), emit, ref hash);
-            EmitTruckDoor(fullPrefix + TruckDoorPrefix, UnityEngine.Object.FindObjectOfType<TruckBackDoor>(), emit, ref hash);
-            EmitParkingTruckDoor(fullPrefix + ParkingTruckDoorPrefix, UnityEngine.Object.FindObjectOfType<ParkingLotTruckDoor>(), emit, ref hash);
-            EmitSuitcase(fullPrefix + SuitcasePrefix, UnityEngine.Object.FindObjectOfType<Suitcase>(), emit, ref hash);
-            EmitUi(fullPrefix + UiPrefix, UnityEngine.Object.FindObjectOfType<ParkingLotUIManager>(), emit, ref hash);
-            EmitElevator(fullPrefix + ElevatorPrefix, UnityEngine.Object.FindObjectOfType<ParkingLotElevatorManager>(), emit, ref hash);
-            EmitAntiThrow(fullPrefix + AntiThrowPrefix, UnityEngine.Object.FindObjectsOfType<ParkingLotAntiThrowZone>(), emit, ref hash);
-            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerSub>(), emit, ref hash);
-            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>(), emit, ref hash);
-            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, UnityEngine.Object.FindObjectsOfType<OnTrigger>(), emit, ref hash);
-            EmitEventTriggers(fullPrefix + EventTriggerPrefix, UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>(), emit, ref hash);
+            EmitManager(fullPrefix + ManagerPrefix, SceneLookup.First<ParkingLotManager>(), emit, ref hash);
+            EmitGame(fullPrefix + GamePrefix, SceneLookup.First<ParkingLotGameManager>(), emit, ref hash);
+            EmitPlayer(fullPrefix + PlayerPrefix, SceneLookup.First<ParkingLotPlayerController>(), emit, ref hash);
+            EmitStranger(fullPrefix + StrangerPrefix, SceneLookup.First<ElevatorStranger>(), emit, ref hash);
+            EmitMike(fullPrefix + MikePrefix, SceneLookup.First<MikeParkingLot>(), emit, ref hash);
+            EmitWalkingCop(fullPrefix + WalkingCopPrefix, SceneLookup.First<WalkingCopController>(), emit, ref hash);
+            EmitMikeTruck(fullPrefix + MikeTruckPrefix, SceneLookup.First<MikeTruckInParking>(), emit, ref hash);
+            EmitStrangerCar(fullPrefix + StrangerCarPrefix, SceneLookup.First<StrangerCar>(), emit, ref hash);
+            EmitTruckDoor(fullPrefix + TruckDoorPrefix, SceneLookup.First<TruckBackDoor>(), emit, ref hash);
+            EmitParkingTruckDoor(fullPrefix + ParkingTruckDoorPrefix, SceneLookup.First<ParkingLotTruckDoor>(), emit, ref hash);
+            EmitSuitcase(fullPrefix + SuitcasePrefix, SceneLookup.First<Suitcase>(), emit, ref hash);
+            EmitUi(fullPrefix + UiPrefix, SceneLookup.First<ParkingLotUIManager>(), emit, ref hash);
+            EmitElevator(fullPrefix + ElevatorPrefix, SceneLookup.First<ParkingLotElevatorManager>(), emit, ref hash);
+            EmitAntiThrow(fullPrefix + AntiThrowPrefix, SceneLookup.All<ParkingLotAntiThrowZone>(), emit, ref hash);
+            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, SceneLookup.All<OnTriggerSub>(), emit, ref hash);
+            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, SceneLookup.All<OnTriggerDisplaySub>(), emit, ref hash);
+            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, SceneLookup.All<OnTrigger>(), emit, ref hash);
+            EmitEventTriggers(fullPrefix + EventTriggerPrefix, SceneLookup.All<TriggerEventInvoker>(), emit, ref hash);
             return hash;
         }
 
@@ -167,50 +167,50 @@ namespace WoodburySpectatorSync.Coop
         {
             if (transforms == null) return;
 
-            var stranger = UnityEngine.Object.FindObjectOfType<ElevatorStranger>();
+            var stranger = SceneLookup.First<ElevatorStranger>();
             if (stranger != null && stranger.gameObject.activeInHierarchy)
             {
                 transforms.Add(stranger.transform);
             }
 
-            var suitcase = UnityEngine.Object.FindObjectOfType<Suitcase>();
+            var suitcase = SceneLookup.First<Suitcase>();
             if (suitcase != null && suitcase.gameObject.activeInHierarchy)
             {
                 transforms.Add(suitcase.transform);
             }
 
-            var mike = UnityEngine.Object.FindObjectOfType<MikeParkingLot>();
+            var mike = SceneLookup.First<MikeParkingLot>();
             if (mike != null && mike.gameObject.activeInHierarchy)
             {
                 transforms.Add(mike.transform);
             }
 
-            var walkingCop = UnityEngine.Object.FindObjectOfType<WalkingCopController>();
+            var walkingCop = SceneLookup.First<WalkingCopController>();
             if (walkingCop != null && walkingCop.gameObject.activeInHierarchy)
             {
                 transforms.Add(walkingCop.transform);
             }
 
-            var mikeTruck = UnityEngine.Object.FindObjectOfType<MikeTruckInParking>();
+            var mikeTruck = SceneLookup.First<MikeTruckInParking>();
             if (mikeTruck != null && mikeTruck.gameObject.activeInHierarchy)
             {
                 transforms.Add(mikeTruck.transform);
             }
 
-            var strangerCar = UnityEngine.Object.FindObjectOfType<StrangerCar>();
+            var strangerCar = SceneLookup.First<StrangerCar>();
             if (strangerCar != null && strangerCar.gameObject.activeInHierarchy)
             {
                 transforms.Add(strangerCar.transform);
             }
 
-            var elevator = UnityEngine.Object.FindObjectOfType<ElevatorDoorManager>();
+            var elevator = SceneLookup.First<ElevatorDoorManager>();
             if (elevator != null && elevator.gameObject.activeInHierarchy)
             {
                 AddTransform(transforms, GetFieldValue<Transform>(elevator, "DoorLeft"));
                 AddTransform(transforms, GetFieldValue<Transform>(elevator, "DoorRight"));
             }
 
-            var truckBackDoor = UnityEngine.Object.FindObjectOfType<TruckBackDoor>();
+            var truckBackDoor = SceneLookup.First<TruckBackDoor>();
             if (truckBackDoor != null && truckBackDoor.gameObject.activeInHierarchy)
             {
                 transforms.Add(truckBackDoor.transform);
@@ -606,7 +606,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyManager(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var manager = UnityEngine.Object.FindObjectOfType<ParkingLotManager>();
+            var manager = SceneLookup.First<ParkingLotManager>();
             if (manager == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { manager.gameObject.SetActive(value != 0); return true; }
@@ -620,7 +620,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyGame(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var game = UnityEngine.Object.FindObjectOfType<ParkingLotGameManager>();
+            var game = SceneLookup.First<ParkingLotGameManager>();
             if (game == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { game.gameObject.SetActive(value != 0); return true; }
@@ -636,7 +636,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyPlayer(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var player = UnityEngine.Object.FindObjectOfType<ParkingLotPlayerController>();
+            var player = SceneLookup.First<ParkingLotPlayerController>();
             if (player == null) return false;
 
             var firstPerson = GetFieldValue<Behaviour>(player, "firstPersonController");
@@ -654,7 +654,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyStranger(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var stranger = UnityEngine.Object.FindObjectOfType<ElevatorStranger>();
+            var stranger = SceneLookup.First<ElevatorStranger>();
             if (stranger == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { stranger.gameObject.SetActive(value != 0); return true; }
@@ -694,7 +694,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyMike(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var mike = UnityEngine.Object.FindObjectOfType<MikeParkingLot>();
+            var mike = SceneLookup.First<MikeParkingLot>();
             if (mike == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { mike.gameObject.SetActive(value != 0); return true; }
@@ -718,7 +718,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyWalkingCop(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var cop = UnityEngine.Object.FindObjectOfType<WalkingCopController>();
+            var cop = SceneLookup.First<WalkingCopController>();
             if (cop == null) return false;
 
             var agent = GetFieldValue<NavMeshAgent>(cop, "navmeshAgent") ?? cop.GetComponent<NavMeshAgent>();
@@ -747,7 +747,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyMikeTruck(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var truck = UnityEngine.Object.FindObjectOfType<MikeTruckInParking>();
+            var truck = SceneLookup.First<MikeTruckInParking>();
             if (truck == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { truck.gameObject.SetActive(value != 0); return true; }
@@ -769,7 +769,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyStrangerCar(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var car = UnityEngine.Object.FindObjectOfType<StrangerCar>();
+            var car = SceneLookup.First<StrangerCar>();
             if (car == null) return false;
 
             var animator = GetFieldValue<Animator>(car, "animator");
@@ -791,7 +791,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyTruckDoor(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var door = UnityEngine.Object.FindObjectOfType<TruckBackDoor>();
+            var door = SceneLookup.First<TruckBackDoor>();
             if (door == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { door.gameObject.SetActive(value != 0); return true; }
@@ -809,7 +809,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyParkingTruckDoor(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var door = UnityEngine.Object.FindObjectOfType<ParkingLotTruckDoor>();
+            var door = SceneLookup.First<ParkingLotTruckDoor>();
             if (door == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { door.gameObject.SetActive(value != 0); return true; }
@@ -820,7 +820,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplySuitcase(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var suitcase = UnityEngine.Object.FindObjectOfType<Suitcase>();
+            var suitcase = SceneLookup.First<Suitcase>();
             if (suitcase == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { suitcase.gameObject.SetActive(value != 0); return true; }
@@ -843,7 +843,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyUi(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var ui = UnityEngine.Object.FindObjectOfType<ParkingLotUIManager>();
+            var ui = SceneLookup.First<ParkingLotUIManager>();
             if (ui == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { ui.gameObject.SetActive(value != 0); return true; }
@@ -863,7 +863,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyElevator(string name, int value)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var manager = UnityEngine.Object.FindObjectOfType<ParkingLotElevatorManager>();
+            var manager = SceneLookup.First<ParkingLotElevatorManager>();
             if (manager == null) return false;
 
             var door = GetFieldValue<ElevatorDoorManager>(manager, "elevatorDoorManager");
@@ -893,7 +893,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var zones = UnityEngine.Object.FindObjectsOfType<ParkingLotAntiThrowZone>();
+            var zones = SceneLookup.All<ParkingLotAntiThrowZone>();
             SortByPath(zones);
             if (index >= zones.Length) return false;
             var zone = zones[index];
@@ -911,7 +911,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerSub>();
+            var triggers = SceneLookup.All<OnTriggerSub>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -932,7 +932,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>();
+            var triggers = SceneLookup.All<OnTriggerDisplaySub>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -952,7 +952,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTrigger>();
+            var triggers = SceneLookup.All<OnTrigger>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -971,7 +971,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>();
+            var triggers = SceneLookup.All<TriggerEventInvoker>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -987,7 +987,7 @@ namespace WoodburySpectatorSync.Coop
 
         private static void SuppressLocalBrains(ManualLogSource logger)
         {
-            var stranger = UnityEngine.Object.FindObjectOfType<ElevatorStranger>();
+            var stranger = SceneLookup.First<ElevatorStranger>();
             if (stranger != null)
             {
                 stranger.enabled = false;
@@ -999,7 +999,7 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            var mike = UnityEngine.Object.FindObjectOfType<MikeParkingLot>();
+            var mike = SceneLookup.First<MikeParkingLot>();
             if (mike != null)
             {
                 mike.enabled = false;
@@ -1011,13 +1011,13 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            var truck = UnityEngine.Object.FindObjectOfType<MikeTruckInParking>();
+            var truck = SceneLookup.First<MikeTruckInParking>();
             if (truck != null) truck.enabled = false;
 
-            var car = UnityEngine.Object.FindObjectOfType<StrangerCar>();
+            var car = SceneLookup.First<StrangerCar>();
             if (car != null) car.enabled = false;
 
-            var walkingCop = UnityEngine.Object.FindObjectOfType<WalkingCopController>();
+            var walkingCop = SceneLookup.First<WalkingCopController>();
             if (walkingCop != null)
             {
                 walkingCop.enabled = false;
@@ -1029,10 +1029,10 @@ namespace WoodburySpectatorSync.Coop
                 }
             }
 
-            var triggerSubCount = DisableTriggers(UnityEngine.Object.FindObjectsOfType<OnTriggerSub>());
-            var displaySubCount = DisableTriggers(UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>());
-            var triggerCount = DisableTriggers(UnityEngine.Object.FindObjectsOfType<OnTrigger>());
-            var eventTriggerCount = DisableTriggers(UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>());
+            var triggerSubCount = DisableTriggers(SceneLookup.All<OnTriggerSub>());
+            var displaySubCount = DisableTriggers(SceneLookup.All<OnTriggerDisplaySub>());
+            var triggerCount = DisableTriggers(SceneLookup.All<OnTrigger>());
+            var eventTriggerCount = DisableTriggers(SceneLookup.All<TriggerEventInvoker>());
 
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (logger != null && nowMs >= _nextSuppressLogMs)

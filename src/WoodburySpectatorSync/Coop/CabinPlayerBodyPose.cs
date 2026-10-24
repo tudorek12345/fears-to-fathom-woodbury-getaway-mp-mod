@@ -7,6 +7,8 @@ namespace WoodburySpectatorSync.Coop
     internal static class CabinPlayerBodyPose
     {
         private const BindingFlags FieldFlags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        private static readonly FieldInfo RoadTripDrivingCam = typeof(RoadTripPlayerController).GetField("drivingCam", FieldFlags);
+        private static RoadTripPlayerController _roadTripPlayer;
 
         private static readonly string[] CabinVisibleProxyFields =
         {
@@ -32,6 +34,18 @@ namespace WoodburySpectatorSync.Coop
         {
             bodyTransform = null;
             sourceName = string.Empty;
+
+            // RoadTrip keeps its walking controller inactive at the scene origin.
+            // The real passenger pivot lives under the moving truck instead.
+            if (_roadTripPlayer == null) _roadTripPlayer = UnityEngine.Object.FindObjectOfType<RoadTripPlayerController>();
+            var roadTripPlayer = playerController as RoadTripPlayerController ?? _roadTripPlayer;
+            var drivingCam = roadTripPlayer != null ? RoadTripDrivingCam?.GetValue(roadTripPlayer) as DrivingCam : null;
+            if (drivingCam != null && drivingCam.gameObject.activeInHierarchy && drivingCam.playerBody != null)
+            {
+                bodyTransform = drivingCam.playerBody;
+                sourceName = "roadtrip.passengerPivot";
+                return true;
+            }
 
             var cabinPlayer = playerController as CabinPlayerController ?? UnityEngine.Object.FindObjectOfType<CabinPlayerController>();
             if (TryResolveProxyFields(cabinPlayer, CabinVisibleProxyFields, "cabin", out bodyTransform, out sourceName))

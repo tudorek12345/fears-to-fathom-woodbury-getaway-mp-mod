@@ -1799,3 +1799,12 @@ body.fx-off .fx-toggle { color: var(--fg-mute); }
   }
   .topnav a { flex-shrink: 0; white-space: nowrap; }
 }
+
+/* Preserve the full body in isolated character diagnostic renders. */
+.shot-portrait img { height: 420px; object-fit: contain; background: #272a32; }
+
+@media (max-width: 640px) {
+  .system-row { grid-template-columns: minmax(0, 1fr); }
+  .system-row .pill { justify-self: start; }
+  .system-row-note { overflow-wrap: anywhere; }
+}

@@ -55,12 +55,9 @@ namespace WoodburySpectatorSync.Coop
 
     internal static class SceneDiscoveryManifest
     {
-        public static void LogIfDiscoveryOnlyScene(string side, string sceneName, ManualLogSource logger, Action<string> sessionLogWrite)
+        public static void LogSceneCoverage(string side, string sceneName, ManualLogSource logger, Action<string> sessionLogWrite)
         {
-            if (!IsDiscoveryOnlyScene(sceneName))
-            {
-                return;
-            }
+            var adapter = SceneCatalog.AdapterFor(sceneName);
 
             var managers = CountLoadedComponentsByName("GameManager", exact: false);
             var npcs = CountLoadedComponentsByName("NPC", exact: false) +
@@ -77,15 +74,8 @@ namespace WoodburySpectatorSync.Coop
                 " doors=" + doors +
                 " holdables=" + holdables +
                 " ui=" + ui +
-                " mode=discovery-only", logger, sessionLogWrite);
-        }
-
-        private static bool IsDiscoveryOnlyScene(string sceneName)
-        {
-            if (string.IsNullOrEmpty(sceneName)) return false;
-            return sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   sceneName.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                   sceneName.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0;
+                " adapter=" + (adapter.Length == 0 ? "none" : adapter) +
+                " mode=" + (adapter.Length == 0 ? "utility-or-unknown" : "sync-wired"), logger, sessionLogWrite);
         }
 
         private static int CountLoadedComponentsByName(string text, bool exact)

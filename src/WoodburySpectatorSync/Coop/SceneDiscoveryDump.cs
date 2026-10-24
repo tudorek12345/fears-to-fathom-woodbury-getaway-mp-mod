@@ -134,6 +134,31 @@ namespace WoodburySpectatorSync.Coop
                 "|fields=" + fieldCount.ToString(CultureInfo.InvariantCulture), logger, sessionLogWrite);
 
             LogSceneSummary(side, scene, logger, sessionLogWrite, prefix);
+            LogRemoteAvatarSummary(side, scene, logger, sessionLogWrite, prefix);
+        }
+
+        private static void LogRemoteAvatarSummary(string side, Scene scene, ManualLogSource logger,
+            Action<string> sessionLogWrite, string prefix)
+        {
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                if (root == null || !string.Equals(root.name, "CoopRemotePlayer", StringComparison.Ordinal)) continue;
+                var renderers = root.GetComponentsInChildren<Renderer>(true);
+                var enabledCount = 0;
+                var activeCount = 0;
+                foreach (var renderer in renderers)
+                {
+                    if (renderer == null) continue;
+                    if (renderer.enabled) enabledCount++;
+                    if (renderer.enabled && renderer.gameObject.activeInHierarchy) activeCount++;
+                }
+                Log(Prefix("Avatar", prefix) + "|role=" + Escape(side) +
+                    "|scene=" + Escape(scene.name) + "|path=" + Escape(NetPath.GetPath(root.transform)) +
+                    "|active=" + BoolText(root.activeInHierarchy) +
+                    "|renderers=" + renderers.Length.ToString(CultureInfo.InvariantCulture) +
+                    "|enabledRenderers=" + enabledCount.ToString(CultureInfo.InvariantCulture) +
+                    "|activeRenderers=" + activeCount.ToString(CultureInfo.InvariantCulture), logger, sessionLogWrite);
+            }
         }
 
         private static string Prefix(string suffix, string prefix)

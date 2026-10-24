@@ -80,6 +80,7 @@ namespace WoodburySpectatorSync.Coop
         public void Refresh(string sceneName, bool force = false)
         {
             sceneName = sceneName ?? string.Empty;
+            if (sceneName == ScenePresentationSync.TypingScene && _scenePrefix == "Office") sceneName = "OfficeLayout";
             if (string.IsNullOrEmpty(_scenePrefix) ||
                 sceneName.IndexOf(_scenePrefix, StringComparison.OrdinalIgnoreCase) < 0)
             {

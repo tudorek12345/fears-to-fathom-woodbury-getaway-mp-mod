@@ -9,7 +9,7 @@ param(
     [bool]$UdpEnabled = $true,
     [int]$StartupDelaySeconds = 35,
     [int]$HostReadyTimeoutSeconds = 45,
-    [float]$SceneDiscoveryDumpIntervalSeconds = 0.0,
+    [float]$SceneDiscoveryDumpIntervalSeconds = 60.0,
     [switch]$ExperimentalSceneDumpCrawler,
     [string]$SceneDumpCrawlerScenes = "",
     [float]$SceneDumpCrawlerStartDelaySeconds = 20.0,
@@ -21,6 +21,8 @@ param(
     [switch]$AutoStartHost,
     [switch]$AutoConnectClient,
     [switch]$NoWindowed,
+    [switch]$Headless,
+    [switch]$GraphicsBatch,
     [int]$WindowWidth = 1440,
     [int]$WindowHeight = 900,
     [string]$RemotePlayerPrefabPath = "",
@@ -257,6 +259,7 @@ SceneDiscoveryDumpCrawlerRequireLivePeer = $($SceneDumpCrawlerRequireLivePeer.To
 OverlayEnabled = true
 
 [Coop]
+Transport = Lan
 RouteInteractionsToHost = true
 UseLocalPlayerController = true
 SnapToHostOnSceneLoad = false
@@ -270,8 +273,11 @@ RemotePlayerAvatarBundlePath = $RemotePlayerAvatarBundlePath
 RemotePlayerAvatarId = $RemotePlayerAvatarId
 RemotePlayerAvatarScale = $(Format-InvariantFloat -Value $RemotePlayerAvatarScale)
 RemotePlayerAvatarYOffset = $(Format-InvariantFloat -Value $RemotePlayerAvatarYOffset)
-ForceCabinStartSequence = true
+ForceCabinStartSequence = false
 CabinStartSequence = StartAfterShower
+
+[Voice]
+Enabled = $((!$Headless.IsPresent).ToString().ToLowerInvariant())
 
 [Steamworks]
 AppIdMode = $SteamworksAppIdMode
@@ -325,6 +331,9 @@ if (-not $NoWindowed.IsPresent) {
         "-screen-height", "$WindowHeight"
     )
 }
+if ($Headless) { $commonLaunchArgs += @("-batchmode", "-nographics") }
+elseif ($GraphicsBatch) { $commonLaunchArgs += '-batchmode' }
+$launchWindowStyle = if ($Headless -or $GraphicsBatch) { "Hidden" } else { "Normal" }
 $unityLogDir = Join-Path $GameDir "BepInEx\logs"
 New-Item -ItemType Directory -Force -Path $unityLogDir | Out-Null
 $hostUnityLog = Join-Path $unityLogDir ("unity_host_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
@@ -343,7 +352,7 @@ try {
         $env:WSS_SESSION_LOG = "true"
     }
     $hostLaunchTime = Get-Date
-    $hostProc = Start-Process -FilePath $resolvedExe -WorkingDirectory $GameDir -PassThru -ArgumentList $hostLaunchArgs
+    $hostProc = Start-Process -FilePath $resolvedExe -WorkingDirectory $GameDir -PassThru -ArgumentList $hostLaunchArgs -WindowStyle $launchWindowStyle
 
     if ($EnableSessionLog.IsPresent) {
         $hostSessionLog = Wait-ForSessionLog -Root $GameDir -ModeLabel "CoopHost" -ProcessId $hostProc.Id -Since $hostLaunchTime -TimeoutSeconds $HostReadyTimeoutSeconds
@@ -362,10 +371,19 @@ try {
         $env:WSS_SESSION_LOG = "true"
     }
     $clientLaunchTime = Get-Date
-    $clientProc = Start-Process -FilePath $resolvedExe -WorkingDirectory $GameDir -PassThru -ArgumentList $clientLaunchArgs
+    $clientProc = Start-Process -FilePath $resolvedExe -WorkingDirectory $GameDir -PassThru -ArgumentList $clientLaunchArgs -WindowStyle $launchWindowStyle
     if ($EnableSessionLog.IsPresent) {
         $clientSessionLog = Wait-ForSessionLog -Root $GameDir -ModeLabel "CoopClient" -ProcessId $clientProc.Id -Since $clientLaunchTime -TimeoutSeconds $HostReadyTimeoutSeconds
     }
+}
+catch {
+    # A failed readiness check must not leave this launch's host locking the plugin DLL.
+    foreach ($owned in @($hostProc,$clientProc)) {
+        if ($null -eq $owned) { continue }
+        $active = Get-Process -Id $owned.Id -ErrorAction SilentlyContinue
+        if ($active -and $active.Path -eq $resolvedExe) { Stop-Process -Id $active.Id -Force }
+    }
+    throw
 }
 finally {
     Remove-Item Env:WSS_MODE -ErrorAction SilentlyContinue

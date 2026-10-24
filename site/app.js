@@ -67,10 +67,11 @@
       imgs.forEach(function (img) {
         var ok = img.complete && img.naturalWidth > 0;
         var fig = img.closest(".shot");
-        if (fig) fig.classList.toggle("shot-missing", !ok);
+        if (fig) fig.classList.toggle("shot-missing", img.complete && !ok);
         if (ok) anyLoaded = true;
       });
-      gallery.style.display = anyLoaded ? "" : "none";
+      // Keep pending lazy images visible so scrolling can trigger their requests.
+      gallery.style.display = "";
     }
     imgs.forEach(function (img) {
       img.addEventListener("load", evaluate);
@@ -131,16 +132,6 @@
       addBadge(badges, "badge-updated", `SOURCE ${meta.lastUpdated}`);
     }
 
-    const ringPct = document.getElementById("ring-percent");
-    if (ringPct) {
-      ringPct.firstChild && (ringPct.firstChild.nodeValue = String(meta.overallPercent));
-    }
-
-    const ring = document.getElementById("ring-fill");
-    if (ring) {
-      ring.dataset.targetPercent = String(meta.overallPercent);
-    }
-
     const repo = document.getElementById("hero-repo");
     if (repo && meta.repo) {
       repo.href = meta.download?.url || meta.repo;
@@ -174,16 +165,14 @@
         <summary>
           <div class="scene-card-head">
             <h3>${escapeHtml(s.name)}</h3>
-            <div class="scene-card-percent" data-target="${s.percent}">0%</div>
           </div>
           <div class="scene-card-status">${escapeHtml(s.status)}</div>
           <p class="scene-card-summary">${escapeHtml(s.summary)}</p>
-          <div class="scene-bar"><div class="scene-bar-fill" data-target="${s.percent}"></div></div>
           <div class="expand-hint"><span>Show details</span></div>
         </summary>
         <div class="scene-card-detail">
           <div>
-            <h4>Synced (${s.synced.length})</h4>
+            <h4>Implemented (${s.synced.length})</h4>
             <ul>${s.synced.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
           </div>
           <div class="not-synced">
@@ -225,7 +214,7 @@
           <div class="system-row-name">${escapeHtml(r.name)}</div>
           <div class="system-row-note">${escapeHtml(r.note)}</div>
         </div>
-        <span class="pill pill-${r.status}">${r.status}</span>
+        <span class="pill pill-${r.status}">${r.status === "done" ? "implemented" : escapeHtml(r.status)}</span>
       `;
       grid.appendChild(row);
     }

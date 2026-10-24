@@ -550,7 +550,9 @@ namespace WoodburySpectatorSync.Coop
                 parent.position + Vector3.up * (heightOffset * (index + 1)),
                 parent.rotation,
                 parent);
-            instance.name = prefab.name + "_CoopFolded_" + index;
+            // Match the game's Instantiate name: NetPath also includes the sibling index.
+            // A client-only suffix makes every host box transform permanently unresolved.
+            instance.name = prefab.name + "(Clone)";
             instance.SetActive(false);
             return instance;
         }

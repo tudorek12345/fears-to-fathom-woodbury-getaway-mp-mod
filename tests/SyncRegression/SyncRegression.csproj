@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/CharacterProfile.cs" Link="CharacterProfile.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Net/Protocol.Appearance.cs" Link="Protocol.Appearance.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/BatchLookupCache.cs" Link="BatchLookupCache.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/ScalarStorySchema.cs" Link="ScalarStorySchema.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/CoopClient.cs" Link="CoopClient.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/CoopServer.cs" Link="CoopServer.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Net/UdpChannel.cs" Link="UdpChannel.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/CharacterAnimation.cs" Link="CharacterAnimation.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/UI/CoopMenuValidation.cs" Link="CoopMenuValidation.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/SceneCatalog.cs" Link="SceneCatalog.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Net/ScenePresentationFrame.cs" Link="ScenePresentationFrame.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/SceneAdapters.cs" Link="SceneAdapters.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Net/Protocol.cs" Link="Protocol.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Net/TcpFraming.cs" Link="TcpFraming.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Net/SpacewarWire.cs" Link="SpacewarWire.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Net/SpacewarStream.cs" Link="SpacewarStream.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/PlayerPoseStream.cs" Link="PlayerPoseStream.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/LimbPoseMath.cs" Link="LimbPoseMath.cs" />
+    <Compile Include="../../src/WoodburySpectatorSync/Coop/PlayerMotionSampler.cs" Link="PlayerMotionSampler.cs" />
+  </ItemGroup>
+</Project>

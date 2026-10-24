@@ -23,7 +23,19 @@ permissions:
   id-token: write       # OIDC for actions/deploy-pages
 
 jobs:
+  regression:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Check managed, snapshot and log regressions
+        shell: pwsh
+        run: ./scripts/Test-SyncRegression.ps1
+
   refresh-and-deploy:
+    needs: regression
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -35,10 +47,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
-
-      - name: Check snapshot and smoke regressions
-        shell: pwsh
-        run: ./scripts/Test-SyncRegression.ps1
 
       - name: Verify package and refresh site data
         shell: pwsh

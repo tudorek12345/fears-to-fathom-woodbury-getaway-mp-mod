@@ -63,17 +63,17 @@ namespace WoodburySpectatorSync.Coop
             if (emit == null) return 0;
 
             var hash = 71;
-            var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+            var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? SceneLookup.First<MikeDrivingInPizzeriaScene>();
             var mike = ResolvePizzeriaMike(manager);
             EmitGame(fullPrefix + GamePrefix, manager, emit, ref hash);
             EmitPhone(fullPrefix + PhonePrefix, GetFieldValue<Phone>(manager, "phoneUI"), emit, ref hash);
-            EmitUi(fullPrefix + UiPrefix, UnityEngine.Object.FindObjectOfType<PizzerriaUIManager>(), emit, ref hash);
-            EmitPlayer(fullPrefix + PlayerPrefix, UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>(), emit, ref hash);
+            EmitUi(fullPrefix + UiPrefix, SceneLookup.First<PizzerriaUIManager>(), emit, ref hash);
+            EmitPlayer(fullPrefix + PlayerPrefix, SceneLookup.First<PizzeriaPlayerController>(), emit, ref hash);
             EmitDriving(fullPrefix + DrivingPrefix, driving, emit, ref hash);
             EmitPizzeriaMike(fullPrefix + MikeDetailPrefix, manager, mike, driving, emit, ref hash, logger, sessionLogWrite);
-            EmitChair(fullPrefix + ChairPrefix, manager != null ? manager.pizzeriaChair : UnityEngine.Object.FindObjectOfType<PizzeriaChair>(), emit, ref hash);
-            EmitBoundaries(fullPrefix + BoundaryPrefix, UnityEngine.Object.FindObjectsOfType<BoundaryCollidersTogglePizzeria>(), emit, ref hash);
-            EmitOutOfZones(fullPrefix + OutOfZonePrefix, UnityEngine.Object.FindObjectsOfType<OutOfPlayZonePizzeria>(), emit, ref hash);
+            EmitChair(fullPrefix + ChairPrefix, manager != null ? manager.pizzeriaChair : SceneLookup.First<PizzeriaChair>(), emit, ref hash);
+            EmitBoundaries(fullPrefix + BoundaryPrefix, SceneLookup.All<BoundaryCollidersTogglePizzeria>(), emit, ref hash);
+            EmitOutOfZones(fullPrefix + OutOfZonePrefix, SceneLookup.All<OutOfPlayZonePizzeria>(), emit, ref hash);
             hash = hash * 31 + VendingMachineSceneSync.EmitHostFlags(fullPrefix + VendingPrefix, emit);
             EmitObjectArray(fullPrefix + ObjectPrefix + "TruckTriggerMask", manager != null ? manager.truckTriggers : null, emit, ref hash);
             EmitObject(fullPrefix + ObjectPrefix + "KeysUI.", manager != null ? manager.keysUI : null, emit, ref hash);
@@ -82,12 +82,12 @@ namespace WoodburySpectatorSync.Coop
             EmitAudio(fullPrefix + AudioPrefix + "Burp2.", manager != null ? manager.burp2 : null, emit, ref hash);
             EmitAudio(fullPrefix + AudioPrefix + "Keys.", manager != null ? manager.keysAS : null, emit, ref hash);
             EmitAudio(fullPrefix + AudioPrefix + "TruckStart.", manager != null ? manager.truckStart : null, emit, ref hash);
-            EmitRoadTripMusic(fullPrefix + RoadTripMusicPrefix, UnityEngine.Object.FindObjectOfType<DontDestroyRoadTripMusic>(), emit, ref hash);
-            EmitTvAudioProximity(fullPrefix + TvAudioProximityPrefix, UnityEngine.Object.FindObjectsOfType<PizzeriaTVAudioProximity>(), emit, ref hash);
-            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerSub>(), emit, ref hash);
-            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>(), emit, ref hash);
-            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, UnityEngine.Object.FindObjectsOfType<OnTrigger>(), emit, ref hash);
-            EmitEventTriggers(fullPrefix + EventTriggerPrefix, UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>(), emit, ref hash);
+            EmitRoadTripMusic(fullPrefix + RoadTripMusicPrefix, SceneLookup.First<DontDestroyRoadTripMusic>(), emit, ref hash);
+            EmitTvAudioProximity(fullPrefix + TvAudioProximityPrefix, SceneLookup.All<PizzeriaTVAudioProximity>(), emit, ref hash);
+            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, SceneLookup.All<OnTriggerSub>(), emit, ref hash);
+            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, SceneLookup.All<OnTriggerDisplaySub>(), emit, ref hash);
+            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, SceneLookup.All<OnTrigger>(), emit, ref hash);
+            EmitEventTriggers(fullPrefix + EventTriggerPrefix, SceneLookup.All<TriggerEventInvoker>(), emit, ref hash);
 
             var doors = FindDoors();
             for (var i = 0; i < doors.Count; i++)
@@ -116,8 +116,8 @@ namespace WoodburySpectatorSync.Coop
 
             VendingMachineSceneSync.CollectSyncedTransforms(transforms);
 
-            var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
-            var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+            var manager = SceneLookup.First<PizzeriaGameManager>();
+            var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? SceneLookup.First<MikeDrivingInPizzeriaScene>();
             AddTransform(driving, transforms);
             AddTransform(ResolvePizzeriaMike(manager), transforms);
         }
@@ -135,21 +135,21 @@ namespace WoodburySpectatorSync.Coop
             if (fieldName.StartsWith(GamePrefix, StringComparison.Ordinal))
             {
                 return TryApplyGameFlag(
-                    UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>(),
+                    SceneLookup.First<PizzeriaGameManager>(),
                     fieldName.Substring(GamePrefix.Length),
                     value);
             }
 
             if (fieldName.StartsWith(PhonePrefix, StringComparison.Ordinal))
             {
-                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                var manager = SceneLookup.First<PizzeriaGameManager>();
                 return TryApplyPhoneFlag(GetFieldValue<Phone>(manager, "phoneUI"), fieldName.Substring(PhonePrefix.Length), value);
             }
 
             if (fieldName.StartsWith(UiPrefix, StringComparison.Ordinal))
             {
                 return TryApplyUiFlag(
-                    UnityEngine.Object.FindObjectOfType<PizzerriaUIManager>(),
+                    SceneLookup.First<PizzerriaUIManager>(),
                     fieldName.Substring(UiPrefix.Length),
                     value);
             }
@@ -157,24 +157,24 @@ namespace WoodburySpectatorSync.Coop
             if (fieldName.StartsWith(PlayerPrefix, StringComparison.Ordinal))
             {
                 return TryApplyPlayerFlag(
-                    UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>(),
+                    SceneLookup.First<PizzeriaPlayerController>(),
                     fieldName.Substring(PlayerPrefix.Length),
                     value);
             }
 
             if (fieldName.StartsWith(DrivingPrefix, StringComparison.Ordinal))
             {
-                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                var manager = SceneLookup.First<PizzeriaGameManager>();
                 return TryApplyDrivingFlag(
-                    GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>(),
+                    GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? SceneLookup.First<MikeDrivingInPizzeriaScene>(),
                     fieldName.Substring(DrivingPrefix.Length),
                     value);
             }
 
             if (fieldName.StartsWith(MikeDetailPrefix, StringComparison.Ordinal))
             {
-                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
-                var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+                var manager = SceneLookup.First<PizzeriaGameManager>();
+                var driving = GetFieldValue<MikeDrivingInPizzeriaScene>(manager, "mikeDriving") ?? SceneLookup.First<MikeDrivingInPizzeriaScene>();
                 return TryApplyPizzeriaMikeFlag(
                     manager,
                     ResolvePizzeriaMike(manager),
@@ -186,8 +186,8 @@ namespace WoodburySpectatorSync.Coop
 
             if (fieldName.StartsWith(ChairPrefix, StringComparison.Ordinal))
             {
-                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
-                var chair = manager != null ? manager.pizzeriaChair : UnityEngine.Object.FindObjectOfType<PizzeriaChair>();
+                var manager = SceneLookup.First<PizzeriaGameManager>();
+                var chair = manager != null ? manager.pizzeriaChair : SceneLookup.First<PizzeriaChair>();
                 return TryApplyChairFlag(chair, fieldName.Substring(ChairPrefix.Length), value);
             }
 
@@ -208,7 +208,7 @@ namespace WoodburySpectatorSync.Coop
 
             if (fieldName.StartsWith(ObjectPrefix + "TruckTriggerMask", StringComparison.Ordinal))
             {
-                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                var manager = SceneLookup.First<PizzeriaGameManager>();
                 if (manager == null) return false;
                 ApplyObjectArrayMask(manager.truckTriggers, value);
                 return true;
@@ -216,7 +216,7 @@ namespace WoodburySpectatorSync.Coop
 
             if (fieldName.StartsWith(ObjectPrefix + "KeysUI.", StringComparison.Ordinal))
             {
-                var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+                var manager = SceneLookup.First<PizzeriaGameManager>();
                 if (manager == null) return false;
                 return TryApplyObjectFlag(manager.keysUI, fieldName.Substring((ObjectPrefix + "KeysUI.").Length), value);
             }
@@ -963,7 +963,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.Equals(localKey, "Count", StringComparison.Ordinal)) return true;
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
-            var toggles = UnityEngine.Object.FindObjectsOfType<BoundaryCollidersTogglePizzeria>();
+            var toggles = SceneLookup.All<BoundaryCollidersTogglePizzeria>();
             SortByPath(toggles);
             if (index < 0 || index >= toggles.Length) return false;
             var toggle = toggles[index];
@@ -979,7 +979,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.Equals(localKey, "Count", StringComparison.Ordinal)) return true;
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
-            var zones = UnityEngine.Object.FindObjectsOfType<OutOfPlayZonePizzeria>();
+            var zones = SceneLookup.All<OutOfPlayZonePizzeria>();
             SortByPath(zones);
             if (index < 0 || index >= zones.Length) return false;
             var zone = zones[index];
@@ -996,7 +996,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.Equals(localKey, "Count", StringComparison.Ordinal)) return true;
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerSub>();
+            var triggers = SceneLookup.All<OnTriggerSub>();
             SortByPath(triggers);
             if (index < 0 || index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1016,7 +1016,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.Equals(localKey, "Count", StringComparison.Ordinal)) return true;
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>();
+            var triggers = SceneLookup.All<OnTriggerDisplaySub>();
             SortByPath(triggers);
             if (index < 0 || index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1035,7 +1035,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.Equals(localKey, "Count", StringComparison.Ordinal)) return true;
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTrigger>();
+            var triggers = SceneLookup.All<OnTrigger>();
             SortByPath(triggers);
             if (index < 0 || index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1053,7 +1053,7 @@ namespace WoodburySpectatorSync.Coop
         {
             if (string.Equals(localKey, "Count", StringComparison.Ordinal)) return true;
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>();
+            var triggers = SceneLookup.All<TriggerEventInvoker>();
             SortByPath(triggers);
             if (index < 0 || index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1104,7 +1104,7 @@ namespace WoodburySpectatorSync.Coop
 
         private static bool TryApplyAudioByKey(string localKey, int value)
         {
-            var manager = UnityEngine.Object.FindObjectOfType<PizzeriaGameManager>();
+            var manager = SceneLookup.First<PizzeriaGameManager>();
             if (manager == null) return false;
 
             if (localKey.StartsWith("CashRegister.", StringComparison.Ordinal)) return TryApplyAudioFlag(manager.cashRegisterAS, localKey.Substring(13), value);
@@ -1137,7 +1137,7 @@ namespace WoodburySpectatorSync.Coop
 
         private static bool TryApplyRoadTripMusicFlag(string name, int value)
         {
-            var music = UnityEngine.Object.FindObjectOfType<DontDestroyRoadTripMusic>();
+            var music = SceneLookup.First<DontDestroyRoadTripMusic>();
             if (string.Equals(name, "Exists", StringComparison.Ordinal))
             {
                 if (value == 0 && music != null)
@@ -1164,7 +1164,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(localKey, "Count", StringComparison.Ordinal)) return true;
             if (!TryParseIndexedKey(localKey, out var index, out var name)) return true;
 
-            var proximities = UnityEngine.Object.FindObjectsOfType<PizzeriaTVAudioProximity>();
+            var proximities = SceneLookup.All<PizzeriaTVAudioProximity>();
             SortByPath(proximities);
             if (index < 0 || index >= proximities.Length) return false;
 
@@ -1191,37 +1191,37 @@ namespace WoodburySpectatorSync.Coop
                 if (toggles[i] != null) toggles[i].enabled = false;
             }
 
-            var boundaries = UnityEngine.Object.FindObjectsOfType<BoundaryCollidersTogglePizzeria>();
+            var boundaries = SceneLookup.All<BoundaryCollidersTogglePizzeria>();
             for (var i = 0; i < boundaries.Length; i++)
             {
                 if (boundaries[i] != null) boundaries[i].enabled = false;
             }
 
-            var outOfZones = UnityEngine.Object.FindObjectsOfType<OutOfPlayZonePizzeria>();
+            var outOfZones = SceneLookup.All<OutOfPlayZonePizzeria>();
             for (var i = 0; i < outOfZones.Length; i++)
             {
                 if (outOfZones[i] != null) outOfZones[i].enabled = false;
             }
 
-            var tvAudioProximities = UnityEngine.Object.FindObjectsOfType<PizzeriaTVAudioProximity>();
+            var tvAudioProximities = SceneLookup.All<PizzeriaTVAudioProximity>();
             for (var i = 0; i < tvAudioProximities.Length; i++)
             {
                 if (tvAudioProximities[i] != null) tvAudioProximities[i].enabled = false;
             }
 
-            var driving = UnityEngine.Object.FindObjectOfType<MikeDrivingInPizzeriaScene>();
+            var driving = SceneLookup.First<MikeDrivingInPizzeriaScene>();
             if (driving != null)
             {
                 driving.enabled = false;
             }
 
-            var mike = UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+            var mike = SceneLookup.First<MikePizzeria>();
             if (mike != null)
             {
                 mike.enabled = false;
             }
 
-            var roadTripMusic = UnityEngine.Object.FindObjectOfType<DontDestroyRoadTripMusic>();
+            var roadTripMusic = SceneLookup.First<DontDestroyRoadTripMusic>();
             if (roadTripMusic != null)
             {
                 roadTripMusic.enabled = false;
@@ -1253,14 +1253,14 @@ namespace WoodburySpectatorSync.Coop
 
         private static List<PizzeriaDoor> FindDoors()
         {
-            var list = new List<PizzeriaDoor>(UnityEngine.Object.FindObjectsOfType<PizzeriaDoor>());
+            var list = new List<PizzeriaDoor>(SceneLookup.All<PizzeriaDoor>());
             SortByPath(list);
             return list;
         }
 
         private static List<ToggleLightsPizzeria> FindLightToggles()
         {
-            var list = new List<ToggleLightsPizzeria>(UnityEngine.Object.FindObjectsOfType<ToggleLightsPizzeria>());
+            var list = new List<ToggleLightsPizzeria>(SceneLookup.All<ToggleLightsPizzeria>());
             SortByPath(list);
             return list;
         }
@@ -1514,7 +1514,7 @@ namespace WoodburySpectatorSync.Coop
         {
             return manager != null && manager.mikePizzeria != null
                 ? manager.mikePizzeria
-                : UnityEngine.Object.FindObjectOfType<MikePizzeria>();
+                : SceneLookup.First<MikePizzeria>();
         }
 
         private static PizzeriaMikePhase ResolvePizzeriaMikePhase(PizzeriaGameManager manager, MikePizzeria mike, MikeDrivingInPizzeriaScene driving)
@@ -1559,7 +1559,7 @@ namespace WoodburySpectatorSync.Coop
 
             if (mike.state == MikePizzeria.State.InCar)
             {
-                var player = UnityEngine.Object.FindObjectOfType<PizzeriaPlayerController>();
+                var player = SceneLookup.First<PizzeriaPlayerController>();
                 var drivingCameraActive = player != null &&
                                           (IsObjectActiveInHierarchy(player.playerDrivingParent) ||
                                            IsObjectActiveInHierarchy(player.playerDrivingCam));

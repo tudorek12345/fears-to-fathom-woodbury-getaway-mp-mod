@@ -25,9 +25,14 @@ namespace WoodburySpectatorSync.Config
         Custom
     }
 
+    public enum CoopTransport { Lan, Spacewar }
+
     public sealed class Settings
     {
         public ConfigEntry<Mode> ModeSetting;
+        public ConfigEntry<CoopTransport> Transport;
+        public ConfigEntry<string> CharacterAppearance;
+        public ConfigEntry<ulong> SpacewarLobbyId;
         public ConfigEntry<string> HostBindIP;
         public ConfigEntry<int> HostPort;
         public ConfigEntry<string> SpectatorHostIP;
@@ -115,7 +120,7 @@ namespace WoodburySpectatorSync.Config
             settings.CoopCabinStartSequence = config.Bind("Coop", "CabinStartSequence", "StartAfterShower", "CabinSceneSequences enum name (StartAfterShower, StartInKitchenAfterOvenStart, StartHiding)");
             settings.CoopRemotePlayerPrefabPath = config.Bind("Coop", "RemotePlayerPrefabPath", string.Empty, "Optional dedicated remote player source path (NetPath or Resources path). If empty, fallback uses local FPC clone.");
             settings.CoopRemotePlayerRig = config.Bind("Coop", "RemotePlayerRig", "Auto", "Animator rig profile for remote player proxies (Auto, WoodburyFpc, ThirdPersonBasic, LegacyHumanoid).");
-            settings.CoopRemotePlayerAvatarSource = config.Bind("Coop", "RemotePlayerAvatarSource", RemotePlayerAvatarSource.Auto, "Remote player avatar source (Auto, GameModel, AssetBundle, Capsule). Auto prefers safe in-scene models and keeps AssetBundle optional.");
+            settings.CoopRemotePlayerAvatarSource = config.Bind("Coop", "RemotePlayerAvatarSource", RemotePlayerAvatarSource.Auto, "Remote player avatar source (Auto, GameModel, AssetBundle, Capsule). Auto uses the customizable winter traveler in gameplay scenes; explicit legacy sources keep their own appearance.");
             settings.CoopRemotePlayerAvatarBundlePath = config.Bind("Coop", "RemotePlayerAvatarBundlePath", "BepInEx/plugins/WoodburySpectatorSync/avatars/woodbury_avatars.bundle", "Optional Unity AssetBundle for remote player avatars. Used only when RemotePlayerPrefabPath is blank.");
             settings.CoopRemotePlayerAvatarId = config.Bind("Coop", "RemotePlayerAvatarId", "woodbury_scene_auto", "Avatar id. Use woodbury_scene_auto for in-scene avatars or a bundle manifest id such as quaternius_regular_male for explicit AssetBundle testing.");
             settings.CoopRemotePlayerAvatarScale = config.Bind("Coop", "RemotePlayerAvatarScale", 1f, "Multiplier applied on top of the avatar manifest scale.");
@@ -135,7 +140,10 @@ namespace WoodburySpectatorSync.Config
             settings.CoopVoiceShoutThreshold = config.Bind("Voice", "ShoutThreshold", 0.42f, "Normalized remote voice level that counts as a loud shout for hiker/chaser checks.");
             settings.CoopFootstepSyncEnabled = config.Bind("Audio", "FootstepSyncEnabled", true, "Mirror host/client movement footsteps as spatial remote audio events.");
             settings.CoopFootstepVolume = config.Bind("Audio", "FootstepVolume", 0.72f, "Remote footstep playback volume multiplier.");
-            settings.SteamworksAppIdMode = config.Bind("Steamworks", "AppIdMode", global::WoodburySpectatorSync.Config.SteamworksAppIdMode.SteamworksTestApp, "Steamworks app id override for test launches. Direct/Steam launch defaults to SteamworksTestApp/Spacewar. Disabled is LAN/local multi-instance mode. Custom uses CustomAppId.");
+            settings.CharacterAppearance = config.Bind("Character", "Appearance", Coop.CharacterProfile.Default.ToString(), "Saved character catalog choices. Edit through Multiplayer > Character.");
+            settings.Transport = config.Bind("Coop", "Transport", CoopTransport.Lan, "LAN TCP/UDP or Spacewar Steam lobby transport. Stop/disconnect before switching.");
+            settings.SpacewarLobbyId = config.Bind("Steamworks", "LobbyId", 0UL, "Host lobby ID to join with Spacewar transport. Host displays its ID in F11 and the log.");
+            settings.SteamworksAppIdMode = config.Bind("Steamworks", "AppIdMode", global::WoodburySpectatorSync.Config.SteamworksAppIdMode.Disabled, "Steamworks app id override for test launches. Defaults to Disabled. Spacewar transport uses an isolated helper with App ID 480. Custom uses CustomAppId.");
             settings.SteamworksCustomAppId = config.Bind("Steamworks", "CustomAppId", 0u, "Custom Steamworks app id used only when AppIdMode is Custom. Restart the game after changing this.");
             settings.SceneDiscoveryDump = config.Bind("Debug", "SceneDiscoveryDump", true, "Dump manager/controller component fields once on every scene entry for host/client log diffing.");
             settings.SceneDiscoveryDumpIntervalSeconds = config.Bind("Debug", "SceneDiscoveryDumpIntervalSeconds", 0f, "Optional repeated scene discovery dump interval in seconds. 0 disables timed dumps; F10 manual dumps still work when SceneDiscoveryDump is enabled.");

@@ -16,7 +16,7 @@ using WoodburySpectatorSync.UI;
 namespace WoodburySpectatorSync
 {
     // TODO (IL2CPP): Swap to BepInEx IL2CPP chainloader and update project references.
-    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.44")]
+    [BepInPlugin("com.woodbury.spectatorsync", "Woodbury Spectator Sync", "0.4.49")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private Settings _settings;
@@ -26,6 +26,8 @@ namespace WoodburySpectatorSync
         private SceneSync _sceneSync;
         private Overlay _overlay;
         private CoopMainMenuPanel _coopMenuPanel;
+        private NativeCoopMenu _nativeCoopMenu;
+        private bool _mainMenuDiagnosticsRequested;
         private CoopBrandMark _brandMark;
         private WaitingSpinnerOverlay _waitingSpinnerOverlay;
         private RemoteDialogueOverlay _remoteDialogueOverlay;
@@ -50,6 +52,8 @@ namespace WoodburySpectatorSync
         private int _sceneDiscoveryCrawlerIndex = -1;
         private bool _sceneDiscoveryCrawlerPrepared;
         private bool _sceneDiscoveryCrawlerCompleted;
+        private bool _sceneDiscoveryCrawlerTypingStarted;
+        private bool _sceneDiscoveryCrawlerLiveStarted;
         private float _nextSceneDiscoveryCrawlerActionTime;
         private float _nextSceneDiscoveryCrawlerStatusLogTime;
 
@@ -64,8 +68,9 @@ namespace WoodburySpectatorSync
         {
             var configFile = CreateConfigFile();
             _settings = Settings.Bind(configFile);
-            ApplySteamworksLaunchOverrides(_settings);
             ApplyRuntimeOverrides(_settings);
+            SceneRuntimeRepairs.Install();
+            if (_settings.Transport.Value != CoopTransport.Spacewar) ApplySteamworksLaunchOverrides(_settings);
             Application.runInBackground = true;
             _overlay = new Overlay(_settings);
             _coopMenuPanel = new CoopMainMenuPanel(_settings);
@@ -81,6 +86,8 @@ namespace WoodburySpectatorSync
             _spectatorClient = new SpectatorClient(Logger, _settings);
             _coopServer = new CoopServer(Logger, _settings);
             _coopClient = new CoopClient(Logger, _settings);
+            _nativeCoopMenu = new NativeCoopMenu(_settings, _coopServer, _coopClient,
+                message => { Logger.LogInfo(message); _sessionLog?.Write(message); });
             _coopHost = new CoopHostCoordinator(
                 Logger,
                 _settings,
@@ -93,8 +100,14 @@ namespace WoodburySpectatorSync
                 _sessionLog != null ? new Action<string>(_sessionLog.Write) : null);
 
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
+            SceneManager.sceneLoaded += OnCrawlerSceneLoaded;
             Logger.LogInfo("Woodbury Spectator Sync loaded (runInBackground enabled)");
             _sessionLog?.Write("Plugin loaded");
+            for (var i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+            {
+                var name = GetSceneNameByBuildIndex(i);
+                _sessionLog?.Write("SceneBuild index=" + i + " scene=" + name + " adapter=" + SceneCatalog.AdapterFor(name));
+            }
             _sessionLog?.Write("Config: " + (configFile != null ? configFile.ConfigFilePath : "default"));
         }
 
@@ -312,7 +325,10 @@ namespace WoodburySpectatorSync
 
         private void OnDestroy()
         {
+            _nativeCoopMenu?.Dispose();
             SceneManager.activeSceneChanged -= OnActiveSceneChanged;
+            SceneManager.sceneLoaded -= OnCrawlerSceneLoaded;
+            SceneRuntimeRepairs.Uninstall();
             _hostServer.Stop();
             _spectatorClient.Disconnect();
             _coopServer.Stop();
@@ -326,6 +342,8 @@ namespace WoodburySpectatorSync
 
         private void Update()
         {
+            _nativeCoopMenu?.Update();
+            _coopMenuPanel.NativeMenuBound = _nativeCoopMenu?.IsBound ?? false;
             HandleHotkeys();
             HandleAutoStart();
             HandlePeriodicSceneDiscoveryDump();
@@ -352,14 +370,15 @@ namespace WoodburySpectatorSync
             }
             else if (_settings.ModeSetting.Value == Mode.CoopHost)
             {
-                _coopHost.Update();
+                using (SceneLookup.Begin()) _coopHost.Update();
             }
             else if (_settings.ModeSetting.Value == Mode.CoopClient)
             {
-                _coopClientCoordinator.Update();
+                using (SceneLookup.Begin()) _coopClientCoordinator.Update();
             }
 
             MaybeLogHeartbeat();
+            SceneLookup.Report(line => _sessionLog?.Write(line));
         }
 
         private void OnGUI()
@@ -372,7 +391,8 @@ namespace WoodburySpectatorSync
                         ? (_coopServer.IsRunning ? (_coopServer.IsClientConnected ? "Co-op hosting (client connected)" : "Co-op hosting (waiting)") : "Co-op host idle")
                         : _coopClient.Status);
             var sceneName = SceneManager.GetActiveScene().name;
-            var overlayText = DrawCachedOverlay(modeLabel, status, sceneName);
+            var overlayText = (sceneName != "MainMenu" || _mainMenuDiagnosticsRequested) && !(_nativeCoopMenu?.IsOpen ?? false)
+                ? DrawCachedOverlay(modeLabel, status, sceneName) : null;
             MaybeLogStatus(modeLabel, status, sceneName);
 
             if (_settings.ModeSetting.Value == Mode.CoopClient && _coopClientCoordinator != null)
@@ -419,6 +439,7 @@ namespace WoodburySpectatorSync
 
         private void DrawHostWaitIndicator()
         {
+            if (SceneManager.GetActiveScene().name == "MainMenu") return;
             if (_settings == null ||
                 _settings.ModeSetting.Value != Mode.CoopHost ||
                 _coopHost == null ||
@@ -451,7 +472,12 @@ namespace WoodburySpectatorSync
         {
             if (Input.GetKeyDown(KeyCode.F8))
             {
-                _overlay.Toggle();
+                if (SceneManager.GetActiveScene().name == "MainMenu")
+                {
+                    _mainMenuDiagnosticsRequested = !_mainMenuDiagnosticsRequested;
+                    _overlay.SetVisible(_mainMenuDiagnosticsRequested);
+                }
+                else _overlay.Toggle();
             }
 
             if (Input.GetKeyDown(KeyCode.F10))
@@ -461,7 +487,9 @@ namespace WoodburySpectatorSync
 
             if (Input.GetKeyDown(KeyCode.F11))
             {
-                _coopMenuPanel?.Toggle();
+                if (SceneManager.GetActiveScene().name == "MainMenu" && (_nativeCoopMenu?.IsBound ?? false))
+                    _nativeCoopMenu.SetOpen(!_nativeCoopMenu.IsOpen);
+                else _coopMenuPanel?.Toggle();
                 _sessionLog?.Write("Hotkey F11: co-op menu toggled");
             }
 
@@ -589,6 +617,30 @@ namespace WoodburySpectatorSync
             }
 
             var now = Time.realtimeSinceStartup;
+            if (_sceneDiscoveryCrawlerIndex >= 0 && !_sceneDiscoveryCrawlerLiveStarted)
+            {
+                _sceneDiscoveryCrawlerLiveStarted = true;
+                _nextSceneDiscoveryCrawlerActionTime = now + GetSceneDiscoveryCrawlerSceneSeconds();
+                LogSceneDiscoveryCrawler("live-dwell scene=" + SceneManager.GetActiveScene().name);
+            }
+            if (SceneManager.GetActiveScene().name == ScenePresentationSync.TypingScene && !_sceneDiscoveryCrawlerTypingStarted)
+            {
+                var typingMenu = UnityEngine.Object.FindObjectOfType<TypingShooterStatesManager>();
+                if (typingMenu != null)
+                {
+                    _sceneDiscoveryCrawlerTypingStarted = true;
+                    typingMenu.OnPlay();
+                    var overlay = UnityEngine.Object.FindObjectOfType<TypingGameKit.OverlaySequenceManager>();
+                    var enemy = UnityEngine.Object.FindObjectOfType<TypingGameKit.AlienTyping.Enemy>();
+                    if (overlay != null && enemy != null)
+                    {
+                        var sequence = overlay.CreateSequence("coop regression", enemy.transform);
+                        sequence.ProcessInput('c'); sequence.ProcessInput('o'); sequence.ProcessInput('o');
+                        LogSceneDiscoveryCrawler("typing-word-fixture progress=3 target=" + NetPath.GetPath(enemy.transform));
+                    }
+                    LogSceneDiscoveryCrawler("typing-play officeRetained=" + SceneManager.GetSceneByName("OfficeLayout").isLoaded);
+                }
+            }
             if (_nextSceneDiscoveryCrawlerActionTime <= 0f)
             {
                 _nextSceneDiscoveryCrawlerActionTime = now + GetSceneDiscoveryCrawlerStartDelaySeconds();
@@ -654,7 +706,7 @@ namespace WoodburySpectatorSync
             _sceneDiscoveryCrawlerScenes = BuildSceneDiscoveryCrawlerList();
             _sceneDiscoveryCrawlerPrepared = true;
             _sceneDiscoveryCrawlerCompleted = _sceneDiscoveryCrawlerScenes.Length == 0;
-            _sceneDiscoveryCrawlerIndex = FindSceneDiscoveryCrawlerSceneIndex(SceneManager.GetActiveScene().name);
+            _sceneDiscoveryCrawlerIndex = -1;
             _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + GetSceneDiscoveryCrawlerStartDelaySeconds();
             LogSceneDiscoveryCrawler("enabled scenes=" + string.Join(",", _sceneDiscoveryCrawlerScenes) +
                 " startDelay=" + GetSceneDiscoveryCrawlerStartDelaySeconds().ToString("0.###") +
@@ -682,7 +734,7 @@ namespace WoodburySpectatorSync
                         value = GetSceneNameByBuildIndex(buildIndex);
                     }
 
-                    AddUniqueSceneName(scenes, value);
+                    if (!string.IsNullOrWhiteSpace(value)) scenes.Add(value);
                 }
             }
             else
@@ -753,12 +805,6 @@ namespace WoodburySpectatorSync
         private int GetNextSceneDiscoveryCrawlerIndex(string currentSceneName)
         {
             var currentIndex = _sceneDiscoveryCrawlerIndex;
-            var sceneIndex = FindSceneDiscoveryCrawlerSceneIndex(currentSceneName);
-            if (sceneIndex >= 0)
-            {
-                currentIndex = sceneIndex;
-                _sceneDiscoveryCrawlerIndex = sceneIndex;
-            }
 
             var nextIndex = currentIndex + 1;
             if (nextIndex >= _sceneDiscoveryCrawlerScenes.Length)
@@ -779,6 +825,10 @@ namespace WoodburySpectatorSync
         private int FindSceneDiscoveryCrawlerSceneIndex(string sceneName)
         {
             if (string.IsNullOrWhiteSpace(sceneName)) return -1;
+            if (_sceneDiscoveryCrawlerIndex >= 0 && _sceneDiscoveryCrawlerIndex < _sceneDiscoveryCrawlerScenes.Length &&
+                _sceneDiscoveryCrawlerScenes[_sceneDiscoveryCrawlerIndex] == sceneName) return _sceneDiscoveryCrawlerIndex;
+            for (var i = _sceneDiscoveryCrawlerIndex + 1; i < _sceneDiscoveryCrawlerScenes.Length; i++)
+                if (_sceneDiscoveryCrawlerScenes[i] == sceneName) return i;
             for (var i = 0; i < _sceneDiscoveryCrawlerScenes.Length; i++)
             {
                 if (string.Equals(_sceneDiscoveryCrawlerScenes[i], sceneName, StringComparison.Ordinal))
@@ -810,7 +860,18 @@ namespace WoodburySpectatorSync
                 _sceneDiscoveryCrawlerIndex = sceneIndex;
                 _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + GetSceneDiscoveryCrawlerSceneSeconds();
                 LogSceneDiscoveryCrawler("loading scene=" + sceneName + " index=" + sceneIndex);
-                SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+                var office = SceneManager.GetSceneByName("OfficeLayout");
+                var typing = SceneManager.GetSceneByName(ScenePresentationSync.TypingScene);
+                if (sceneName == "OfficeLayout" && office.IsValid() && office.isLoaded && typing.IsValid() && typing.isLoaded)
+                {
+                    SceneManager.SetActiveScene(office);
+                    SceneManager.UnloadSceneAsync(typing);
+                }
+                else
+                {
+                    SceneManager.LoadScene(sceneName, sceneName == ScenePresentationSync.TypingScene && office.IsValid() && office.isLoaded
+                        ? LoadSceneMode.Additive : LoadSceneMode.Single);
+                }
             }
             catch (Exception ex)
             {
@@ -823,18 +884,19 @@ namespace WoodburySpectatorSync
 
         private void HandleSceneDiscoveryCrawlerSceneChanged(Scene newScene)
         {
+            _sceneDiscoveryCrawlerTypingStarted = false;
+            _sceneDiscoveryCrawlerLiveStarted = false;
             if (!IsSceneDiscoveryCrawlerEnabled() || !_sceneDiscoveryCrawlerPrepared)
             {
                 return;
             }
 
-            var sceneIndex = FindSceneDiscoveryCrawlerSceneIndex(newScene.name);
-            if (sceneIndex >= 0)
-            {
-                _sceneDiscoveryCrawlerIndex = sceneIndex;
-            }
+            // Only an explicitly scheduled load advances the cursor. A bootstrap MainMenu
+            // also present at the route's end must not skip every intervening test scene.
+            var sceneIndex = _sceneDiscoveryCrawlerIndex;
 
-            _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup + GetSceneDiscoveryCrawlerSceneSeconds();
+            _nextSceneDiscoveryCrawlerActionTime = Time.realtimeSinceStartup +
+                (sceneIndex < 0 ? GetSceneDiscoveryCrawlerStartDelaySeconds() : GetSceneDiscoveryCrawlerSceneSeconds());
             LogSceneDiscoveryCrawler("scene-enter scene=" + newScene.name +
                 " index=" + _sceneDiscoveryCrawlerIndex +
                 " nextIn=" + GetSceneDiscoveryCrawlerSceneSeconds().ToString("0.###") + "s");
@@ -965,6 +1027,18 @@ namespace WoodburySpectatorSync
             if (_hostServer.IsRunning)
             {
                 _hostServer.QueueSceneChange(newScene.name, newScene.buildIndex);
+            }
+        }
+
+        private void OnCrawlerSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            if (_settings.ModeSetting.Value == Mode.CoopClient) PedestrianPoolSync.Suppress(scene);
+            if (_settings.ModeSetting.Value == Mode.CoopHost || _settings.ModeSetting.Value == Mode.CoopClient)
+                SceneRuntimeRepairs.OnLoaded(scene, _sessionLog != null ? new Action<string>(_sessionLog.Write) : null);
+            if (IsSceneDiscoveryCrawlerEnabled() && scene.name == ScenePresentationSync.TypingScene && mode == LoadSceneMode.Additive)
+            {
+                SceneManager.SetActiveScene(scene);
+                LogSceneDiscoveryCrawler("additive-loaded scene=" + scene.name + " officeRetained=" + SceneManager.GetSceneByName("OfficeLayout").isLoaded);
             }
         }
 
@@ -1224,6 +1298,8 @@ namespace WoodburySpectatorSync
             }
             else if (_settings.ModeSetting.Value == Mode.CoopClient)
             {
+                _sessionLog.Write("HostState: read=" + _coopClient.HostStateReadCount +
+                    ", enq=" + _coopClient.HostStateEnqueuedCount + ", applied=" + _coopClientCoordinator.HostStateAppliedCount);
                 _sessionLog.Write(
                     "Heartbeat client: tcpRx=" + FormatAge(nowMs, _coopClient.LastTcpReceiveMs) +
                     " udpRx=" + FormatAge(nowMs, _coopClient.UdpLastReceiveMs) +

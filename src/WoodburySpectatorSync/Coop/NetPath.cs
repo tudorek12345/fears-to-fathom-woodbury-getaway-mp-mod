@@ -9,6 +9,7 @@ namespace WoodburySpectatorSync.Coop
     public static class NetPath
     {
         private static readonly Dictionary<string, Transform> PathCache = new Dictionary<string, Transform>();
+        internal static void InvalidateCache() { PathCache.Clear(); SceneLookup.Invalidate(); }
 
         public static string GetPath(Transform transform)
         {

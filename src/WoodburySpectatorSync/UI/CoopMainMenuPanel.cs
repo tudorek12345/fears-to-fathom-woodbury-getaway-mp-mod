@@ -10,7 +10,9 @@ namespace WoodburySpectatorSync.UI
     {
         private readonly Settings _settings;
         private bool _manualVisible;
+        public bool NativeMenuBound { get; set; }
         private Rect _rect = new Rect(24f, 120f, 360f, 430f);
+        private string _lobbyIdText = "0";
         private string _hostIpText;
         private string _hostPortText;
         private string _udpPortText;
@@ -42,7 +44,7 @@ namespace WoodburySpectatorSync.UI
                     return _manualVisible;
                 }
 
-                return _manualVisible || IsMainMenu();
+                return _manualVisible || (IsMainMenu() && !NativeMenuBound);
             }
         }
 
@@ -72,18 +74,29 @@ namespace WoodburySpectatorSync.UI
             GUILayout.Space(6f);
 
             GUILayout.Label("Connection", _headerStyle);
-            DrawTextRow("Host IP", ref _hostIpText, 140f);
-            DrawTextRow("TCP Port", ref _hostPortText, 80f);
-            DrawTextRow("UDP Port", ref _udpPortText, 80f);
-            DrawBoolRow("UDP", _settings.UdpEnabled, sessionWrite);
+            DrawTransportRow(server, client);
+            if (_settings.Transport.Value == CoopTransport.Spacewar)
+            {
+                DrawTextRow("Lobby ID", ref _lobbyIdText, 190f);
+                if (server != null && server.SpacewarLobbyId != 0)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Host: " + server.SpacewarLobbyId, _labelStyle);
+                    if (GUILayout.Button("Copy ID", _buttonStyle)) GUIUtility.systemCopyBuffer = server.SpacewarLobbyId.ToString();
+                    GUILayout.EndHorizontal();
+                }
+                string status = _settings.ModeSetting.Value == Mode.CoopHost ? server?.ConnectionStatus : client?.Status;
+                if (!string.IsNullOrEmpty(status)) GUILayout.Label(status, _labelStyle);
+            }
+            else
+            {
+                DrawTextRow("Host IP", ref _hostIpText, 140f);
+                DrawTextRow("TCP Port", ref _hostPortText, 80f);
+                DrawTextRow("UDP Port", ref _udpPortText, 80f);
+                DrawBoolRow("UDP", _settings.UdpEnabled, sessionWrite);
+            }
             DrawBoolRow("Voice", _settings.CoopVoiceChatEnabled, sessionWrite);
             DrawBoolRow("Footsteps", _settings.CoopFootstepSyncEnabled, sessionWrite);
-            DrawSteamworksAppIdRow(sessionWrite);
-            if (_settings.SteamworksAppIdMode != null &&
-                _settings.SteamworksAppIdMode.Value == SteamworksAppIdMode.Custom)
-            {
-                DrawTextRow("App ID", ref _steamworksAppIdText, 96f);
-            }
             DrawBoolRow("Auto host", _settings.CoopAutoStartHost, sessionWrite);
             DrawBoolRow("Auto connect", _settings.CoopAutoConnectClient, sessionWrite);
             DrawActionButtons(server, client, sessionWrite);
@@ -172,6 +185,22 @@ namespace WoodburySpectatorSync.UI
             GUI.backgroundColor = previous;
         }
 
+        private void DrawTransportRow(CoopServer server, CoopClient client)
+        {
+            bool previous = GUI.enabled;
+            GUI.enabled = previous && !(server?.IsRunning ?? false) && !(client?.IsRunning ?? false);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Network", _labelStyle, GUILayout.Width(86f));
+            foreach (var transport in new[] { CoopTransport.Lan, CoopTransport.Spacewar })
+            {
+                string label = (transport == CoopTransport.Lan ? "LAN / IP" : "Spacewar") +
+                    (_settings.Transport.Value == transport ? " *" : "");
+                if (GUILayout.Button(label, _buttonStyle)) _settings.Transport.Value = transport;
+            }
+            GUILayout.EndHorizontal();
+            GUI.enabled = previous;
+        }
+
         private void DrawSteamworksAppIdRow(Action<string> sessionWrite)
         {
             if (_settings.SteamworksAppIdMode == null) return;
@@ -207,13 +236,14 @@ namespace WoodburySpectatorSync.UI
         {
             GUILayout.BeginHorizontal();
             var hostRunning = server != null && server.IsRunning;
-            var clientConnected = client != null && client.IsConnected;
+            var clientConnected = client != null && client.IsRunning;
             if (GUILayout.Button(hostRunning ? "Stop Host" : "Start Host", _buttonStyle, GUILayout.Height(28f)))
             {
                 ApplyTextSettings(sessionWrite);
                 if (server != null)
                 {
-                    if (server.IsRunning) server.Stop(); else server.Start();
+                    if (server.IsRunning) server.Stop();
+                    else { client?.Disconnect(); _settings.ModeSetting.Value = Mode.CoopHost; server.Start(); }
                     sessionWrite?.Invoke("Co-op menu: host " + (server.IsRunning ? "started" : "stopped"));
                 }
             }
@@ -222,7 +252,8 @@ namespace WoodburySpectatorSync.UI
                 ApplyTextSettings(sessionWrite);
                 if (client != null)
                 {
-                    if (client.IsConnected) client.Disconnect(); else client.Connect();
+                    if (client.IsRunning) client.Disconnect();
+                    else { server?.Stop(); _settings.ModeSetting.Value = Mode.CoopClient; client.Connect(); }
                     sessionWrite?.Invoke("Co-op menu: client " + (client.IsConnected ? "connected" : "connecting"));
                 }
             }
@@ -269,6 +300,7 @@ namespace WoodburySpectatorSync.UI
 
         private void ApplyTextSettings(Action<string> sessionWrite)
         {
+            if (ulong.TryParse(_lobbyIdText, out var lobbyId)) _settings.SpacewarLobbyId.Value = lobbyId;
             _settings.SpectatorHostIP.Value = (_hostIpText ?? string.Empty).Trim();
             _settings.CoopDisplayName.Value = (_displayNameText ?? string.Empty).Trim();
             _settings.CoopRemotePlayerAvatarId.Value = (_avatarIdText ?? string.Empty).Trim();
@@ -306,6 +338,7 @@ namespace WoodburySpectatorSync.UI
         private void RefreshTextFromSettings()
         {
             if (_settings == null) return;
+            _lobbyIdText = _settings.SpacewarLobbyId.Value.ToString();
             _hostIpText = _settings.SpectatorHostIP != null ? _settings.SpectatorHostIP.Value : "127.0.0.1";
             _hostPortText = _settings.HostPort != null ? _settings.HostPort.Value.ToString() : "27055";
             _udpPortText = _settings.UdpPort != null ? _settings.UdpPort.Value.ToString() : "27056";

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "compiled": "2026-10-19",
+    "compiled": "2026-10-24",
     "source": "Live project status"
   },
   "headlineFeatures": [
@@ -24,7 +24,7 @@
     },
     {
       "title": "Synced death & ending",
-      "summary": "Cabin client-catch and native death mirroring are implemented with July 8 log evidence. Other death/ending paths and credits still need a complete paired run.",
+      "summary": "Cabin client-catch and native death mirroring have historical log evidence. Credits presentation is now host-driven; complete death/ending branches still require a paired story run.",
       "scenes": [
         "All chapters"
       ],
@@ -34,11 +34,11 @@
   "unsyncedScenes": [
     {
       "name": "Menus & loading",
-      "impact": "Lobby/menu choices aren't shared yet — set up the session in-game with F11."
+      "impact": "Native Multiplayer Host/Join controls are implemented; host scene changes drive the client. Shared save/resume and full story handoffs still need gameplay validation."
     },
     {
       "name": "Death & end credits",
-      "impact": "Cabin shared death is implemented. Remaining ending/cinematic paths and end-credit handoff are not yet verified end to end."
+      "impact": "Cabin shared death and host-driven credits presentation are implemented. Complete death/ending branches and cinematic parity still require gameplay validation."
     },
     {
       "name": "Dark cabin — deeper beats",
@@ -47,10 +47,13 @@
   ],
   "milestones": [
     {
-      "id": "0.4.44",
-      "title": "Validate the repaired test build",
-      "subtitle": "Snapshot recovery and package fixes are implemented; gameplay validation remains",
+      "id": "0.4.49",
+      "title": "Validate complete gameplay and Spacewar",
+      "subtitle": "All build scenes have routing and repeatable sync checks; complete story and Internet gameplay remain",
       "items": [
+        "Complete all-scene visual/story calibration for customizable travelers, seated poses and held-item hands",
+        "Exercise Spacewar lobby join, packet exchange and disconnect on two Steam accounts",
+        "Retest Cabin Board Game episode entry: both remote bodies visible and oven casserole matches host",
         "Exercise failed snapshot recovery with a delayed scene object",
         "Run Cabin host catch and client catch through return to menu",
         "Complete Pizzeria dialogue, pizza props, passenger exit and scene handoff",
@@ -66,8 +69,7 @@
         "Reconnect handling",
         "Synced death + end credits",
         "Menu / loading hand-off",
-        "Office + Parking Lot polish",
-        "One-button host / join"
+        "Office + Parking Lot polish"
       ]
     },
     {

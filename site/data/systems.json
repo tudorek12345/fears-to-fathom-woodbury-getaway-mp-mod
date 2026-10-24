@@ -3,12 +3,12 @@
     {
       "name": "Session lifecycle",
       "status": "partial",
-      "note": "Hello/scene/snapshot handshakes implemented. 0.4.44 rejects failed/incomplete acknowledgements and retries full state; recovery needs a fresh paired gameplay pass."
+      "note": "Hello/scene/snapshot handshakes and catch-up retries implemented. Cleanup is scoped to the original stream; repeated TCP replacement sessions are regression tested. Full gameplay reconnect recovery remains pending."
     },
     {
       "name": "NPC brains",
       "status": "done",
-      "note": "Cabin (Mike variants, hiker, host, Nora, cat) deep; Pizzeria + RoadTrip via GenericNpcRegistry."
+      "note": "Cabin and chapter registries suppress client brains and mirror host state. Native random pedestrian pools now mirror host prefab/slot/count inventories before AI snapshots, including Office during the additive typing game."
     },
     {
       "name": "Doors / Holdables",
@@ -17,8 +17,8 @@
     },
     {
       "name": "Story flags",
-      "status": "done",
-      "note": "Per-scene flag dictionaries (cabinHouse, cabinGame, pizzeria, roadTrip, office, parkingLot)."
+      "status": "partial",
+      "note": "Per-scene flag dictionaries plus 30 explicit Cabin arrival, toilet, intro and late-story fields with native-value digests. Full story branches and save/resume parity remain unverified."
     },
     {
       "name": "Dialogue mirroring",
@@ -43,22 +43,22 @@
     {
       "name": "UI mirror",
       "status": "done",
-      "note": "Pizzeria + RoadTrip + Office UI managers mirrored (intro/fade canvases, dialogue cameras, phone state)."
+      "note": "Existing chapter UI/phone mirroring plus 0.4.47 host-driven typing-game and credits transforms, activation, text, color, camera, animation, word/progress, health and audio state."
     },
     {
       "name": "Avatars",
-      "status": "done",
-      "note": "Auto prefers safe scene humans and optional AssetBundle avatars. Capsule is explicit-only; Auto can remain invisible if no valid model is available."
+      "status": "partial",
+      "note": "Auto now uses an original skinned winter traveler with saved face, skin, hair, clothing colors and accessories. Reliable session/revision-checked appearance messages survive scene transitions. Directional body/limb animation, head/torso aim and hand targets run in both directions. Explicit legacy visual overrides remain available. Full visual/story calibration remains pending."
     },
     {
       "name": "Diagnostics",
       "status": "done",
-      "note": "Session logs, F10 scene dumps, comparisons, stricter gameplay smoke checks, and standalone snapshot/log regressions."
+      "note": "Ten-scene route checks snapshots, both skeletons, native Host/Join, typing words, story-field digests, lookup reuse and distinct live appearance changes. Character menu probes verify Apply/Discard and cancellation. Local log collector includes capture times and installed DLL/helper hashes; native crashes remain failures."
     },
     {
       "name": "Co-op setup UI",
       "status": "done",
-      "note": "F11 main-menu panel for mode/host/client/avatar/overlay config (no more editing the .cfg by hand)."
+      "note": "Native Multiplayer entry above Episodes opens modern Co-op and Character pages. Co-op offers LAN/Spacewar, Host/Join, lobby copying, name/address/port fields, Disconnect and Start story. Character offers a rotating 3D preview, face/body framing and saved clothing/face choices. F11 opens this menu in MainMenu and the advanced panel in gameplay."
     },
     {
       "name": "Cabin Mike sync",
@@ -98,12 +98,27 @@
     {
       "name": "Menu / loading scenes",
       "status": "partial",
-      "note": "Client menu cursor/input kept usable; nothing actively synced in menu/loading."
+      "note": "Scene handshakes cover menu return and preserve Office across additive typing-game transitions. Client-only minigame controls are suppressed; host owns its gameplay. Lobby/menu choices remain local."
     },
     {
       "name": "IL2CPP migration",
       "status": "missing",
       "note": "Game ships as Mono. Plugin has a TODO marker for an eventual IL2CPP chainloader swap."
+    },
+    {
+      "name": "Spacewar transport",
+      "status": "partial",
+      "note": "Isolated App ID 480 helper and two-player lobbies. Connection readiness requires received peer packets; helper errors persist in Multiplayer. Native initialization/lobby/relay and helper fixtures pass. The tester-reported two-PC kick still requires a real retest."
+    },
+    {
+      "name": "Credits / typing-game presentation",
+      "status": "partial",
+      "note": "Host-authored presentation and additive lifecycle implemented. Typing remains controlled by the host; full minigame completion, death effects and visual/audio calibration still need gameplay validation."
+    },
+    {
+      "name": "Scene lookup work",
+      "status": "done",
+      "note": "Scene-state adapters reuse Unity searches within one update, invalidate on object inventory changes and clear at scope exit. Runtime counters measure avoided searches; no FPS improvement percentage is claimed."
     }
   ]
 }

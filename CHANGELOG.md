@@ -2,7 +2,14 @@
 
 ## Unreleased
 
-> Current iteration: Plugin 0.4.44, wire protocol 5.
+- Publication: concise README and website separate implemented sync from verified story parity, remove estimated percentages from the primary status views, and show six actual 0.4.49 menu/character captures. Keep lazy gallery images visible while loading and prevent status badges from overflowing phone layouts. Run the managed regression gate on Windows before Pages deployment.
+
+> Current iteration: Plugin 0.4.49, wire protocol 7. Update both players together.
+
+- October 24 character release validation: 873 managed/log checks and both native helper suites pass. Fresh TCP-only and TCP+UDP sweeps pass all ten build scenes on the same DLL, including changed partner appearances in every gameplay scene and the retained Office typing world, with zero mod runtime errors. A paired graphics run verifies the menu, visible outfit/face previews and both remote bodies after live edits. The package was refreshed and independently verified against all 30 file checksums; game preferences were restored byte-for-byte. Status/site metadata and evidence are updated in `docs/VALIDATION-0.4.49.md`; the tester's two-account Spacewar disconnect and complete story playthrough remain unverified.
+- Character editor: modern Co-op/Character tabs, isolated 3D preview, face/body framing, rotation and explicit Apply/Discard. Saved catalog choices cover face shape, skin, hair/color, three outerwear silhouettes, jacket/trouser/boot colors and accessories. Auto avatars use an original skinned winter-traveler model consistently across gameplay scenes; explicit legacy avatar overrides remain available.
+- Appearance synchronization: bounded catalog indices travel reliably in a session-scoped, revision-checked message. Scene-created replicas retain their partner's appearance; disconnects clear it. Wire protocol 7 deliberately rejects older peers. Character geometry, meshes, materials and preview targets are owned and cleaned up by the mod.
+- Character validation: production TCP tests cover both appearance directions, malformed payloads, stale sessions/revisions and draft behavior. Opt-in scene probes change distinct host/client looks and verify remote appearance across scene transitions.
 
 - Snapshot recovery: failed, incomplete, stale, or unbracketed snapshots no longer open the Live gate; host catch-up retries also run with host pausing disabled, and forced snapshots clear Office/ParkingLot delta caches before resending state. Wire format remains protocol 5.
 - Validation: smoke checks require applied state and both roles Live in the same gameplay scene/session/generation, reject stale log fallback, and flag failed snapshots and unresolved objects older than 15 seconds. Build/deploy helpers stop on compiler failure. Added standalone snapshot/log regression checks.

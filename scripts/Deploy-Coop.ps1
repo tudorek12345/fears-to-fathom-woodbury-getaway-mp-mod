@@ -3,6 +3,7 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [string]$ProjectPath = (Join-Path $PSScriptRoot "..\src\WoodburySpectatorSync\WoodburySpectatorSync.csproj"),
+    [string]$SpacewarDirectory = (Join-Path $PSScriptRoot "../build/spacewar-package/Spacewar"),
     [switch]$Build
 )
 
@@ -29,6 +30,14 @@ New-Item -ItemType Directory -Force -Path $pluginDir | Out-Null
 
 $destinationDll = Join-Path $pluginDir "WoodburySpectatorSync.dll"
 Copy-Item -LiteralPath $sourceDll -Destination $destinationDll -Force
+
+if (Test-Path -LiteralPath $SpacewarDirectory) {
+    $spacewarTarget = Join-Path $pluginDir 'Spacewar'
+    New-Item -ItemType Directory -Path $spacewarTarget -Force | Out-Null
+    foreach ($name in @('Woodbury.Spacewar.exe','steam_api64.dll','steam_appid.txt')) {
+        Copy-Item -LiteralPath (Join-Path $SpacewarDirectory $name) -Destination (Join-Path $spacewarTarget $name) -Force
+    }
+}
 
 $hash = (Get-FileHash -LiteralPath $destinationDll -Algorithm SHA256).Hash
 $stamp = (Get-Item -LiteralPath $destinationDll).LastWriteTime

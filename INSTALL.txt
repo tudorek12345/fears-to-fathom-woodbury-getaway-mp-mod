@@ -1,4 +1,4 @@
-Woodbury Co-op 0.4.44 / protocol 5 - development test build
+Woodbury Co-op 0.4.49 / protocol 7 - development test build
 
 Download:
 https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/downloads/woodbury-coop-latest.7z
@@ -12,16 +12,30 @@ BepInEx 5 Mono is included in the all-in-one package.
    winhttp.dll, doorstop_config.ini and BepInEx must sit beside
    Fears to Fathom - Woodbury Getaway.exe, with no extra build folder.
 2. Back up a custom mod config before replacing it with the test config.
-3. Launch normally and press F11. Host selects CoopHost; friend selects CoopClient.
-4. Enter the host's reachable IP. Internet play requires TCP 27055 and UDP 27056
-   to be reachable, through port forwarding or a virtual LAN.
+3. Click Multiplayer above Episodes in the native main menu, or press F11.
+4. LAN / IP: enter the host IP; TCP 27055 and UDP 27056 must be reachable.
+   Spacewar: run Steam under separate accounts on two PCs and choose Spacewar
+   in Multiplayer on both. One player clicks Host game and Copy lobby ID. The
+   friend enters that ID and clicks Join game. Disconnect before changing transport.
+   The host can click Start story, or Back to choose a native episode/checkpoint.
 5. Use the same package on both machines. F8 opens diagnostics, F10 captures
    scene state, and F12 toggles available passenger seats.
+6. Multiplayer > Character previews face, hair, clothing, colors and accessories.
+   Apply look saves and shares; Discard or Back cancels unapplied changes.
+   Use the default Auto avatar source for customization. Explicit legacy avatar
+   overrides keep their own appearance. Both players must update to protocol 7.
 
 This package disables the forced Cabin test start and Steamworks test-app override.
-Steam friend invites/relay are not implemented; transport is direct TCP/UDP.
+Spacewar uses the included BepInEx/plugins/Spacewar helper for Steam P2P/relay.
+Keep its steam_api64.dll inside that helper folder. The game native library
+is independent. Same-PC paired testing uses LAN; Spacewar needs two accounts.
 
-Release build and snapshot/log regression checks pass. A complete two-player
+If joining fails, keep the error shown in Multiplayer. Spacewar waits for actual
+peer packets before reporting Connected. After reproducing the failure, run
+Collect-CoopDiagnostics.ps1 from the game folder on both PCs. It creates a local
+ZIP of recent logs and installed DLL/helper hashes; nothing is uploaded.
+
+Release build and pose/Steam-stream/snapshot/log regression checks pass. A complete two-player
 story run of this build is still pending. Full save/resume, reconnect validation,
 and ending/cinematic edge cases remain work to do.
 

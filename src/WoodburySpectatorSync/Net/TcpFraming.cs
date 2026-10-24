@@ -1,5 +1,5 @@
 using System;
-using System.Net.Sockets;
+using System.IO;
 
 namespace WoodburySpectatorSync.Net
 {
@@ -13,7 +13,7 @@ namespace WoodburySpectatorSync.Net
 
     internal static class TcpFraming
     {
-        public static FrameReadResult TryReadFrame(NetworkStream stream, byte[] lengthBuffer, out byte[] payload)
+        public static FrameReadResult TryReadFrame(Stream stream, byte[] lengthBuffer, out byte[] payload)
         {
             payload = null;
             if (!ReadExact(stream, lengthBuffer, 4)) return FrameReadResult.Disconnected;
@@ -33,7 +33,7 @@ namespace WoodburySpectatorSync.Net
             return ReadExact(stream, payload, payloadLength) ? FrameReadResult.Success : FrameReadResult.Disconnected;
         }
 
-        private static bool ReadExact(NetworkStream stream, byte[] buffer, int count)
+        private static bool ReadExact(Stream stream, byte[] buffer, int count)
         {
             var offset = 0;
             while (offset < count)

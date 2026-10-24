@@ -19,6 +19,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly CoopServer _server;
         private readonly RemoteAvatar _clientAvatar;
         private readonly Action<string> _sessionLogWrite;
+        private readonly CabinStoryParitySync _storyParity = new CabinStoryParitySync();
         private readonly VoiceChatSync _voiceChat;
         private readonly PlayerFootstepSync _footstepSync;
         private readonly CabinChaserTargetAssist _cabinChaserTargetAssist;
@@ -55,7 +56,12 @@ namespace WoodburySpectatorSync.Coop
         private readonly Dictionary<string, Vector3> _vehicleLastPositionById = new Dictionary<string, Vector3>(StringComparer.Ordinal);
         private readonly Dictionary<string, long> _vehicleLastPositionMsById = new Dictionary<string, long>(StringComparer.Ordinal);
         private readonly List<ICoopHostSceneAdapter> _sceneAdapters = new List<ICoopHostSceneAdapter>();
+        private readonly ScenePresentationSync _presentation = new ScenePresentationSync();
         private PlayerTransformState _pendingClientTransform;
+        private readonly LocalPlayerPose _localPose = new LocalPlayerPose();
+        private readonly CharacterProfileChannel _appearance = new CharacterProfileChannel();
+        private readonly Diagnostics.CharacterAppearanceProbe _appearanceProbe = new Diagnostics.CharacterAppearanceProbe();
+        private readonly PlayerPoseStream _remotePoseStream = new PlayerPoseStream();
         private bool _hasPendingClientTransform;
 
         private CabinDoor[] _cabinDoors = new CabinDoor[0];
@@ -507,7 +513,7 @@ namespace WoodburySpectatorSync.Coop
             InitializeSceneAdapters();
             CacheSceneObjects();
             OnSceneEnterAdapters(SceneManager.GetActiveScene().name);
-            SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("host", SceneManager.GetActiveScene().name, _logger, _sessionLogWrite);
+            SceneDiscoveryManifest.LogSceneCoverage("host", SceneManager.GetActiveScene().name, _logger, _sessionLogWrite);
             if (_settings.ModeSetting.Value == Mode.CoopHost)
             {
                 SceneDiscoveryDump.LogIfEnabled(_settings, "host", SceneManager.GetActiveScene(), _logger, _sessionLogWrite);
@@ -572,6 +578,7 @@ namespace WoodburySpectatorSync.Coop
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (!_server.IsRunning)
             {
+                _appearance.Reset(0);
                 ReleaseHostWait(nowMs, "server-stopped");
                 if (_lifecycle.State != SessionState.Disconnected)
                 {
@@ -637,6 +644,7 @@ namespace WoodburySpectatorSync.Coop
 
             EnsureRemotePlayer();
             DrainIncoming();
+            UpdateAppearance();
             BindDialogueUiSelection();
             MaintainHostDialogueInput(nowMs);
 
@@ -1041,6 +1049,8 @@ namespace WoodburySpectatorSync.Coop
 
         public void SetClientAvatar(PlayerTransformState state)
         {
+            if (!_remotePoseStream.Accept(state, 1, _server.ActiveSessionId, _sceneGeneration)) return;
+            _lastClientTransformMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (_remotePlayer != null && _remotePlayer.Root != null)
             {
                 _remotePlayer.SetActive(true);
@@ -1082,7 +1092,7 @@ namespace WoodburySpectatorSync.Coop
         private void UpdateFootsteps(long nowMs)
         {
             if (_footstepSync == null ||
-                !TryBuildHostTransform(out var transformState) ||
+                !_server.TryGetHostTransform(out var transformState) ||
                 !TryBuildHostInput(out var inputState))
             {
                 return;
@@ -1395,11 +1405,30 @@ namespace WoodburySpectatorSync.Coop
             }
         }
 
+        private int AppearanceSession => _server.IsClientConnected && _lifecycle.State >= SessionState.Connected && _lifecycle.State <= SessionState.Live ? _server.ActiveSessionId : 0;
+        private void UpdateAppearance()
+        {
+            var local = _appearance.Local(_settings.CharacterAppearance.Value);
+            local = _appearanceProbe.Select(true, local, AppearanceSession, _lifecycle.State == SessionState.Live && Array.IndexOf(SceneCatalog.GameplayScenes, SceneManager.GetActiveScene().name) >= 0, Time.realtimeSinceStartup);
+            var next = _appearance.Next(AppearanceSession, local, Time.realtimeSinceStartup);
+            if (next != null) _server.Enqueue(next);
+            _remotePlayer?.SetAppearance(_appearance.Remote);
+        }
+
         private void DrainIncoming()
         {
             var nowSeconds = Time.realtimeSinceStartup;
             while (_server.TryDequeueIncoming(out var message))
             {
+                if (message is CharacterAppearanceMessage appearance)
+                {
+                    if (_appearance.Accept(AppearanceSession, appearance))
+                    {
+                        _remotePlayer?.SetAppearance(_appearance.Remote);
+                        _sessionLogWrite?.Invoke("CharacterAppearance received role=host sid=" + appearance.SessionId + " revision=" + appearance.Revision + " profile=" + appearance.Profile);
+                    }
+                    continue;
+                }
                 if (message is HelloMessage hello)
                 {
                     HandleHello(hello);
@@ -1414,7 +1443,6 @@ namespace WoodburySpectatorSync.Coop
                 }
                 else if (message is PlayerTransformMessage playerTransform)
                 {
-                    _lastClientTransformMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                     if (!_lifecycle.IsLive)
                     {
                         _lifecycle.NoteDrop("PlayerTransform", "tcp", nowSeconds);
@@ -1803,7 +1831,7 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
-            if (!CabinPlayerBodyPose.TryResolve(fps, playerController, out var baseTransform, out _))
+            if (!CabinPlayerBodyPose.TryResolve(fps, playerController, out var baseTransform, out var bodySource))
             {
                 baseTransform = camera != null ? camera.transform : null;
             }
@@ -1822,6 +1850,7 @@ namespace WoodburySpectatorSync.Coop
                 CameraPosition = cameraTransform.position,
                 CameraRotation = cameraTransform.rotation
             };
+            _localPose.Capture(ref state, fps, playerController, baseTransform, bodySource, _server.ActiveSessionId, _sceneGeneration);
             return true;
         }
 
@@ -1959,6 +1988,9 @@ namespace WoodburySpectatorSync.Coop
             }
 
             EmitSceneAdapterSnapshot(nowMs);
+            // Re-send this small inventory: a removed slot can be reused by the same
+            // prefab, so a value-only cache would omit the instruction to recreate it.
+            PedestrianPoolSync.Emit((key, value) => _server.Enqueue(new StoryFlagMessage(key, value)));
         }
 
         private void SendCabinHouseFlags()
@@ -2041,6 +2073,10 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var cabinNowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            // These progress fields include native private state omitted by the old
+            // lists. A small reliable heartbeat also repairs local startup writes.
+            _storyParity.Emit(_cabinGameManager,
+                (key, value) => _server.Enqueue(new StoryFlagMessage(CabinGameFlagPrefix + key, value)), _sessionLogWrite);
             SendCabinCookingPropFlags(cabinNowMs);
             SendCabinBoardGameFlags(cabinNowMs);
             SendCabinAmbientFlags(cabinNowMs);
@@ -2989,7 +3025,7 @@ namespace WoodburySpectatorSync.Coop
         {
             var sceneName = SceneManager.GetActiveScene().name;
             if (string.IsNullOrEmpty(sceneName) ||
-                sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) < 0)
+                !SceneCatalog.HasOfficeWorld(sceneName))
             {
                 return;
             }
@@ -3175,17 +3211,14 @@ namespace WoodburySpectatorSync.Coop
 
             var syncedTransforms = new List<Transform>();
             CabinCookingPropSync.CollectSyncedTransforms(_cabinGameManager, syncedTransforms);
-            var hideCookingVisuals = CabinCookingPropSync.ShouldHideCookingVisuals(_cabinGameManager);
             for (var i = 0; i < syncedTransforms.Count; i++)
             {
                 var transform = syncedTransforms[i];
                 if (transform == null) continue;
-                var isCasserole = transform.GetComponent<CasseroleDish>() != null;
                 TryEnqueueAiState(
                     transform,
                     movementThreshold: 0.01f,
-                    rotationThreshold: 0.25f,
-                    activeOverride: isCasserole && hideCookingVisuals ? false : (bool?)null);
+                    rotationThreshold: 0.25f);
             }
         }
 
@@ -3260,7 +3293,7 @@ namespace WoodburySpectatorSync.Coop
                 return SendGenericNpcBrainStates(_roadTripNpcRegistry, sceneName, force, snapshot);
             }
 
-            if (sceneName.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (SceneCatalog.HasOfficeWorld(sceneName))
             {
                 return SendGenericNpcBrainStates(_officeNpcRegistry, sceneName, force, snapshot);
             }
@@ -4013,6 +4046,9 @@ namespace WoodburySpectatorSync.Coop
                 counts.Dialogue,
                 counts.Player,
                 counts.Custom));
+            _sessionLogWrite?.Invoke("SceneSnapshot role=host scene=" + sceneName + " gen=" + generation + " sid=" + sessionId +
+                " story=" + counts.Story + " doors=" + counts.Door + " holdables=" + counts.Holdable +
+                " ai=" + counts.Ai + " custom=" + counts.Custom + " total=" + counts.Total);
             _logger.LogInfo("Co-op session host: snapshot emitted gen=" + generation +
                 " story=" + counts.Story +
                 " doors=" + counts.Door +
@@ -4235,6 +4271,7 @@ namespace WoodburySpectatorSync.Coop
                 return;
             }
             UpdateRemotePlayerNameTag();
+            _remotePlayer.SetAppearance(_appearance.Remote);
             _remotePlayer.SetActive(_server.IsClientConnected);
 
             if (_hasInputState)
@@ -4372,7 +4409,7 @@ namespace WoodburySpectatorSync.Coop
             _lastSceneName = newScene.name;
             _cabinChaserTargetAssist?.Reset();
             OnSceneEnterAdapters(newScene.name);
-            SceneDiscoveryManifest.LogIfDiscoveryOnlyScene("host", newScene.name, _logger, _sessionLogWrite);
+            SceneDiscoveryManifest.LogSceneCoverage("host", newScene.name, _logger, _sessionLogWrite);
             if (_settings.ModeSetting.Value == Mode.CoopHost)
             {
                 SceneDiscoveryDump.LogIfEnabled(_settings, "host", newScene, _logger, _sessionLogWrite);
@@ -4474,9 +4511,12 @@ namespace WoodburySpectatorSync.Coop
         private void InitializeSceneAdapters()
         {
             _sceneAdapters.Clear();
+            _sceneAdapters.Add(new DelegateHostSceneAdapter("TypingShooter", scene => SceneCatalog.Matches("TypingShooter", scene),
+                () => { _officeLayoutGameManager = null; _officeFlags.Clear(); }, _ => SendOfficeLayoutFlags()));
+            _sceneAdapters.Add(new DelegateHostSceneAdapter("Credits", scene => SceneCatalog.Matches("Credits", scene), null, null));
             _sceneAdapters.Add(new DelegateHostSceneAdapter(
                 "Cabin",
-                IsCabinSceneName,
+                scene => SceneCatalog.Matches("Cabin", scene),
                 onSceneEnter: () =>
                 {
                     _cabinHouseManager = null;
@@ -4497,7 +4537,7 @@ namespace WoodburySpectatorSync.Coop
 
             _sceneAdapters.Add(new DelegateHostSceneAdapter(
                 "Pizzeria",
-                scene => scene.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0,
+                scene => SceneCatalog.Matches("Pizzeria", scene),
                 onSceneEnter: () =>
                 {
                     _pizzeriaGameManager = null;
@@ -4509,7 +4549,7 @@ namespace WoodburySpectatorSync.Coop
 
             _sceneAdapters.Add(new DelegateHostSceneAdapter(
                 "RoadTrip",
-                scene => scene.IndexOf("RoadTrip", StringComparison.OrdinalIgnoreCase) >= 0,
+                scene => SceneCatalog.Matches("RoadTrip", scene),
                 onSceneEnter: () =>
                 {
                     _roadTripGameManager = null;
@@ -4521,7 +4561,7 @@ namespace WoodburySpectatorSync.Coop
 
             _sceneAdapters.Add(new DelegateHostSceneAdapter(
                 "OfficeLayout",
-                scene => scene.IndexOf("Office", StringComparison.OrdinalIgnoreCase) >= 0,
+                scene => SceneCatalog.Matches("OfficeLayout", scene),
                 onSceneEnter: () =>
                 {
                     _officeLayoutGameManager = null;
@@ -4531,8 +4571,7 @@ namespace WoodburySpectatorSync.Coop
 
             _sceneAdapters.Add(new DelegateHostSceneAdapter(
                 "ParkingLot",
-                scene => scene.IndexOf("Parking", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                         scene.IndexOf("Lot", StringComparison.OrdinalIgnoreCase) >= 0,
+                scene => SceneCatalog.Matches("ParkingLot", scene),
                 onSceneEnter: () =>
                 {
                     _parkingLotGameManager = null;
@@ -4552,6 +4591,7 @@ namespace WoodburySpectatorSync.Coop
                 }
 
                 adapter.OnSceneEnter();
+                _sessionLogWrite?.Invoke("SceneAdapter role=host scene=" + sceneName + " adapter=" + adapter.Name);
             }
         }
 
@@ -5354,6 +5394,16 @@ namespace WoodburySpectatorSync.Coop
             if (!_clientSceneReady)
             {
                 return false;
+            }
+
+            var presentation = _presentation.Capture(force, line => _sessionLogWrite?.Invoke(line + " gen=" + _sceneHandshake.Generation + " sid=" + _server.ActiveSessionId));
+            if (presentation != null)
+            {
+                _server.Enqueue(new UiMirrorStateMessage(new UiMirrorState {
+                    SessionId = _server.ActiveSessionId, Generation = _sceneHandshake.Generation, UiSeq = ++_uiMirrorSeq,
+                    UnixTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), SceneName = SceneManager.GetActiveScene().name,
+                    UiKind = ScenePresentationSync.UiKind, Text = presentation, Visible = true
+                }));
             }
 
             string payload;

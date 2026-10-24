@@ -20,7 +20,9 @@ namespace WoodburySpectatorSync.Coop
         private readonly object _sendLock = new object();
 
         private TcpClient _client;
-        private NetworkStream _stream;
+        private Stream _stream;
+        private bool _useSpacewar;
+        private SpacewarStream _spacewar;
         private Thread _connectThread;
         private Thread _receiveThread;
         private Thread _sendThread;
@@ -71,6 +73,7 @@ namespace WoodburySpectatorSync.Coop
         }
 
         public bool IsConnected => _connected;
+        public bool IsRunning => _running;
         public string Status { get; private set; }
         public bool HasUdp => _udpChannel != null && _udpChannel.HasRemoteEndpoint;
         public long LastTcpReceiveMs => Interlocked.Read(ref _lastTcpReceiveMs);
@@ -86,6 +89,7 @@ namespace WoodburySpectatorSync.Coop
         public long HostStateReadCount => Interlocked.Read(ref _hostStateReadCount);
         public long HostStateEnqueuedCount => Interlocked.Read(ref _hostStateEnqueuedCount);
         public int ActiveSessionId => _activeHostSession != null ? _activeHostSession.SessionId : 0;
+        public string LastDisconnectReason { get; private set; } = string.Empty;
         public int LatestHostTransformSeq
         {
             get
@@ -170,18 +174,28 @@ namespace WoodburySpectatorSync.Coop
         public void Connect()
         {
             if (_running) return;
+            if (_connectThread != null && _connectThread != Thread.CurrentThread && _connectThread.IsAlive && !_connectThread.Join(2000))
+            {
+                Status = "Previous connection is still closing. Try Join again.";
+                LastDisconnectReason = Status;
+                return;
+            }
+            LastDisconnectReason = string.Empty;
             _running = true;
+            _useSpacewar = _settings.Transport.Value == CoopTransport.Spacewar;
             Status = "Connecting";
             _connectThread = new Thread(ConnectLoop) { IsBackground = true, Name = "WSS-CoopConnect" };
             _connectThread.Start();
         }
 
-        public void Disconnect()
+        public void Disconnect(string reason = null)
         {
             _running = false;
             _connected = false;
-            Status = "Disconnected";
+            LastDisconnectReason = reason ?? string.Empty;
+            Status = string.IsNullOrEmpty(reason) ? "Disconnected" : reason;
             Cleanup();
+            if (_connectThread != null && _connectThread != Thread.CurrentThread) _connectThread.Join(1500);
         }
 
         public void Enqueue(Message message)
@@ -243,6 +257,16 @@ namespace WoodburySpectatorSync.Coop
                 try
                 {
                     Status = "Connecting";
+                    if (_useSpacewar)
+                    {
+                        var steam = new SpacewarStream(Path.Combine(BepInEx.Paths.PluginPath, "Spacewar"), false, _settings.SpacewarLobbyId.Value,
+                            text => { Status = text; _logger.LogInfo(text); });
+                        _spacewar = steam;
+                        _stream = steam;
+                        steam.WaitForPeer(() => _running);
+                    }
+                    else
+                    {
                     _client = new TcpClient();
                     _client.NoDelay = true;
                     _logger.LogInfo("Co-op connecting to host " +
@@ -250,6 +274,9 @@ namespace WoodburySpectatorSync.Coop
                         " timeout=" + ConnectTimeoutMs + "ms");
                     ConnectWithTimeout(_client, _settings.SpectatorHostIP.Value, _settings.HostPort.Value, ConnectTimeoutMs);
                     _stream = _client.GetStream();
+                    }
+                    if (!_running) break;
+                    LastDisconnectReason = string.Empty;
                     _connected = true;
                     _activeHostSession = new HostSessionInfo
                     {
@@ -262,7 +289,7 @@ namespace WoodburySpectatorSync.Coop
                     _logger.LogInfo("Co-op connected to host session=" + _activeHostSession.SessionId +
                         " endpoint=" + _activeHostSession.Host + ":" + _activeHostSession.Port);
 
-                    StartUdp();
+                    if (!_useSpacewar) StartUdp();
 
                     _receiveThread = new Thread(ReceiveLoop) { IsBackground = true, Name = "WSS-CoopReceive" };
                     _sendThread = new Thread(SendLoop) { IsBackground = true, Name = "WSS-CoopSend" };
@@ -270,16 +297,18 @@ namespace WoodburySpectatorSync.Coop
                     _sendThread.Start();
 
                     _receiveThread.Join();
+                    if (_sendThread != null) _sendThread.Join(1000);
                 }
                 catch (Exception ex)
                 {
-                    if (!_running || IsExpectedDisconnectException(ex))
+                    if (!_running)
                     {
-                        Status = "Disconnected";
+                        if (string.IsNullOrEmpty(LastDisconnectReason)) Status = "Disconnected";
                     }
                     else
                     {
-                        Status = "Retrying";
+                        RecordFailure("connect", ex.Message);
+                        if (_useSpacewar) _running = false;
                         var hostLabel = _settings != null && _settings.SpectatorHostIP != null
                             ? (_settings.SpectatorHostIP.Value ?? "?")
                             : "?";
@@ -319,12 +348,14 @@ namespace WoodburySpectatorSync.Coop
                     if (readResult == FrameReadResult.PayloadTooLarge)
                     {
                         _logger.LogWarning("Co-op protocol error code=PayloadTooLarge detail=tcp-frame");
-                        Status = "Protocol error";
+                        RecordFailure("receive", "Host sent a frame larger than the protocol limit.");
+                        _running = false;
                         break;
                     }
                     if (readResult == FrameReadResult.BadFrame)
                     {
-                        Status = "Bad frame";
+                        RecordFailure("receive", "Host sent an invalid frame length. Install the same complete mod package on both PCs.");
+                        _running = false;
                         break;
                     }
 
@@ -334,7 +365,7 @@ namespace WoodburySpectatorSync.Coop
                         if (IsFatalProtocolError(errorCode))
                         {
                             _logger.LogWarning("Co-op client disconnecting on fatal protocol error code=" + errorCode);
-                            Status = "Protocol mismatch";
+                            RecordFailure("protocol", errorCode + ": " + error + ". Install the same complete mod package on both PCs.");
                             _running = false;
                             break;
                         }
@@ -390,15 +421,16 @@ namespace WoodburySpectatorSync.Coop
             }
             catch (Exception ex)
             {
-                if (_running && !IsExpectedDisconnectException(ex))
-                {
-                    _logger.LogWarning("Co-op receive error: " + ex.Message);
-                }
+                if (_running) RecordFailure("receive", ex.Message);
             }
             finally
             {
+                if (_running && string.IsNullOrEmpty(LastDisconnectReason)) RecordFailure("receive", "Host closed the connection.");
+                // A Steam lobby can change when the host reconnects. Do not silently
+                // retry an expired lobby and erase the reason the session ended.
+                if (_useSpacewar) _running = false;
                 _connected = false;
-                Status = "Disconnected";
+                Status = string.IsNullOrEmpty(LastDisconnectReason) ? "Disconnected" : LastDisconnectReason;
                 Cleanup();
             }
         }
@@ -419,10 +451,10 @@ namespace WoodburySpectatorSync.Coop
             }
             catch (Exception ex)
             {
-                if (_running && !IsExpectedDisconnectException(ex))
-                {
-                    _logger.LogWarning("Co-op send error: " + ex.Message);
-                }
+                if (_running) RecordFailure("send", ex.Message);
+                if (_useSpacewar) _running = false;
+                _connected = false;
+                try { _stream?.Close(); } catch { }
             }
         }
 
@@ -431,12 +463,18 @@ namespace WoodburySpectatorSync.Coop
             if (frame == null || frame.Length == 0) return;
             lock (_sendLock)
             {
-                try
-                {
-                    _stream?.Write(frame, 0, frame.Length);
-                }
-                catch { }
+                var stream = _stream;
+                if (stream == null) throw new IOException("Co-op stream closed.");
+                stream.Write(frame, 0, frame.Length);
             }
+        }
+
+        private void RecordFailure(string stage, string detail)
+        {
+            if (string.IsNullOrEmpty(LastDisconnectReason))
+                LastDisconnectReason = (_useSpacewar ? "Spacewar" : "LAN") + " " + stage + " failed: " + detail;
+            Status = LastDisconnectReason;
+            _logger.LogWarning("Co-op disconnect reason=" + LastDisconnectReason + " stage=" + stage);
         }
 
         private void Cleanup()
@@ -444,7 +482,9 @@ namespace WoodburySpectatorSync.Coop
             try { _stream?.Close(); } catch { }
             try { _client?.Close(); } catch { }
             _stream = null;
+            _spacewar = null;
             _client = null;
+            while (_outgoing.TryDequeue(out _)) { }
             _udpChannel?.Stop();
             _udpChannel = null;
             DrainQueue(_incomingPriority);
@@ -534,6 +574,7 @@ namespace WoodburySpectatorSync.Coop
         {
             switch (message.Type)
             {
+                case MessageType.CharacterAppearance: return Protocol.BuildCharacterAppearance((CharacterAppearanceMessage)message);
                 case MessageType.PlayerTransform:
                     return Protocol.BuildPlayerTransform(((PlayerTransformMessage)message).State);
                 case MessageType.InteractRequest:
@@ -724,6 +765,11 @@ namespace WoodburySpectatorSync.Coop
 
             lock (_latestHostTransformLock)
             {
+                if (_latestHostTransformSeq != 0 &&
+                    (state.SessionId < _latestHostTransform.SessionId ||
+                     (state.SessionId == _latestHostTransform.SessionId &&
+                      (state.Generation < _latestHostTransform.Generation ||
+                       (state.Generation == _latestHostTransform.Generation && unchecked((int)(state.Sequence - _latestHostTransform.Sequence)) <= 0))))) return;
                 _latestHostTransform = state;
                 _latestHostTransformSeq++;
             }

@@ -1,11 +1,41 @@
 {
-  "plugin": "0.4.44",
-  "protocol": 5,
-  "builtAtUtc": "2026-09-13T00:43:35.0236893Z",
-  "sourceCommit": "1dea8ff6f70e410c217bad15507c0a7174fe1cac",
+  "plugin": "0.4.49",
+  "protocol": 7,
+  "builtAtUtc": "2026-10-24T00:09:25.3456646Z",
+  "sourceCommit": "f94a6b1fdb4f2aa6b35c56541bc989c1011cb94e",
   "sourceHasLocalChanges": true,
-  "pluginSha256": "c645f55b1cc43ac9763f64683e4ea975962fa92df87e62b04cb48b89856f7cfe",
-  "validation": "Release build and snapshot/log regression checks passed; full gameplay pass pending.",
-  "archiveSha256": "7af9ec6487d39c145d8e4ada9fd00632c04b03fe5ebc1c18e9057a4fd4c7374d",
-  "sizeBytes": 8043044
+  "pluginSha256": "5e31a5e6a711923f5fb5059aaf461395f03c175f184ee389dfdc8836d6b8dd47",
+  "validation": "Release/regression checks passed; all ten build scenes passed paired LAN scene/snapshot/rig smoke (Disclaimer boot only). Full story, visual calibration and two-account Spacewar play remain pending.",
+  "runtimeValidation": [
+    {
+      "transport": "LAN TCP only",
+      "buildScenes": 10,
+      "gameplayScenes": 6,
+      "fullStory": false,
+      "nativeMenuAndAnimations": true,
+      "nativeStoryParity": true,
+      "characterAppearance": true,
+      "reportSha256": "8916ab7203588b7a8bb7fbcbb070b73f9c07e2ed172a9a5454ca808e7024c285",
+      "environmentErrors": [
+        "System.EntryPointNotFoundException: SteamAPI_ManualDispatch_Init assembly:<unknown assembly> type:<unknown type> member:(null)",
+        "NullReferenceException: Object reference not set to an instance of an object at Steamworks.Data.Achievement.Trigger (System.Boolean apply) [0x00006] in <19bd4cc6a4004258bf538b05ac1133d6>:0 [same process failed Steam initialization]"
+      ]
+    },
+    {
+      "transport": "LAN TCP+UDP",
+      "buildScenes": 10,
+      "gameplayScenes": 6,
+      "fullStory": false,
+      "nativeMenuAndAnimations": true,
+      "nativeStoryParity": true,
+      "characterAppearance": true,
+      "reportSha256": "4c3526a9df6193c4ce7668fe74d5bb71b048d67eacd23897a035e023ecdbbdb8",
+      "environmentErrors": [
+        "System.EntryPointNotFoundException: SteamAPI_ManualDispatch_Init assembly:<unknown assembly> type:<unknown type> member:(null)",
+        "NullReferenceException: Object reference not set to an instance of an object at Steamworks.Data.Achievement.Trigger (System.Boolean apply) [0x00006] in <19bd4cc6a4004258bf538b05ac1133d6>:0 [same process failed Steam initialization]"
+      ]
+    }
+  ],
+  "archiveSha256": "2b9c22f5ee18f469363e5d9a1bcd2bafdee742ee121490da6eecd065877e4d37",
+  "sizeBytes": 8296852
 }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Fears to Fathom: Woodbury Getaway Co-op Mod — Multiplayer Status &amp; Roadmap</title>
-<meta name="description" content="Play Fears to Fathom: Woodbury Getaway with a friend. Unofficial co-op multiplayer mod for the Steam horror game. Live coverage status, roadmap, and source on GitHub.">
+<meta name="description" content="Experimental two-player co-op with synchronized characters and scene-specific world state. Full story parity and two-PC Spacewar gameplay remain unverified.">
 <meta name="keywords" content="Fears to Fathom, Woodbury Getaway, co-op mod, multiplayer mod, F2F coop, Woodbury multiplayer, Woodbury coop, horror game co-op, BepInEx mod">
 <meta name="author" content="tudorek12345">
 <meta name="referrer" content="no-referrer">
@@ -40,7 +40,7 @@
   "applicationSubCategory": "Game mod",
   "operatingSystem": "Windows",
   "softwareRequirements": "Fears to Fathom: Woodbury Getaway, BepInEx 5 Mono, .NET 4.7.2",
-  "description": "Unofficial co-op multiplayer mod that lets two players play Fears to Fathom: Woodbury Getaway together. Host runs the real game; the second player joins and the scripted scares happen to both players in sync.",
+  "description": "Experimental two-player co-op with synchronized characters and scene-specific world state. Full story parity and two-PC Spacewar gameplay remain unverified.",
   "url": "https://tudorek12345.github.io/fears-to-fathom-woodbury-getaway-mp-mod/",
   "sameAs": ["https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod"],
   "author": {"@type": "Person", "name": "tudorek12345"},
@@ -64,7 +64,7 @@
     {
       "@type": "Question",
       "name": "Is there a co-op or multiplayer mod for Fears to Fathom: Woodbury Getaway?",
-      "acceptedAnswer": {"@type": "Answer", "text": "Yes. Woodbury Co-op is an unofficial mod that adds 2-player online co-op multiplayer to Fears to Fathom: Woodbury Getaway. One player hosts the real game and a friend connects, so the same Mike, the same scares, and the same scripted moments happen to both players at once."}
+      "acceptedAnswer": {"@type": "Answer", "text": "Yes. Woodbury Co-op is an unofficial mod that adds 2-player online co-op multiplayer to Fears to Fathom: Woodbury Getaway. One player hosts and a friend connects. Scene-specific synchronization is implemented, but a complete paired story playthrough and two-PC Spacewar gameplay remain unverified."}
     },
     {
       "@type": "Question",
@@ -176,23 +176,13 @@
     <div class="hero-eyebrow">Unofficial fan co-op mod · Source available</div>
     <div class="f2f-logotype" aria-hidden="true"><span>FEARS</span><span>TO</span><span>FATHOM</span></div>
     <h1 class="hero-title"><span class="grad">Woodbury Getaway</span><br>Multiplayer Co<span class="co-colon">:</span>op</h1>
-    <p class="hero-sub" id="hero-subhead">Play the Steam horror game with a friend — one of you hosts, the other connects, and the scares happen to both of you at the same time.</p>
+    <p class="hero-sub" id="hero-subhead">Experimental two-player co-op with synchronized characters and scene-specific world state. Full story parity and two-PC Spacewar gameplay remain unverified.</p>
 
     <div class="hero-badges" id="hero-badges">
       <!-- filled by app.js -->
     </div>
 
     <div class="hero-cta-row">
-      <div class="progress-ring" role="img" aria-label="Estimated sync implementation coverage">
-        <svg viewBox="0 0 120 120" aria-hidden="true">
-          <circle class="ring-track" cx="60" cy="60" r="52"></circle>
-          <circle class="ring-fill" cx="60" cy="60" r="52" id="ring-fill"></circle>
-        </svg>
-        <div class="ring-label">
-          <div class="ring-percent" id="ring-percent">60<span>%</span></div>
-          <div class="ring-caption">estimated</div>
-        </div>
-      </div>
       <div class="hero-actions">
         <div class="cta-row">
           <a class="btn btn-primary" id="hero-repo" href="downloads/woodbury-coop-latest.7z" download>Download test build</a>
@@ -240,31 +230,19 @@
 <section id="gallery" class="section section-alt">
   <div class="container">
     <header class="section-head">
-      <span class="eyebrow">See it in action</span>
-      <h2>Development build showcase</h2>
-      <p>Current test-build screenshots: two-player Cabin and Pizzeria runs, vehicle seats, UI mirroring, synced NPCs, and debug overlays. Press <b>F11</b> in-game to host or connect.</p>
+      <span class="eyebrow">Actual development captures · 0.4.49</span>
+      <h2>Menus, characters &amp; live appearance sync</h2>
+      <p>October 24 captures of the new Co-op and Character tabs, outfit/face previews and both remote bodies in Office. These show focused tests, not a completed story run. The stylized model still needs visual refinement.</p>
     </header>
     <div class="shot-grid">
-      <figure class="shot shot-feature shot-live shot-keep">
-        <a href="https://imgur.com/a/JlH4ppj" target="_blank" rel="noopener noreferrer">
-          <img src="assets/showcase/cabin-sync-pair.jpg?v=20260617" alt="Two Woodbury Co-op players in a synced Cabin test run" loading="lazy">
-          <span class="shot-fallback">Open the Woodbury Co-op development showcase album</span>
-        </a>
-        <figcaption>Latest development showcase — Cabin, Pizzeria, driving, UI, and two-player sync tests</figcaption>
-      </figure>
-      <a class="shot shot-album" href="https://imgur.com/a/JlH4ppj" target="_blank" rel="noopener noreferrer">
-        <div>
-          <span class="eyebrow">Dev album</span>
-          <h3>More test-run screenshots</h3>
-          <p>The live page uses local screenshots so it does not depend on Imgur embeds. Open the album for the full dev screenshot set.</p>
-          <strong>Open album →</strong>
-        </div>
-      </a>
+      <figure class="shot"><a href="assets/showcase/049/coop-menu.png"><img src="assets/showcase/049/coop-menu.png" alt="Co-op menu" loading="lazy" width="1280" height="720"></a><figcaption>Native Multiplayer entry opens these host/join controls.</figcaption></figure>
+      <figure class="shot"><a href="assets/showcase/049/character-default.png"><img src="assets/showcase/049/character-default.png" alt="Character editor with full-body preview" loading="lazy" width="1280" height="720"></a><figcaption>Original skinned traveler with selectable face, hair and clothing.</figcaption></figure>
+      <figure class="shot"><a href="assets/showcase/049/character-outfit.png"><img src="assets/showcase/049/character-outfit.png" alt="Puffer outfit preview" loading="lazy" width="1280" height="720"></a><figcaption>Changed outerwear, colors and accessories in the character editor.</figcaption></figure>
+      <figure class="shot"><a href="assets/showcase/049/character-face.png"><img src="assets/showcase/049/character-face.png" alt="Face and hair preview" loading="lazy" width="1280" height="720"></a><figcaption>Close-up framing for face, skin, hair and accessories.</figcaption></figure>
+      <figure class="shot shot-portrait"><a href="assets/showcase/049/remote-client.png"><img src="assets/showcase/049/remote-client.png" alt="Remote client character in Office" loading="lazy" width="512" height="768"></a><figcaption>Isolated diagnostic render of the remote client body after a live appearance change in Office.</figcaption></figure>
+      <figure class="shot shot-portrait"><a href="assets/showcase/049/remote-host.png"><img src="assets/showcase/049/remote-host.png" alt="Remote host character in Office" loading="lazy" width="512" height="768"></a><figcaption>Isolated diagnostic render of the remote host body after a live appearance change in Office.</figcaption></figure>
     </div>
-    <div class="showcase-actions">
-      <a href="downloads/woodbury-coop-latest.7z" download>Download current test build</a>
-      <a href="https://imgur.com/a/JlH4ppj" target="_blank" rel="noopener noreferrer">Open the full showcase album →</a>
-    </div>
+    <p><a href="https://github.com/tudorek12345/fears-to-fathom-woodbury-getaway-mp-mod/blob/main/docs/VALIDATION-0.4.49.md">Validation evidence and known limitations →</a></p>
   </div>
 </section>
 
@@ -274,7 +252,7 @@
     <header class="section-head">
       <span class="eyebrow">What works today</span>
       <h2>Status by chapter</h2>
-      <p>Five chapters have sync implementations. These percentages estimate code coverage; they are not measured playthrough completion rates. Open a card for implemented features and remaining gaps. A complete two-player run of the current build is still pending.</p>
+      <p>All ten build scenes passed paired scene-entry smoke tests in TCP-only and TCP+UDP runs (Disclaimer boot only). Six gameplay scenes plus the additive typing world passed character checks. The chapter cards describe implemented sync and gaps; none represents a completed story parity certification.</p>
     </header>
     <div class="scene-grid" id="scene-grid">
       <!-- rendered by app.js -->
@@ -288,11 +266,11 @@
     <header class="section-head">
       <span class="eyebrow">Under the hood</span>
       <h2>Features &amp; systems</h2>
-      <p>The pieces that make co-op work across every chapter — voice, NPCs, doors, dialogue, vehicles, save state. Filter to see what's done, partial, or missing.</p>
+      <p>Implementation status for voice, NPCs, doors, dialogue, vehicles and save state. Implemented means code exists; it does not certify end-to-end story parity. The reported two-PC Spacewar disconnect still needs reproduction and verification.</p>
     </header>
     <div class="filter-chips" id="filter-chips" role="tablist">
       <button class="chip is-active" data-filter="all" role="tab" aria-selected="true">All</button>
-      <button class="chip" data-filter="done" role="tab" aria-selected="false">Done</button>
+      <button class="chip" data-filter="done" role="tab" aria-selected="false">Implemented</button>
       <button class="chip" data-filter="partial" role="tab" aria-selected="false">Partial</button>
       <button class="chip" data-filter="missing" role="tab" aria-selected="false">Missing</button>
     </div>
@@ -546,7 +524,7 @@
     <div class="faq-list">
       <details class="faq-item" open>
         <summary>Is there a co-op or multiplayer mod for Fears to Fathom: Woodbury Getaway?</summary>
-        <p>Yes — <b>Woodbury Co-op</b> is an unofficial mod that adds 2-player online co-op multiplayer to <i>Fears to Fathom: Woodbury Getaway</i>. One player hosts the real game and a friend connects, so the same Mike, the same scares, and the same scripted moments happen to both players at once.</p>
+        <p>Yes — <b>Woodbury Co-op</b> is an unofficial mod that adds 2-player online co-op multiplayer to <i>Fears to Fathom: Woodbury Getaway</i>. One player hosts and a friend connects. Scene-specific synchronization is implemented, but a complete paired story playthrough and two-PC Spacewar gameplay remain unverified.</p>
       </details>
       <details class="faq-item">
         <summary>How do you play Fears to Fathom: Woodbury Getaway in co-op?</summary>

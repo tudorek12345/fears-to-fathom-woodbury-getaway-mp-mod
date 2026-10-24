@@ -9,7 +9,7 @@ namespace WoodburySpectatorSync.Coop
         private readonly string _name;
         private readonly Color _color;
 
-        public Transform Root => _root.transform;
+        public Transform Root => _root != null ? _root.transform : null;
         public Transform CameraAnchor => _cameraAnchor;
 
         public RemoteAvatar(string name, Color color)

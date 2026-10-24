@@ -158,10 +158,13 @@ namespace WoodburySpectatorSync.Coop
             var casserole = GetCasserole(manager);
             if (casserole != null)
             {
-                Emit(fullPrefix + CasserolePrefix + "RootActive", casserole.gameObject.activeSelf && !hideCookingVisuals ? 1 : 0, emit, ref hash);
-                Emit(fullPrefix + CasserolePrefix + "PickableEnabled", !hideCookingVisuals && IsBehaviourEnabled(casserole, "pickableComponent") ? 1 : 0, emit, ref hash);
-                Emit(fullPrefix + CasserolePrefix + "PointLight", !hideCookingVisuals && IsLightEnabled(casserole, "pointLight") ? 1 : 0, emit, ref hash);
-                Emit(fullPrefix + CasserolePrefix + "IngredientMask", hideCookingVisuals ? 0 : BuildIngredientMask(casserole), emit, ref hash);
+                // The oven casserole remains present during board games, including
+                // episode starts. Mirror its actual state, independently of Mike's
+                // phase-gated carried food props.
+                Emit(fullPrefix + CasserolePrefix + "RootActive", casserole.gameObject.activeSelf ? 1 : 0, emit, ref hash);
+                Emit(fullPrefix + CasserolePrefix + "PickableEnabled", IsBehaviourEnabled(casserole, "pickableComponent") ? 1 : 0, emit, ref hash);
+                Emit(fullPrefix + CasserolePrefix + "PointLight", IsLightEnabled(casserole, "pointLight") ? 1 : 0, emit, ref hash);
+                Emit(fullPrefix + CasserolePrefix + "IngredientMask", BuildIngredientMask(casserole), emit, ref hash);
 
                 for (var i = 0; i < CasseroleBoolFields.Length; i++)
                 {
@@ -172,7 +175,7 @@ namespace WoodburySpectatorSync.Coop
                 for (var i = 0; i < CasseroleActiveFields.Length; i++)
                 {
                     var name = CasseroleActiveFields[i];
-                    Emit(fullPrefix + CasseroleActivePrefix + name, !hideCookingVisuals && GetObjectActive(casserole, name) ? 1 : 0, emit, ref hash);
+                    Emit(fullPrefix + CasseroleActivePrefix + name, GetObjectActive(casserole, name) ? 1 : 0, emit, ref hash);
                 }
             }
 
@@ -305,20 +308,6 @@ namespace WoodburySpectatorSync.Coop
         {
             if (!ShouldHideCookingVisuals(manager)) return;
 
-            var casserole = GetCasserole(manager);
-            if (casserole != null)
-            {
-                casserole.gameObject.SetActive(false);
-                TrySetBehaviourEnabled(casserole, "pickableComponent", false);
-                TrySetLightEnabled(casserole, "pointLight", false);
-                TryApplyIngredientMask(casserole, 0);
-
-                for (var i = 0; i < CasseroleActiveFields.Length; i++)
-                {
-                    TrySetObjectActive(casserole, CasseroleActiveFields[i], false);
-                }
-            }
-
             var cook = GetMikeCookController(manager);
             if (cook != null)
             {
@@ -330,13 +319,10 @@ namespace WoodburySpectatorSync.Coop
         {
             if (manager == null || transforms == null) return;
 
-            if (!ShouldHideCookingVisuals(manager))
+            var casserole = GetCasseroleTransform(manager);
+            if (casserole != null)
             {
-                var casserole = GetCasseroleTransform(manager);
-                if (casserole != null)
-                {
-                    AddUniqueTransform(transforms, casserole);
-                }
+                AddUniqueTransform(transforms, casserole);
             }
 
             var sequence = manager.CurrentSequence;

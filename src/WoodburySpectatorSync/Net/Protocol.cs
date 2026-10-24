@@ -37,7 +37,8 @@ namespace WoodburySpectatorSync.Net
         CameraRigState = 28,
         PathVehicleState = 29,
         SceneEventState = 30,
-        VoiceFrame = 31
+        VoiceFrame = 31,
+        CharacterAppearance = 32
     }
 
     public enum ProtocolParseErrorCode
@@ -549,6 +550,13 @@ namespace WoodburySpectatorSync.Net
         public float Fov;
     }
 
+    [Flags]
+    public enum PlayerPoseFlags : ushort
+    {
+        None = 0, Valid = 1, Crouching = 2, Sprinting = 4, Airborne = 8,
+        Seated = 16, LeftHand = 32, RightHand = 64, All = 127
+    }
+
     public struct PlayerTransformState
     {
         public byte PlayerId;
@@ -556,6 +564,15 @@ namespace WoodburySpectatorSync.Net
         public Quaternion Rotation;
         public Vector3 CameraPosition;
         public Quaternion CameraRotation;
+        public int SessionId;
+        public int Generation;
+        public uint Sequence;
+        public PlayerPoseFlags PoseFlags;
+        public Vector3 LocalVelocity;
+        public Vector3 LeftHandPosition;
+        public Quaternion LeftHandRotation;
+        public Vector3 RightHandPosition;
+        public Quaternion RightHandRotation;
     }
 
     public struct DoorState
@@ -726,11 +743,11 @@ namespace WoodburySpectatorSync.Net
         public bool Sprint;
     }
 
-    public static class Protocol
+    public static partial class Protocol
     {
         public const uint Magic = 0x57535331; // "WSS1"
-        public const ushort Version = 5;
-        public const string PluginVersion = "0.4.44";
+        public const ushort Version = 7;
+        public const string PluginVersion = "0.4.49";
         public const int MaxPayloadBytes = 1024 * 1024;
 
         public static byte[] BuildFrame(byte[] payload)
@@ -1222,6 +1239,9 @@ namespace WoodburySpectatorSync.Net
                     var type = (MessageType)reader.ReadUInt16();
                     switch (type)
                     {
+                        case MessageType.CharacterAppearance:
+                            message = ReadCharacterAppearance(reader);
+                            return true;
                         case MessageType.CameraState:
                             var state = new CameraState
                             {
@@ -1288,28 +1308,16 @@ namespace WoodburySpectatorSync.Net
                                 if (hasTransform != 0)
                                 {
                                     pong.HasTransform = true;
-                                    pong.Transform = new PlayerTransformState
-                                    {
-                                        PlayerId = reader.ReadByte(),
-                                        Position = ReadVector3(reader),
-                                        Rotation = ReadQuaternion(reader),
-                                        CameraPosition = ReadVector3(reader),
-                                        CameraRotation = ReadQuaternion(reader)
-                                    };
+                                    pong.Transform = ReadPlayerTransform(reader);
                                 }
                             }
+                            if (ms.Position != ms.Length) throw new InvalidDataException("Trailing pong data");
                             message = pong;
                             return true;
                         }
                         case MessageType.PlayerTransform:
-                            message = new PlayerTransformMessage(new PlayerTransformState
-                            {
-                                PlayerId = reader.ReadByte(),
-                                Position = ReadVector3(reader),
-                                Rotation = ReadQuaternion(reader),
-                                CameraPosition = ReadVector3(reader),
-                                CameraRotation = ReadQuaternion(reader)
-                            });
+                            message = new PlayerTransformMessage(ReadPlayerTransform(reader));
+                            if (ms.Position != ms.Length) throw new InvalidDataException("Trailing player pose data");
                             return true;
                         case MessageType.InteractRequest:
                             message = new InteractRequestMessage(reader.ReadByte(), ReadString(reader), reader.ReadByte());
@@ -1585,6 +1593,30 @@ namespace WoodburySpectatorSync.Net
             WriteQuaternion(writer, state.Rotation);
             WriteVector3(writer, state.CameraPosition);
             WriteQuaternion(writer, state.CameraRotation);
+            writer.Write(state.SessionId);
+            writer.Write(state.Generation);
+            writer.Write(state.Sequence);
+            writer.Write((ushort)state.PoseFlags);
+            WriteVector3(writer, state.LocalVelocity);
+            WriteVector3(writer, state.LeftHandPosition);
+            WriteQuaternion(writer, state.LeftHandRotation);
+            WriteVector3(writer, state.RightHandPosition);
+            WriteQuaternion(writer, state.RightHandRotation);
+        }
+
+        private static PlayerTransformState ReadPlayerTransform(BinaryReader reader)
+        {
+            var state = new PlayerTransformState
+            {
+                PlayerId = reader.ReadByte(), Position = ReadVector3(reader), Rotation = ReadQuaternion(reader),
+                CameraPosition = ReadVector3(reader), CameraRotation = ReadQuaternion(reader),
+                SessionId = reader.ReadInt32(), Generation = reader.ReadInt32(), Sequence = reader.ReadUInt32(),
+                PoseFlags = (PlayerPoseFlags)reader.ReadUInt16(), LocalVelocity = ReadVector3(reader),
+                LeftHandPosition = ReadVector3(reader), LeftHandRotation = ReadQuaternion(reader),
+                RightHandPosition = ReadVector3(reader), RightHandRotation = ReadQuaternion(reader)
+            };
+            if (!Coop.PlayerPoseRules.IsValid(state)) throw new InvalidDataException("Invalid player pose");
+            return state;
         }
 
         private static Quaternion ReadQuaternion(BinaryReader reader)

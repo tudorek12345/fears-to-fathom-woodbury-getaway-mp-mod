@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Woodbury.Spacewar</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="../../src/WoodburySpectatorSync/Net/SpacewarWire.cs" Link="SpacewarWire.cs" /></ItemGroup>
+</Project>

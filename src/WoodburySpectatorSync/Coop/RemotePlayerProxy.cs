@@ -47,6 +47,7 @@ namespace WoodburySpectatorSync.Coop
         {
             public GameObject SourceObject;
             public bool UseSyntheticCapsule;
+            public bool UseTraveler;
             public bool UseInvisiblePlaceholder;
             public bool AllowSyntheticFallbackBody;
             public Vector3 InitialPosition;
@@ -274,6 +275,12 @@ namespace WoodburySpectatorSync.Coop
         private readonly Transform _cameraTransform;
         private readonly CoopSecondPlayerController _secondPlayerController;
         private readonly Animator _animator;
+        private readonly RemotePlayerPoseDriver _poseDriver;
+        private bool _hasNetworkPose;
+        private string _networkMotion;
+        private bool _nativeSeatApplied;
+        private readonly Action<string> _poseLog;
+        private float _nextPoseLog;
         private readonly HashSet<int> _animFloatParams = new HashSet<int>();
         private readonly HashSet<int> _animBoolParams = new HashSet<int>();
         private readonly AnimatorRigMap _animRig;
@@ -317,7 +324,7 @@ namespace WoodburySpectatorSync.Coop
             bool allowCharacterController = false)
         {
             var source = ResolveSourceObject(settings, fallbackSource, logger, diagnosticsSink);
-            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule && !source.UseInvisiblePlaceholder))
+            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule && !source.UseInvisiblePlaceholder && !source.UseTraveler))
             {
                 return null;
             }
@@ -374,16 +381,23 @@ namespace WoodburySpectatorSync.Coop
             ManualLogSource logger,
             Action<string> diagnosticsSink)
         {
-            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule && !source.UseInvisiblePlaceholder))
+            if (source == null || (source.SourceObject == null && !source.UseSyntheticCapsule && !source.UseInvisiblePlaceholder && !source.UseTraveler))
             {
                 throw new ArgumentNullException(nameof(source));
             }
 
+            _poseLog = diagnosticsSink;
             _allowCharacterController = allowCharacterController;
             _predictionEnabled = predictionEnabled;
             _predictionSeconds = Mathf.Clamp(predictionSeconds, 0f, 0.25f);
             _maxPredictionDistance = Mathf.Clamp(maxPredictionDistance, 0f, 2f);
-            if (source.UseSyntheticCapsule || source.UseInvisiblePlaceholder)
+            if (source.UseTraveler)
+            {
+                _root = new GameObject("CoopRemotePlayer");
+                _root.transform.SetPositionAndRotation(source.InitialPosition, source.InitialRotation);
+                TravelerVisual.Create(_root.transform, CharacterProfile.Default);
+            }
+            else if (source.UseSyntheticCapsule || source.UseInvisiblePlaceholder)
             {
                 _root = new GameObject("CoopRemotePlayer");
                 _root.transform.SetPositionAndRotation(source.InitialPosition, source.InitialRotation);
@@ -409,6 +423,12 @@ namespace WoodburySpectatorSync.Coop
             }
 
             HardenCloneForRemoteAvatar();
+
+            if (source.UseAvatarWrapper &&
+                (source.SourceKind == "GameModel" || source.SourceKind == "GameModelFallback"))
+            {
+                RestoreClonedBodyRenderers(logger, diagnosticsSink);
+            }
 
             var fpc = _root.GetComponent<FirstPersonController>();
             if (fpc != null)
@@ -482,6 +502,15 @@ namespace WoodburySpectatorSync.Coop
             _idleAnimationStateName = ResolveIdleAnimationStateName(_animator);
             _seatedAnimationStateName = ResolveSeatedAnimationStateName(_animator);
             InitializeAnimatorPlayback();
+            _poseDriver = _root.AddComponent<RemotePlayerPoseDriver>();
+            _poseDriver.Initialize(_animator, !_animatorHasMotionControlParams,
+                _animatorHasMotionControlParams && !string.IsNullOrEmpty(_seatedAnimationStateName),
+                _animatorHasMotionControlParams && Array.Exists(_animRig.CrouchBoolNames, n => _animBoolParams.Contains(Animator.StringToHash(n))));
+            _poseDriver.Animate = DriveNetworkPose;
+            LogInfo(logger, diagnosticsSink, "Remote player pose rig: " + _poseDriver.RigSummary);
+            if (Environment.GetEnvironmentVariable("WSS_ANIMATION_PROBE") == "1")
+                LogInfo(logger, diagnosticsSink, "CharacterAnimationProbe scene=" + SceneManager.GetActiveScene().name + " result=" + _poseDriver.Probe());
+            _poseDriver.BeginGraphicsProbe();
 
             LogAvatarDiagnostics(source, usedFallbackBody, logger, diagnosticsSink);
             if (_root != null)
@@ -497,6 +526,25 @@ namespace WoodburySpectatorSync.Coop
             if (_root != null)
             {
                 _root.SetActive(value);
+            }
+        }
+
+        private TravelerVisual _traveler;
+        private bool _appearanceResolved;
+        private string _appearanceLog;
+        public void SetAppearance(CharacterProfile profile)
+        {
+            if (_root == null) return;
+            if (!_appearanceResolved) { _traveler = _root.GetComponentInChildren<TravelerVisual>(true); _appearanceResolved = true; }
+            if (_traveler == null) return;
+            if (_appearanceLog != null && _traveler.Profile.Equals(profile)) return;
+            _traveler.Apply(profile);
+            string key = profile.ToString();
+            if (_appearanceLog != key)
+            {
+                _appearanceLog = key;
+                _poseLog?.Invoke("CharacterAppearance applied scene=" + SceneManager.GetActiveScene().name + " profile=" + key + " vertices=" + _traveler.VertexCount);
+                _poseDriver.ScheduleAppearanceCapture();
             }
         }
 
@@ -532,8 +580,9 @@ namespace WoodburySpectatorSync.Coop
             var bodyPosition = ResolveBodyRootPosition(state);
             var bodyRotation = ResolveUprightBodyRotation(state);
             SmoothBodyTransform(ref bodyPosition, ref bodyRotation);
-            var seatedVisual = InferSeatedVisual(state, bodyPosition);
-            ClampVisualPositionToSurface(ref bodyPosition, state, seatedVisual);
+            bool networkPose = PlayerPoseRules.Has(state.PoseFlags, PlayerPoseFlags.Valid);
+            var seatedVisual = networkPose ? PlayerPoseRules.Has(state.PoseFlags, PlayerPoseFlags.Seated) : InferSeatedVisual(state, bodyPosition);
+            if (!networkPose) ClampVisualPositionToSurface(ref bodyPosition, state, seatedVisual);
             if (_secondPlayerController != null)
             {
                 _secondPlayerController.ApplyNetworkState(state, ref bodyPosition, ref bodyRotation);
@@ -553,7 +602,19 @@ namespace WoodburySpectatorSync.Coop
                 ShouldHideSeatedBodyForCamera(bodyPosition, state.CameraPosition));
 
             _lastSeatedVisual = seatedVisual;
-            DriveAnimatorFromTransform(bodyPosition, bodyRotation, _lastSeatedVisual);
+            if (networkPose)
+            {
+                _hasNetworkPose = true;
+                _poseDriver.Receive(state, seatedVisual);
+                if (Time.realtimeSinceStartup >= _nextPoseLog)
+                {
+                    _nextPoseLog = Time.realtimeSinceStartup + 10f;
+                    _poseLog?.Invoke("Remote player pose received: player=" + state.PlayerId + " seq=" + state.Sequence +
+                        " flags=" + state.PoseFlags + " scene=" + SceneManager.GetActiveScene().name +
+                        " gen=" + state.Generation + " sid=" + state.SessionId + " " + _poseDriver.RigSummary);
+                }
+            }
+            else DriveAnimatorFromTransform(bodyPosition, bodyRotation, _lastSeatedVisual);
 
             if (_cameraTransform != null)
             {
@@ -992,8 +1053,35 @@ namespace WoodburySpectatorSync.Coop
             _lastSampleTime = now;
         }
 
+        private void DriveNetworkPose(PlayerTransformState state, bool stale)
+        {
+            if (_animator == null) return;
+            if (!_animatorHasMotionControlParams) return; // The calibrated bone driver owns this clone.
+            var flags = state.PoseFlags;
+            if (_animatorHasMotionControlParams && PlayerPoseRules.Has(flags, PlayerPoseFlags.Seated) && !string.IsNullOrEmpty(_seatedAnimationStateName))
+            {
+                _nativeSeatApplied = true;
+                DriveAnimatorSeatedPose();
+                return;
+            }
+            if (_nativeSeatApplied) { _nativeSeatApplied = false; _lastAnimatorMoving = true; ForceIdlePoseIfAvailable(); }
+            bool seated = PlayerPoseRules.Has(flags, PlayerPoseFlags.Seated);
+            var velocity = stale || seated ? Vector3.zero : state.LocalVelocity;
+            float speed = new Vector2(velocity.x, velocity.z).magnitude;
+            _networkMotion = PlayerPoseRules.SelectMotion(stale ? flags & ~PlayerPoseFlags.Airborne : flags, speed, _networkMotion);
+            SetFloatFromRig(_animRig.StrafeFloatNames, velocity.x);
+            SetFloatFromRig(_animRig.ForwardFloatNames, velocity.z);
+            SetFloatFromRig(_animRig.SpeedFloatNames, speed);
+            SetBoolFromRig(_animRig.MovingBoolNames, _networkMotion == "Walk" || _networkMotion == "Run" || _networkMotion == "CrouchWalk");
+            SetBoolFromRig(_animRig.CrouchBoolNames, !seated && PlayerPoseRules.Has(flags, PlayerPoseFlags.Crouching));
+            SetBoolFromRig(_animRig.SprintBoolNames, speed > 0.1f && PlayerPoseRules.Has(flags, PlayerPoseFlags.Sprinting));
+            SetBoolFromRig(_animRig.JumpBoolNames, !stale && !seated && PlayerPoseRules.Has(flags, PlayerPoseFlags.Airborne));
+            _animator.speed = 1f;
+        }
+
         public void ApplyInput(PlayerInputState input)
         {
+            if (_hasNetworkPose) return;
             if (_animator == null) return;
             if (_lastSeatedVisual)
             {
@@ -1179,10 +1267,7 @@ namespace WoodburySpectatorSync.Coop
             return HasAnyFloatParam(_animRig.StrafeFloatNames) ||
                    HasAnyFloatParam(_animRig.ForwardFloatNames) ||
                    HasAnyFloatParam(_animRig.SpeedFloatNames) ||
-                   HasAnyBoolParam(_animRig.MovingBoolNames) ||
-                   HasAnyBoolParam(_animRig.SprintBoolNames) ||
-                   HasAnyBoolParam(_animRig.CrouchBoolNames) ||
-                   HasAnyBoolParam(_animRig.JumpBoolNames);
+                   HasAnyBoolParam(_animRig.MovingBoolNames);
         }
 
         private bool HasAnyFloatParam(string[] names)
@@ -1288,6 +1373,8 @@ namespace WoodburySpectatorSync.Coop
             }
 
             var avatarSource = ResolveAvatarSource(settings);
+            if (avatarSource == RemotePlayerAvatarSource.Auto && SceneCatalog.HasPlayerAvatar(SceneManager.GetActiveScene().name))
+                return new SourceDescriptor { UseTraveler = true, RigProfile = "ThirdPersonBasic", SourceKind = "Traveler", SourceName = "woodbury_traveler", InitialPosition = fallbackSource != null ? fallbackSource.transform.position : Vector3.zero };
             if (avatarSource == RemotePlayerAvatarSource.Capsule)
             {
                 return CreateCapsuleSource(settings, fallbackSource, "configured source=Capsule");
@@ -1306,7 +1393,8 @@ namespace WoodburySpectatorSync.Coop
 
                 LogWarning(logger, diagnosticsSink, "Remote player avatar fallback: configured scene avatar not found id=" +
                     configuredAvatarId + " scene=" + SceneManager.GetActiveScene().name);
-                return CreateHiddenSource(settings, fallbackSource, "configured scene avatar unavailable");
+                // Auto must still try the bundled human when this scene has no usable actor.
+                // Explicit GameModel selection below continues to report a missing model.
             }
 
             if (avatarSource == RemotePlayerAvatarSource.Auto ||
@@ -1397,8 +1485,14 @@ namespace WoodburySpectatorSync.Coop
 
             if (!HasUsableAnimator(prefab, out var animatorReason))
             {
-                reason = animatorReason;
-                return false;
+                // Bundles may ship a skinned skeleton without a controller. The pose driver
+                // animates that skeleton procedurally; a static mesh still is not a valid rig.
+                var skinned = prefab.GetComponentInChildren<SkinnedMeshRenderer>(true);
+                if (skinned == null || skinned.bones == null || skinned.bones.Length < 12)
+                {
+                    reason = animatorReason + " and no skinned skeleton";
+                    return false;
+                }
             }
 
             return true;
@@ -1560,6 +1654,21 @@ namespace WoodburySpectatorSync.Coop
             sourceName = string.Empty;
 
             var sceneName = SceneManager.GetActiveScene().name ?? string.Empty;
+            if (sceneName == "RoadTripLoop")
+            {
+                // MikeInCar is an interaction component, not necessarily the rendered rig root.
+                foreach (var animator in Resources.FindObjectsOfTypeAll<Animator>())
+                {
+                    if (animator == null || animator.gameObject.scene != SceneManager.GetActiveScene()) continue;
+                    var skin = animator.GetComponentInChildren<SkinnedMeshRenderer>(true);
+                    if (skin == null || skin.bones.Length < 12) continue;
+                    bool human = animator.isHuman || HasHumanHandBones(skin);
+                    bool safe = IsSafeAvatarCandidate(animator.gameObject, true);
+                    Debug.Log("RoadTrip avatar candidate path=" + GetTransformPath(animator.transform) + " human=" + human + " safe=" + safe);
+                    if (!human || !safe) continue;
+                    candidate = animator.gameObject; sourceName = "RoadTripRig:" + GetTransformPath(animator.transform); return true;
+                }
+            }
             if (sceneName.IndexOf("Cabin", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return TryFindCabinNonMikeAvatar(out candidate, out sourceName) ||
@@ -1574,6 +1683,19 @@ namespace WoodburySpectatorSync.Coop
             return TryFindNonMikeSceneHuman(out candidate, out sourceName) ||
                    TryFindCabinMikeAvatar(out candidate, out sourceName) ||
                    TryFindComponentAvatar<MikeInCar>(out candidate, out sourceName);
+        }
+
+        private static bool HasHumanHandBones(SkinnedMeshRenderer skin)
+        {
+            bool left = false, right = false;
+            foreach (var bone in skin.bones)
+            {
+                if (bone == null) continue;
+                string name = bone.name.ToLowerInvariant().Replace("_", "").Replace(" ", "").Replace(".", "");
+                left |= name.EndsWith("lefthand", StringComparison.Ordinal) || name.EndsWith("lhand", StringComparison.Ordinal);
+                right |= name.EndsWith("righthand", StringComparison.Ordinal) || name.EndsWith("rhand", StringComparison.Ordinal);
+            }
+            return left && right;
         }
 
         private static bool TryFindCabinMikeAvatar(out GameObject candidate, out string sourceName)
@@ -1604,6 +1726,19 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryFindNonMikeSceneHuman(out GameObject candidate, out string sourceName)
         {
             var sceneName = SceneManager.GetActiveScene().name ?? string.Empty;
+            if (string.Equals(sceneName, "OfficeLayout", StringComparison.Ordinal))
+            {
+                return TryFindComponentAvatar<OfficeJanitor>(out candidate, out sourceName) ||
+                       TryFindComponentAvatar<OfficeWorker>(out candidate, out sourceName);
+            }
+
+            if (string.Equals(sceneName, "ParkingLotScene", StringComparison.Ordinal))
+            {
+                return TryFindComponentAvatar<ElevatorStranger>(out candidate, out sourceName) ||
+                       TryFindComponentAvatar<WalkingCopController>(out candidate, out sourceName) ||
+                       TryFindComponentAvatar<MikeParkingLot>(out candidate, out sourceName);
+            }
+
             if (sceneName.IndexOf("Pizzeria", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return TryFindPizzeriaSafeAvatar(out candidate, out sourceName);
@@ -1746,7 +1881,7 @@ namespace WoodburySpectatorSync.Coop
             var maxHeight = trustedActor ? 3.2f : 2.5f;
             var maxHorizontal = trustedActor ? 3.25f : 2.2f;
             var maxDepth = trustedActor ? 3.25f : 1.6f;
-            return size.y >= 1.1f &&
+            return size.y >= (trustedActor ? 0.45f : 1.1f) &&
                    size.y <= maxHeight &&
                    horizontalMax >= 0.2f &&
                    horizontalMax <= maxHorizontal &&
@@ -1978,6 +2113,31 @@ namespace WoodburySpectatorSync.Coop
             DisableColliders();
         }
 
+        private void RestoreClonedBodyRenderers(ManualLogSource logger, Action<string> diagnosticsSink)
+        {
+            // An inactive story NPC can have its renderers disabled by client NPC
+            // replication before it is cloned. That visibility belongs to the NPC,
+            // not to the independent remote player. Restore only surviving body
+            // meshes after hardening; keep hidden props and utility children hidden.
+            var restored = 0;
+            foreach (var renderer in _root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || !renderer.gameObject.activeInHierarchy) continue;
+                if (!(renderer is SkinnedMeshRenderer) && !(renderer is MeshRenderer)) continue;
+                if (LooksLikeUtilityAvatarObject(renderer.transform) ||
+                    LooksLikeStoryCarryProp(renderer.name, GetTransformPath(renderer.transform))) continue;
+                if (!renderer.enabled)
+                {
+                    renderer.enabled = true;
+                    restored++;
+                }
+            }
+            if (restored > 0)
+            {
+                LogInfo(logger, diagnosticsSink, "Remote player avatar: restored inherited disabled body renderers=" + restored);
+            }
+        }
+
         private void HideStoryCarryProps()
         {
             if (_root == null) return;
@@ -2016,6 +2176,8 @@ namespace WoodburySpectatorSync.Coop
             if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(path)) return false;
 
             var text = ((path ?? string.Empty) + "/" + (name ?? string.Empty)).ToLowerInvariant();
+            if (text.IndexOf("broom", StringComparison.Ordinal) >= 0 || text.IndexOf("mop", StringComparison.Ordinal) >= 0)
+                return true;
             if (text.IndexOf("casserole", StringComparison.Ordinal) >= 0 ||
                 text.IndexOf("fishplate", StringComparison.Ordinal) >= 0 ||
                 text.IndexOf("fish plate", StringComparison.Ordinal) >= 0 ||
@@ -2309,6 +2471,8 @@ namespace WoodburySpectatorSync.Coop
         private static Vector3 ResolveBodyRootPosition(PlayerTransformState state)
         {
             var position = state.Position;
+            if (PlayerPoseRules.Has(state.PoseFlags, PlayerPoseFlags.Valid) &&
+                !PlayerPoseRules.Has(state.PoseFlags, PlayerPoseFlags.Seated)) return position;
             var cameraPosition = state.CameraPosition;
             var cameraHasPosition = cameraPosition != Vector3.zero;
             var cameraNearBody = cameraHasPosition && IsCameraNearBody(position, cameraPosition);

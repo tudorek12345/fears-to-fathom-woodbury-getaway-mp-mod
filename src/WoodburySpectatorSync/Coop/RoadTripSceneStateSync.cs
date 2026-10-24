@@ -35,17 +35,17 @@ namespace WoodburySpectatorSync.Coop
             EmitRadio(fullPrefix + RadioPrefix, GetFieldValue<RadioMikeCar>(manager, "radioMikeCar"), emit, ref hash);
             EmitMike(fullPrefix + MikePrefix, GetFieldValue<MikeInCar>(manager, "mikeInCar"), emit, ref hash);
             EmitTruck(fullPrefix + TruckPrefix, GetFieldValue<MikeTruckInLoopScene>(manager, "mikeTruckInLoopScene"), emit, ref hash);
-            EmitUi(fullPrefix + UiPrefix, UnityEngine.Object.FindObjectOfType<RoadTripUIManager>(), emit, ref hash);
+            EmitUi(fullPrefix + UiPrefix, SceneLookup.First<RoadTripUIManager>(), emit, ref hash);
             EmitPlayer(fullPrefix + PlayerPrefix, GetFieldValue<RoadTripPlayerController>(manager, "roadTripPlayerController"), emit, ref hash);
             EmitManager(fullPrefix + ManagerPrefix, manager, emit, ref hash);
             EmitBobble(fullPrefix + BobblePrefix, GetFieldValue<BobbleHeadMikeCar>(manager, "bobbleHeadMikeCar"), emit, ref hash);
             EmitObject(fullPrefix + ObjectPrefix + "schoolBus.", GetFieldObject(manager, "schoolBus"), emit, ref hash);
             EmitAudio(fullPrefix + ObjectPrefix + "horrorSound.", GetFieldValue<AudioSource>(manager, "horrorSound"), emit, ref hash);
             EmitAudio(fullPrefix + ObjectPrefix + "musicToFade.", GetFieldValue<AudioSource>(manager, "musicToFade"), emit, ref hash);
-            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerSub>(), emit, ref hash);
-            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>(), emit, ref hash);
-            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, UnityEngine.Object.FindObjectsOfType<OnTrigger>(), emit, ref hash);
-            EmitEventTriggers(fullPrefix + EventTriggerPrefix, UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>(), emit, ref hash);
+            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, SceneLookup.All<OnTriggerSub>(), emit, ref hash);
+            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, SceneLookup.All<OnTriggerDisplaySub>(), emit, ref hash);
+            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, SceneLookup.All<OnTrigger>(), emit, ref hash);
+            EmitEventTriggers(fullPrefix + EventTriggerPrefix, SceneLookup.All<TriggerEventInvoker>(), emit, ref hash);
             return hash;
         }
 
@@ -66,7 +66,7 @@ namespace WoodburySpectatorSync.Coop
                 return false;
             }
 
-            var manager = UnityEngine.Object.FindObjectOfType<RoadTripGameManager>();
+            var manager = SceneLookup.First<RoadTripGameManager>();
             if (manager == null) return false;
 
             SuppressLocalRoadTripSceneBrains(manager, logger);
@@ -98,7 +98,7 @@ namespace WoodburySpectatorSync.Coop
             if (fieldName.StartsWith(UiPrefix, StringComparison.Ordinal))
             {
                 return TryApplyUiFlag(
-                    UnityEngine.Object.FindObjectOfType<RoadTripUIManager>(),
+                    SceneLookup.First<RoadTripUIManager>(),
                     fieldName.Substring(UiPrefix.Length),
                     value);
             }
@@ -715,7 +715,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerSub>();
+            var triggers = SceneLookup.All<OnTriggerSub>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -736,7 +736,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>();
+            var triggers = SceneLookup.All<OnTriggerDisplaySub>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -756,7 +756,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTrigger>();
+            var triggers = SceneLookup.All<OnTrigger>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -775,7 +775,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>();
+            var triggers = SceneLookup.All<TriggerEventInvoker>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -802,10 +802,10 @@ namespace WoodburySpectatorSync.Coop
             if (drivingCam != null) drivingCam.FreezeCam = true;
             var fovZoom = GetFieldValue<FovZoom>(player, "fovZoom");
             if (fovZoom != null) fovZoom.disableFov = true;
-            var triggerSubCount = DisableBehaviours(UnityEngine.Object.FindObjectsOfType<OnTriggerSub>());
-            var displaySubCount = DisableBehaviours(UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>());
-            var triggerCount = DisableBehaviours(UnityEngine.Object.FindObjectsOfType<OnTrigger>());
-            var eventTriggerCount = DisableBehaviours(UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>());
+            var triggerSubCount = DisableBehaviours(SceneLookup.All<OnTriggerSub>());
+            var displaySubCount = DisableBehaviours(SceneLookup.All<OnTriggerDisplaySub>());
+            var triggerCount = DisableBehaviours(SceneLookup.All<OnTrigger>());
+            var eventTriggerCount = DisableBehaviours(SceneLookup.All<TriggerEventInvoker>());
 
             var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             if (logger != null && nowMs >= _nextSuppressLogMs)

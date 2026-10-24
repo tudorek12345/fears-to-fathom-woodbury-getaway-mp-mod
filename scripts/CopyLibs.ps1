@@ -30,6 +30,8 @@ $optional = @(
     "UnityEngine.AnimationModule.dll",
     "UnityEngine.AIModule.dll",
     "UnityEngine.UIModule.dll",
+    "UnityEngine.UI.dll",
+    "Unity.TextMeshPro.dll",
     "UnityEngine.TextRenderingModule.dll",
     "UnityEngine.SceneManagementModule.dll",
     "UnityEngine.UnityWebRequestModule.dll",
@@ -58,5 +60,8 @@ if (-not $bepInExPath) {
 }
 
 Copy-Item -Path $bepInExPath.FullName -Destination $libDir -Force
+$harmonyPath = Join-Path $bepInExPath.Directory.FullName '0Harmony.dll'
+if (-not (Test-Path -LiteralPath $harmonyPath)) { throw 'BepInEx/core/0Harmony.dll is required for native lifecycle repairs.' }
+Copy-Item -LiteralPath $harmonyPath -Destination $libDir -Force
 
 Write-Host "Copied Unity + BepInEx assemblies to $libDir"

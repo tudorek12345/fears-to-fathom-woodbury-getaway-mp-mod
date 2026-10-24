@@ -6,6 +6,8 @@ param(
     [int]$StartupDelaySeconds = 3,
     [bool]$UdpEnabled = $true,
     [string]$ArchiveRoot = (Join-Path $PSScriptRoot "..\sessionlogsbackup\smoke"),
+    [switch]$Headless,
+    [string]$SmokeScene = "CabinScene",
     [switch]$KeepProcesses
 )
 
@@ -26,7 +28,7 @@ $deployInfo = & $deployScript -GameDir $GameDir -Configuration $Configuration
 
 $launchInfo = $null
 try {
-    $launchInfo = & $launchScript -GameDir $GameDir -StartupDelaySeconds $StartupDelaySeconds -UdpEnabled $UdpEnabled -AutoStartHost -AutoConnectClient -EnableSessionLog -ForceStopExisting
+    $launchInfo = & $launchScript -GameDir $GameDir -StartupDelaySeconds $StartupDelaySeconds -UdpEnabled $UdpEnabled -AutoStartHost -AutoConnectClient -EnableSessionLog -ForceStopExisting -Headless:$Headless -ExperimentalSceneDumpCrawler:$Headless -SceneDumpCrawlerScenes $SmokeScene -SceneDumpCrawlerStartDelaySeconds 8
     Write-Host "Runtime window: $RuntimeSeconds seconds"
     Write-Host "Enter gameplay on the host during this window; menu-only sessions do not pass."
     Start-Sleep -Seconds ([Math]::Max(10, $RuntimeSeconds))
@@ -54,7 +56,7 @@ $runDir = Join-Path $ArchiveRoot $runStamp
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
 $summaryJson = Join-Path $runDir "summary.json"
-$check = & $checkScript -GameDir $GameDir -Since $startedAt -MaxSessionLogs 2 -RequireTraffic -RequireGameplay -OutputJson $summaryJson -NoFail | Select-Object -First 1
+$check = & $checkScript -GameDir $GameDir -Since $startedAt -MaxSessionLogs 2 -RequireTraffic -RequireGameplay -RequirePlayerPoses -OutputJson $summaryJson -NoFail | Select-Object -First 1
 
 $logIndex = 0
 foreach ($logPath in $check.SelectedLogs) {

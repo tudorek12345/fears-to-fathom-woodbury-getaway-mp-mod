@@ -44,29 +44,29 @@ namespace WoodburySpectatorSync.Coop
             if (emit == null) return 0;
 
             var hash = 41;
-            EmitGame(fullPrefix + GamePrefix, UnityEngine.Object.FindObjectOfType<OfficeLayoutGameManager>(), emit, ref hash);
-            EmitYellowIntro(fullPrefix + YellowIntroPrefix, UnityEngine.Object.FindObjectOfType<YellowIntroManager>(), emit, ref hash);
-            EmitPlayer(fullPrefix + PlayerPrefix, UnityEngine.Object.FindObjectOfType<OfficeLayoutPlayerController>(), emit, ref hash);
-            EmitTable(fullPrefix + TablePrefix, UnityEngine.Object.FindObjectOfType<TableManager>(), emit, ref hash);
-            EmitComputer(fullPrefix + ComputerPrefix, UnityEngine.Object.FindObjectOfType<ComputerManager>(), emit, ref hash);
-            EmitCoffee(fullPrefix + CoffeePrefix, UnityEngine.Object.FindObjectOfType<CoffeeMachineManager>(), emit, ref hash);
-            EmitPhone(fullPrefix + PhonePrefix, UnityEngine.Object.FindObjectOfType<OfficePhone>(), emit, ref hash);
-            EmitTypeMaster(fullPrefix + TypeMasterPrefix, UnityEngine.Object.FindObjectOfType<TypeMasterManager>(), emit, ref hash);
-            EmitTypingShooter(fullPrefix + TypingShooterPrefix, UnityEngine.Object.FindObjectOfType<TypingShooterComputerManager>(), emit, ref hash);
-            EmitRadios(fullPrefix + RadioPrefix, UnityEngine.Object.FindObjectsOfType<OfficeRadio>(), emit, ref hash);
-            EmitFridges(fullPrefix + FridgePrefix, UnityEngine.Object.FindObjectsOfType<OfficeFridge>(), emit, ref hash);
-            EmitMicrowaves(fullPrefix + MicrowavePrefix, UnityEngine.Object.FindObjectsOfType<OfficeMicrowave>(), emit, ref hash);
-            EmitToilets(fullPrefix + ToiletPrefix, UnityEngine.Object.FindObjectsOfType<OfficeToiletManager>(), emit, ref hash);
-            EmitJanitor(fullPrefix + JanitorPrefix, UnityEngine.Object.FindObjectOfType<OfficeJanitor>(), emit, ref hash);
-            EmitWorkers(fullPrefix + WorkerPrefix, UnityEngine.Object.FindObjectsOfType<OfficeWorker>(), emit, ref hash);
-            EmitWorkerMonitors(fullPrefix + WorkerMonitorPrefix, UnityEngine.Object.FindObjectsOfType<OfficeWorkerMonitor>(), emit, ref hash);
-            EmitUi(fullPrefix + UiPrefix, UnityEngine.Object.FindObjectOfType<OfficeLayoutUIManager>(), emit, ref hash);
+            EmitGame(fullPrefix + GamePrefix, SceneLookup.First<OfficeLayoutGameManager>(), emit, ref hash);
+            EmitYellowIntro(fullPrefix + YellowIntroPrefix, SceneLookup.First<YellowIntroManager>(), emit, ref hash);
+            EmitPlayer(fullPrefix + PlayerPrefix, SceneLookup.First<OfficeLayoutPlayerController>(), emit, ref hash);
+            EmitTable(fullPrefix + TablePrefix, SceneLookup.First<TableManager>(), emit, ref hash);
+            EmitComputer(fullPrefix + ComputerPrefix, SceneLookup.First<ComputerManager>(), emit, ref hash);
+            EmitCoffee(fullPrefix + CoffeePrefix, SceneLookup.First<CoffeeMachineManager>(), emit, ref hash);
+            EmitPhone(fullPrefix + PhonePrefix, SceneLookup.First<OfficePhone>(), emit, ref hash);
+            EmitTypeMaster(fullPrefix + TypeMasterPrefix, SceneLookup.First<TypeMasterManager>(), emit, ref hash);
+            EmitTypingShooter(fullPrefix + TypingShooterPrefix, SceneLookup.First<TypingShooterComputerManager>(), emit, ref hash);
+            EmitRadios(fullPrefix + RadioPrefix, SceneLookup.All<OfficeRadio>(), emit, ref hash);
+            EmitFridges(fullPrefix + FridgePrefix, SceneLookup.All<OfficeFridge>(), emit, ref hash);
+            EmitMicrowaves(fullPrefix + MicrowavePrefix, SceneLookup.All<OfficeMicrowave>(), emit, ref hash);
+            EmitToilets(fullPrefix + ToiletPrefix, SceneLookup.All<OfficeToiletManager>(), emit, ref hash);
+            EmitJanitor(fullPrefix + JanitorPrefix, SceneLookup.First<OfficeJanitor>(), emit, ref hash);
+            EmitWorkers(fullPrefix + WorkerPrefix, SceneLookup.All<OfficeWorker>(), emit, ref hash);
+            EmitWorkerMonitors(fullPrefix + WorkerMonitorPrefix, SceneLookup.All<OfficeWorkerMonitor>(), emit, ref hash);
+            EmitUi(fullPrefix + UiPrefix, SceneLookup.First<OfficeLayoutUIManager>(), emit, ref hash);
             hash = hash * 31 + VendingMachineSceneSync.EmitHostFlags(fullPrefix + VendingPrefix, emit);
-            EmitBoundsSubs(fullPrefix + BoundsSubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerOfficeBoundsSub>(), emit, ref hash);
-            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerSub>(), emit, ref hash);
-            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>(), emit, ref hash);
-            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, UnityEngine.Object.FindObjectsOfType<OnTrigger>(), emit, ref hash);
-            EmitEventTriggers(fullPrefix + EventTriggerPrefix, UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>(), emit, ref hash);
+            EmitBoundsSubs(fullPrefix + BoundsSubPrefix, SceneLookup.All<OnTriggerOfficeBoundsSub>(), emit, ref hash);
+            EmitTriggerSubs(fullPrefix + TriggerSubPrefix, SceneLookup.All<OnTriggerSub>(), emit, ref hash);
+            EmitDisplaySubs(fullPrefix + DisplaySubPrefix, SceneLookup.All<OnTriggerDisplaySub>(), emit, ref hash);
+            EmitGenericTriggers(fullPrefix + GenericTriggerPrefix, SceneLookup.All<OnTrigger>(), emit, ref hash);
+            EmitEventTriggers(fullPrefix + EventTriggerPrefix, SceneLookup.All<TriggerEventInvoker>(), emit, ref hash);
             return hash;
         }
 
@@ -74,14 +74,14 @@ namespace WoodburySpectatorSync.Coop
         {
             if (transforms == null) return;
 
-            var fridges = UnityEngine.Object.FindObjectsOfType<OfficeFridge>();
+            var fridges = SceneLookup.All<OfficeFridge>();
             SortByPath(fridges);
             for (var i = 0; i < fridges.Length; i++)
             {
                 if (fridges[i] != null) transforms.Add(fridges[i].transform);
             }
 
-            var microwaves = UnityEngine.Object.FindObjectsOfType<OfficeMicrowave>();
+            var microwaves = SceneLookup.All<OfficeMicrowave>();
             SortByPath(microwaves);
             for (var i = 0; i < microwaves.Length; i++)
             {
@@ -89,31 +89,31 @@ namespace WoodburySpectatorSync.Coop
                 if (door != null) transforms.Add(door);
             }
 
-            var toiletLids = UnityEngine.Object.FindObjectsOfType<OfficeToiletLid>();
+            var toiletLids = SceneLookup.All<OfficeToiletLid>();
             SortByPath(toiletLids);
             for (var i = 0; i < toiletLids.Length; i++)
             {
                 if (toiletLids[i] != null) transforms.Add(toiletLids[i].transform);
             }
 
-            var toiletSeats = UnityEngine.Object.FindObjectsOfType<OfficeToiletSeat>();
+            var toiletSeats = SceneLookup.All<OfficeToiletSeat>();
             SortByPath(toiletSeats);
             for (var i = 0; i < toiletSeats.Length; i++)
             {
                 if (toiletSeats[i] != null) transforms.Add(toiletSeats[i].transform);
             }
 
-            var janitor = UnityEngine.Object.FindObjectOfType<OfficeJanitor>();
+            var janitor = SceneLookup.First<OfficeJanitor>();
             if (janitor != null) transforms.Add(janitor.transform);
 
-            var workers = UnityEngine.Object.FindObjectsOfType<OfficeWorker>();
+            var workers = SceneLookup.All<OfficeWorker>();
             SortByPath(workers);
             for (var i = 0; i < workers.Length; i++)
             {
                 if (workers[i] != null) transforms.Add(workers[i].transform);
             }
 
-            var monitors = UnityEngine.Object.FindObjectsOfType<OfficeWorkerMonitor>();
+            var monitors = SceneLookup.All<OfficeWorkerMonitor>();
             SortByPath(monitors);
             for (var i = 0; i < monitors.Length; i++)
             {
@@ -622,7 +622,7 @@ namespace WoodburySpectatorSync.Coop
         private static void EmitToilets(string prefix, OfficeToiletManager[] toilets, Action<string, int> emit, ref int hash)
         {
             SortByPath(toilets);
-            var all = UnityEngine.Object.FindObjectOfType<AllOfficeToiletsManager>();
+            var all = SceneLookup.First<AllOfficeToiletsManager>();
             Emit(prefix + "Count", toilets != null ? toilets.Length : 0, emit, ref hash);
             Emit(prefix + "UsedIndex", all != null ? all.UsedToiletIndex : -1, emit, ref hash);
             if (toilets == null) return;
@@ -852,7 +852,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyGame(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var manager = UnityEngine.Object.FindObjectOfType<OfficeLayoutGameManager>();
+            var manager = SceneLookup.First<OfficeLayoutGameManager>();
             if (manager == null) return false;
 
             var player = GetFieldValue<OfficeLayoutPlayerController>(manager, "officeLayoutPlayerController");
@@ -876,7 +876,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyYellowIntro(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var yellowIntro = UnityEngine.Object.FindObjectOfType<YellowIntroManager>();
+            var yellowIntro = SceneLookup.First<YellowIntroManager>();
             if (yellowIntro == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { yellowIntro.gameObject.SetActive(value != 0); return true; }
@@ -893,7 +893,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyPlayer(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var player = UnityEngine.Object.FindObjectOfType<OfficeLayoutPlayerController>();
+            var player = SceneLookup.First<OfficeLayoutPlayerController>();
             if (player == null) return false;
 
             var mainCamera = GetFieldValue<Camera>(player, "mainCamera");
@@ -925,7 +925,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyTable(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var table = UnityEngine.Object.FindObjectOfType<TableManager>();
+            var table = SceneLookup.First<TableManager>();
             if (table == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { table.gameObject.SetActive(value != 0); return true; }
@@ -947,7 +947,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyComputer(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var computer = UnityEngine.Object.FindObjectOfType<ComputerManager>();
+            var computer = SceneLookup.First<ComputerManager>();
             if (computer == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { computer.gameObject.SetActive(value != 0); return true; }
@@ -995,7 +995,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyCoffee(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var coffee = UnityEngine.Object.FindObjectOfType<CoffeeMachineManager>();
+            var coffee = SceneLookup.First<CoffeeMachineManager>();
             if (coffee == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { coffee.gameObject.SetActive(value != 0); return true; }
@@ -1014,7 +1014,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyPhone(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var phone = UnityEngine.Object.FindObjectOfType<OfficePhone>();
+            var phone = SceneLookup.First<OfficePhone>();
             if (phone == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { phone.gameObject.SetActive(value != 0); return true; }
@@ -1032,7 +1032,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyTypeMaster(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var typeMaster = UnityEngine.Object.FindObjectOfType<TypeMasterManager>();
+            var typeMaster = SceneLookup.First<TypeMasterManager>();
             if (typeMaster == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { typeMaster.gameObject.SetActive(value != 0); return true; }
@@ -1061,7 +1061,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyTypingShooter(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var shooter = UnityEngine.Object.FindObjectOfType<TypingShooterComputerManager>();
+            var shooter = SceneLookup.First<TypingShooterComputerManager>();
             if (shooter == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { shooter.gameObject.SetActive(value != 0); return true; }
@@ -1083,7 +1083,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var radios = UnityEngine.Object.FindObjectsOfType<OfficeRadio>();
+            var radios = SceneLookup.All<OfficeRadio>();
             SortByPath(radios);
             if (index >= radios.Length) return false;
             var radio = radios[index];
@@ -1110,7 +1110,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var fridges = UnityEngine.Object.FindObjectsOfType<OfficeFridge>();
+            var fridges = SceneLookup.All<OfficeFridge>();
             SortByPath(fridges);
             if (index >= fridges.Length) return false;
             var fridge = fridges[index];
@@ -1135,7 +1135,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var microwaves = UnityEngine.Object.FindObjectsOfType<OfficeMicrowave>();
+            var microwaves = SceneLookup.All<OfficeMicrowave>();
             SortByPath(microwaves);
             if (index >= microwaves.Length) return false;
             var microwave = microwaves[index];
@@ -1166,7 +1166,7 @@ namespace WoodburySpectatorSync.Coop
 
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var toilets = UnityEngine.Object.FindObjectsOfType<OfficeToiletManager>();
+            var toilets = SceneLookup.All<OfficeToiletManager>();
             SortByPath(toilets);
             if (index >= toilets.Length) return false;
             var toilet = toilets[index];
@@ -1192,7 +1192,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyJanitor(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var janitor = UnityEngine.Object.FindObjectOfType<OfficeJanitor>();
+            var janitor = SceneLookup.First<OfficeJanitor>();
             if (janitor == null) return false;
 
             var agent = janitor.GetComponent<UnityEngine.AI.NavMeshAgent>();
@@ -1238,7 +1238,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var workers = UnityEngine.Object.FindObjectsOfType<OfficeWorker>();
+            var workers = SceneLookup.All<OfficeWorker>();
             SortByPath(workers);
             if (index >= workers.Length) return false;
             var worker = workers[index];
@@ -1270,7 +1270,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var monitors = UnityEngine.Object.FindObjectsOfType<OfficeWorkerMonitor>();
+            var monitors = SceneLookup.All<OfficeWorkerMonitor>();
             SortByPath(monitors);
             if (index >= monitors.Length) return false;
             var monitor = monitors[index];
@@ -1293,7 +1293,7 @@ namespace WoodburySpectatorSync.Coop
         private static bool TryApplyUi(string name, int value, ManualLogSource logger)
         {
             if (string.Equals(name, "Exists", StringComparison.Ordinal)) return true;
-            var ui = UnityEngine.Object.FindObjectOfType<OfficeLayoutUIManager>();
+            var ui = SceneLookup.First<OfficeLayoutUIManager>();
             if (ui == null) return false;
 
             if (string.Equals(name, "RootActive", StringComparison.Ordinal)) { ui.gameObject.SetActive(value != 0); return true; }
@@ -1315,7 +1315,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerOfficeBoundsSub>();
+            var triggers = SceneLookup.All<OnTriggerOfficeBoundsSub>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1336,7 +1336,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerSub>();
+            var triggers = SceneLookup.All<OnTriggerSub>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1358,7 +1358,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTriggerDisplaySub>();
+            var triggers = SceneLookup.All<OnTriggerDisplaySub>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1379,7 +1379,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<OnTrigger>();
+            var triggers = SceneLookup.All<OnTrigger>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];
@@ -1399,7 +1399,7 @@ namespace WoodburySpectatorSync.Coop
             if (string.Equals(name, "Count", StringComparison.Ordinal)) return true;
             var index = ParseIndexedName(name, out var fieldName);
             if (index < 0) return true;
-            var triggers = UnityEngine.Object.FindObjectsOfType<TriggerEventInvoker>();
+            var triggers = SceneLookup.All<TriggerEventInvoker>();
             SortByPath(triggers);
             if (index >= triggers.Length) return false;
             var trigger = triggers[index];

@@ -1,8 +1,56 @@
 {
   "unreleased": {
-    "label": "0.4.44 development test build",
-    "rangeNote": "Implementation notes; a full gameplay pass of 0.4.44 is pending.",
+    "label": "0.4.49 development test build",
+    "rangeNote": "Modern Co-op/Character menu, original customizable avatars and reliable appearance sync; protocol 7 requires both players to update. Complete story and two-account Internet validation remain pending.",
     "groups": [
+      {
+        "section": "Characters and menu (0.4.49)",
+        "bullets": [
+          "Modern Co-op and Character pages keep the native Multiplayer entry. A rotating 3D preview offers face, skin, hair, outerwear, colors and accessories with explicit Apply/Discard and saved profiles.",
+          "Auto uses an original skinned winter traveler across gameplay and the additive Office typing world. Reliable session/revision-checked catalog messages share live edits; explicit legacy avatar overrides retain their own visuals.",
+          "Preview rendering waits for Unity skinning after a geometry change, preventing blank portraits. Changed meshes and preview resources are released; unchanged profiles avoid rebuilds and settings parsing.",
+          "873 managed/log checks and two native helper suites pass. Same-DLL TCP-only and TCP+UDP routes cover all ten build scenes, with visible menu/remote-body graphics checks and zero mod runtime errors. Full story and two-account Spacewar testing remain pending."
+        ]
+      },
+      {
+        "section": "Earlier menu, join and parity repairs",
+        "bullets": [
+          "Multiplayer text sits above Episodes using the native font and spacing; the Canvas tab has Host/Join, LAN/Spacewar, lobby copying, Back and Start story. Main-menu diagnostics are opt-in.",
+          "Directional walk/run/backward/strafe, breathing, crouch, seating, airborne tuck, head aim and held-item hand targets use the sequenced pose stream. Procedural clones have a neutral base and independent animation ownership.",
+          "Grounded foot correction prevents crouch sinking; inactive cinematic controllers no longer imply airborne poses. The janitor broom is removed from player clones.",
+          "Regression probes exercise native Host/Join actions and the actual skinned skeletons; optional graphics capture records menu/pose images. Native crashes and out-of-memory reports remain test failures.",
+          "Spacewar waits for real peer packets; disconnect reasons survive cleanup and follow the current Host/Join role in Multiplayer. Closed lobby IDs cannot be copied. Stale host workers cannot close replacement connections. The tester-reported two-PC failure needs a fresh retest.",
+          "Thirty selected Cabin story fields gain native-value digest checks; per-update lookup reuse reduces repeated scene searches. Both-PC log collection records actual installed DLL/helper hashes.",
+          "Previous 0.4.48 validation: 688 managed/log checks and two native helper suites pass. Final same-DLL headless TCP-only and TCP+UDP sweeps pass all ten scenes, native menu/animation probes and matching 15/30-field Cabin digests. Full story, full graphics and two-account Spacewar retest remain pending."
+        ]
+      },
+      {
+        "section": "All-scene synchronization and repairs",
+        "bullets": [
+          "Exact adapters and runtime inventory cover the ten shipped build scenes; the paired crawler verifies snapshots, rigs, additive Office return, typing words and RoadTrip seating.",
+          "Office/Parking/RoadTrip select native human rigs; pizza-box clone paths now match the host.",
+          "Credits and the typing game mirror host presentation with bounded binary payloads; client suppression leaves host scripts enabled.",
+          "Native crouch and audio-fade lifecycle guards prevent missing-reference callbacks without replacing game files.",
+          "Dynamic pedestrian pools now use host prefab/slot/count inventories; client random spawns cannot stall the Office additive snapshot.",
+          "Earlier 0.4.47 validation: 530 automated checks and same-DLL TCP-only/TCP+UDP sweeps passed across all ten build scenes; full story/visual and two-account Spacewar validation remain pending."
+        ]
+      },
+      {
+        "section": "Player poses and Spacewar",
+        "bullets": [
+          "Body/stance/velocity and hand targets travel in scene/session/sequence-scoped poses; head/torso aim and arm IK apply after Animator evaluation.",
+          "Spacewar adds isolated App ID 480 two-player lobbies and Steam P2P/relay with F11 lobby IDs; LAN remains default.",
+          "Fixed scene-destroyed avatar roots, duplicate application counters, frame-rate-dependent pose sending and silent send failures; expanded regression and headless diagnostics."
+        ]
+      },
+      {
+        "section": "Board Game episode fixes",
+        "bullets": [
+          "Scene-model remote avatars restore body renderers inherited disabled from suppressed NPCs; hidden story props remain hidden.",
+          "The oven casserole follows the host's actual visibility and transform during board games.",
+          "F10 and automatic scene dumps include remote-avatar renderer counts for diagnosis."
+        ]
+      },
       {
         "section": "Recovery, validation, and download",
         "bullets": [
